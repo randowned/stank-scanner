@@ -1,10 +1,10 @@
-![](Stank.gif)
+![](static/Stank.gif)
 
 # StankBot
 
 **StankBot** is a custom [BetterDiscord](https://betterdiscord.app/) plugin built for tracking community sticker chains in the [Maphra Discord Server](https://discord.gg/maphra).
 
-It listens to the `#maphra-worship` channel for "Stank" sticker chains, awards XP and punishment points, and dynamically updates your Server Bio and Nickname when records are broken.
+It listens to the `#maphra-worship` channel for "Stank" sticker chains, awards Stank Points and Punishment Points, and dynamically updates your Server Bio and Nickname when the current or record chain lengths are changed.
 
 ## 🎮 The Game
 
@@ -12,10 +12,10 @@ Players cooperate to build the longest chain of "Stank" stickers in `#worship`. 
 
 | Action | Points |
 |---|---|
-| Start a new chain (1st sticker after break) | +100 XP, become **slayer** |
-| First-ever sticker contribution (lifetime) | +50 XP bonus |
-| Valid unique chain contribution | +25 XP |
-| Stank emoji reaction on a sticker | +5 XP |
+| Start a new chain (1st sticker after break) | +100 SP, become **slayer** |
+| First-ever sticker contribution (lifetime) | +50 SP bonus |
+| Valid unique chain contribution | +25 SP |
+| Stank emoji reaction on a sticker | +5 SP |
 | Break the chain | +3× chain length punishment, become **goat** |
 | Chat during a broken chain | +1× chain length punishment |
 | Break chain then start the next one | +50 flat punishment (cheating!) |
@@ -47,7 +47,8 @@ Players cooperate to build the longest chain of "Stank" stickers in `#worship`. 
 - **Auto-Reply**: Responds to commands in DMs, dev thread, and #memes (configurable).
 - **Customization**: Configurable templates for Bio, Nickname, record announcements, and board layout.
 
-![](screenshot-1.png) ![](screenshot-2.png)
+![](static/screenshot-1.png)
+![](static/screenshot-2.png)
 
 ## 🚀 Installation
 
