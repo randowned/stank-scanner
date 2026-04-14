@@ -171,7 +171,13 @@ module.exports = class StankBot {
                         if (me) {
                             const xp = (this.stankboard[me.id] && this.stankboard[me.id].xp) || 0;
                             const pun = (this.stankboard[me.id] && this.stankboard[me.id].punishments) || 0;
-                            message.content = `\`\`\`\nstank points: ${Number(xp).toLocaleString()}\npunishment points: ${Number(pun).toLocaleString()}\n\`\`\``;
+                            const stankSorted = Object.entries(this.stankboard).map(([id, u]) => ({ id, ...u })).sort((a, b) => b.xp - a.xp);
+                            const punSorted = Object.entries(this.stankboard).map(([id, u]) => ({ id, ...u })).filter(u => (u.punishments || 0) > 0).sort((a, b) => (b.punishments || 0) - (a.punishments || 0));
+                            const stankRank = stankSorted.findIndex(u => u.id === me.id);
+                            const punRank = punSorted.findIndex(u => u.id === me.id);
+                            const stankRankStr = stankRank !== -1 ? (stankRank + 1) : "N/A";
+                            const punRankStr = punRank !== -1 ? (punRank + 1) : "N/A";
+                            message.content = `\`\`\`\nstank points: ${Number(xp).toLocaleString()}, rank: ${stankRankStr}\npunishment points: ${Number(pun).toLocaleString()}, rank: ${punRankStr}\n\`\`\``;
                         }
                     } else if (text === "!stank-cheater-test" || text === "/stank-cheater-test") {
                         this.toast(`Intercepted ${text}!`);
@@ -979,7 +985,13 @@ module.exports = class StankBot {
                 const totalPunish = (this.stankboard[msg.author.id] && this.stankboard[msg.author.id].punishments) || 0;
                 const xpStr = Number(totalXp).toLocaleString();
                 const punStr = Number(totalPunish).toLocaleString();
-                const replyText = `\`\`\`\nstank points: ${xpStr}\npunishment points: ${punStr}\n\`\`\``;
+                const stankSorted = Object.entries(this.stankboard).map(([id, u]) => ({ id, ...u })).sort((a, b) => b.xp - a.xp);
+                const punSorted = Object.entries(this.stankboard).map(([id, u]) => ({ id, ...u })).filter(u => (u.punishments || 0) > 0).sort((a, b) => (b.punishments || 0) - (a.punishments || 0));
+                const stankRank = stankSorted.findIndex(u => u.id === msg.author.id);
+                const punRank = punSorted.findIndex(u => u.id === msg.author.id);
+                const stankRankStr = stankRank !== -1 ? (stankRank + 1) : "N/A";
+                const punRankStr = punRank !== -1 ? (punRank + 1) : "N/A";
+                const replyText = `\`\`\`\nstank points: ${xpStr}, rank: ${stankRankStr}\npunishment points: ${punStr}, rank: ${punRankStr}\n\`\`\``;
                 this.sendBotReply(msg.channel_id, replyText, msg.id);
             } else if (isBoardCommand) {
                 this.sendBotReply(msg.channel_id, this.getScoreTemplate());
