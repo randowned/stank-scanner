@@ -6,7 +6,7 @@
 
 It listens to the `#altar` channel for "Stank" sticker chains, awards Stank Points and Punishment Points, and dynamically updates your Server Bio and Nickname when the current or record chain lengths are changed.
 
-## 🎮 The Game
+## The Game
 
 Players cooperate to build the longest chain of "Stank" stickers in `#altar`. Each **unique user** can contribute once per chain. The chain breaks when anyone posts a non-sticker message.
 
@@ -20,7 +20,7 @@ Players cooperate to build the longest chain of "Stank" stickers in `#altar`. Ea
 | Chat during a broken chain | +1× chain length punishment |
 | Break chain then start the next one | +50 flat punishment (cheating!) |
 
-## ⚙️ Commands
+## Commands
 
 | Command | Description |
 |---|---|
@@ -37,7 +37,7 @@ Players cooperate to build the longest chain of "Stank" stickers in `#altar`. Ea
 | `!stank-board-reset` | Reset all board data |
 | `!stank-board-reload` | Reset and reload from channel history |
 
-## 🌟 Features
+## Features
 
 - **Chain Tracking**: Tracks the longest unbroken chain of Stank stickers by unique users.
 - **SP & Punishment System**: Awards and punishes players based on their contributions and chain-breaking behavior.
@@ -48,10 +48,7 @@ Players cooperate to build the longest chain of "Stank" stickers in `#altar`. Ea
 - **Announcement Channels**: Separate allowlist for record-broken and cheater-caught announcements. Template-driven — leave a template empty to disable that announcement.
 - **Customization**: Configurable templates for Bio, Nickname, board layout, record announcements, and cheater caught messages.
 
-![](static/screenshot-1.png)
-![](static/screenshot-2.png)
-
-## 🚀 Installation
+## Installation
 
 1. Download and install [BetterDiscord](https://betterdiscord.app/).
 2. Open Discord → **User Settings** → **BetterDiscord** → **Plugins**.
@@ -59,7 +56,7 @@ Players cooperate to build the longest chain of "Stank" stickers in `#altar`. Ea
 4. Drop `StankBot.plugin.js` into the folder.
 5. Enable **StankBot** in the Plugins menu.
 
-## ⚠️ Important
+## Important
 
 > **Self-Bot Warning:** Auto-replying to other users relies on your user account sending API requests without manual input, which goes against Discord's TOS regarding self-bots. Use at your own risk.
 
