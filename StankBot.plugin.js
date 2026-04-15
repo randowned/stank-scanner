@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra community #altar management bot.
- * @version 2.0.0
+ * @version 2.1.0
  */
 
 module.exports = class StankBot {
@@ -53,6 +53,20 @@ module.exports = class StankBot {
         return cleaned || "Randowned";
     }
 
+    _syncConfigFromDisk() {
+        try {
+            const fs = require("fs");
+            const configPath = require("path").join(BdApi.Plugins.folder, "StankBot.config.json");
+            const diskConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+            for (const key of Object.keys(diskConfig)) {
+                BdApi.Data.save("StankBot", key, diskConfig[key]);
+            }
+            this.toast("Config synced from disk!");
+        } catch (e) {
+            this.toast(`Disk config read failed, using cached: ${e.message}`);
+        }
+    }
+
     async start() {
         try {
             // Hijack BetterDiscord's toast container globally to force them to render at the Top Center!
@@ -76,11 +90,8 @@ module.exports = class StankBot {
 
             this.toast("Booting plugin...", false);
             this.MAPHRA_GUILD_ID = "1482266782306799646";
-            this.MEMES_CHANNEL_ID = "1483628334490587336";
-            this.DEV_THREAD_ID = "1493190417703895051";
-            this.WORSHIP_CHANNEL_ID = "1489889364392546375";
+            this.ALTAR_CHANNEL_ID = "1489889364392546375";
             this.STANK_EMOJI = "<a:Stank:1487854129349922816>";
-            this.CHEATER_CAUGHT_GIF = "https://tenor.com/view/bh187-austin-powers-spotlight-search-light-busted-gif-19285562";
             this.BOT_OWNER_ID = "129508601730564096";
 
             this.UserStore = BdApi.Webpack.getStore("UserStore");
@@ -89,24 +100,26 @@ module.exports = class StankBot {
             this.ChannelStore = BdApi.Webpack.getStore("ChannelStore");
             this.AuthStore = BdApi.Webpack.getStore("AuthenticationStore");
 
+            // Sync BdApi's in-memory cache with the actual config.json file on disk
+            this._syncConfigFromDisk();
+
             // Load Settings
             this.defaultTemplate = "```\n{stankBoard}\n```";
             this.defaultBioTemplate = "Current :Stank: record: {record}\nOngoing :Stank: chain: {ongoing}";
             const savedSettings = BdApi.Data.load("StankBot", "settings") || {};
             this.settings = Object.assign({
                 exactCommandMatch: true,
-                enableMemesReplies: true,
-                enableBoardInMemes: true,
                 enableNicknameSync: true,
-                enableRecordAnnouncement: true,
+                autoReplyChannelIds: "1483628334490587336\n1493190417703895051",
+                announcementChannelIds: "1483628334490587336",
                 nicknameTemplate: "Randowned ({ongoing}/{record})",
                 recordTemplate: "```\nnew record chain: {record}\n\n{stankBoard}\n```",
+                cheaterTemplate: "https://tenor.com/view/bh187-austin-powers-spotlight-search-light-busted-gif-19285562\n{username} - penalty! - 50 punishment points awarded!",
                 scoreTemplate: this.defaultTemplate,
                 bioTemplate: this.defaultBioTemplate
             }, savedSettings);
 
             // Force update user templates to the strict new specification
-            this.settings.recordTemplate = "```\nnew record chain: {record}\n\n{stankBoard}\n```";
             this.settings.scoreTemplate = this.defaultTemplate;
 
             // Reinitialize bioTemplate if missing (new update feature)
@@ -135,7 +148,7 @@ module.exports = class StankBot {
                 return;
             }
 
-            // Next, heavily synchronize the active full set natively from the maphra-worship history deeply
+            // Next, heavily synchronize the active full set natively from the #altar history deeply
             await this.syncOngoingChainFromHistory();
 
             // Synchronize the server nickname on startup!
@@ -185,7 +198,7 @@ module.exports = class StankBot {
                         const memberStore = BdApi.Webpack.getStore("GuildMemberStore");
                         const memberInfo = testUser && memberStore ? memberStore.getMember(this.MAPHRA_GUILD_ID, testUser.id) : null;
                         const myName = memberInfo?.nick || testUser?.globalName || testUser?.username || "Unknown";
-                        this.sendCheaterMessage(channelId, testUser?.id, myName);
+                        this.sendCheaterMessage(testUser?.id, myName, channelId);
                         message.content = "!stank-cheater-test";
                     } else if (text === "!stank-board-reset" || text === "/stank-board-reset") {
                         this.toast(`Intercepted ${text}!`);
@@ -345,7 +358,7 @@ module.exports = class StankBot {
 
             while (!completedScrape && currentLoop < loopLimit) {
                 currentLoop++;
-                let fetchUrl = `https://discord.com/api/v9/channels/${this.WORSHIP_CHANNEL_ID}/messages?limit=100`;
+                let fetchUrl = `https://discord.com/api/v9/channels/${this.ALTAR_CHANNEL_ID}/messages?limit=100`;
                 if (lastMessageId) fetchUrl += `&before=${lastMessageId}`;
 
                 const res = await BdApi.Net.fetch(fetchUrl, { headers: { "Authorization": token } });
@@ -662,10 +675,19 @@ module.exports = class StankBot {
         }
     }
 
-    sendCheaterMessage(channelId, userId, username) {
+    sendCheaterMessage(userId, username, targetChannelId = null) {
+        const cheaterTmpl = (this.settings.cheaterTemplate || "").trim();
+        if (!cheaterTmpl) return;
         const displayName = (userId === this.BOT_OWNER_ID) ? this.cleanBotOwnerNick() : username;
-        this.sendBotReply(channelId, this.CHEATER_CAUGHT_GIF);
-        this.sendBotReply(channelId, `${displayName} - penalty! - 50 punishment points awarded!`);
+        const message = cheaterTmpl.replace(/{username}/g, displayName);
+        if (targetChannelId) {
+            this.sendBotReply(targetChannelId, message);
+        } else {
+            const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
+            for (const ch of channels) {
+                this.sendBotReply(ch, message);
+            }
+        }
     }
 
     getScoreTemplate() {
@@ -678,7 +700,7 @@ module.exports = class StankBot {
         return this.applyCommonReplacements(this.settings.bioTemplate || this.defaultBioTemplate);
     }
 
-    getRecordAnnouncementTemplate(isMemes = false) {
+    getRecordAnnouncementTemplate() {
         let tmpl = this.applyCommonReplacements(this.settings.recordTemplate || "```\nnew record chain: {record}\n\n{stankBoard}\n```");
 
         let slayerName = "Unknown";
@@ -686,12 +708,7 @@ module.exports = class StankBot {
             slayerName = this.stankboard[this.newSlayerId].username;
         }
         tmpl = tmpl.replace(/{chainStarterServerNickname}/g, slayerName);
-
-        if (isMemes && !this.settings.enableBoardInMemes) {
-            tmpl = tmpl.replace(/\n*\{stankBoard\}\n*/g, "\n");
-        } else {
-            tmpl = tmpl.replace(/{stankBoard}/g, this.generateStankBoardAscii());
-        }
+        tmpl = tmpl.replace(/{stankBoard}/g, this.generateStankBoardAscii());
 
         return tmpl;
     }
@@ -786,8 +803,8 @@ module.exports = class StankBot {
 
     onMessageReactionAdd(event) {
         if (!event) return;
-        // Verify it was in the worship channel
-        if (event.channelId !== this.WORSHIP_CHANNEL_ID) return;
+        // Verify it was in the #altar channel
+        if (event.channelId !== this.ALTAR_CHANNEL_ID) return;
         // Check if the reaction is the Stank Emoji
         const emojiName = event.emoji?.name?.toLowerCase() || "";
         if (emojiName.includes("stank") || event.emoji?.id === "1487854129349922816") {
@@ -805,16 +822,16 @@ module.exports = class StankBot {
         if (!event || !event.message) return;
         const msg = event.message;
 
-        if (msg.channel_id === this.WORSHIP_CHANNEL_ID) {
-            this.processWorshipMessage(msg);
+        if (msg.channel_id === this.ALTAR_CHANNEL_ID) {
+            this.processAltarMessage(msg);
         }
 
         this.processCommands(msg);
     }
 
-    processWorshipMessage(msg) {
+    processAltarMessage(msg) {
         const isStank = this.isStankMessage(msg);
-        this.toast(`Worship msg read! isStank: ${isStank}`);
+        this.toast(`Altar msg read! isStank: ${isStank}`);
 
         let stateChanged = false;
 
@@ -848,7 +865,7 @@ module.exports = class StankBot {
                         isCheater = true;
                         this.awardPunishment(authorId, username, 50);
                         this.toast(`🚨 CHEATER CAUGHT! ${username} broke the chain and tried to start a new one! +50 Punishment`);
-                        this.sendCheaterMessage(this.MEMES_CHANNEL_ID, authorId, username);
+                        this.sendCheaterMessage(authorId, username);
                         // Clear slayer — next legitimate contributor inherits the title
                         this.newSlayerId = null;
                         BdApi.Data.save("StankBot", "newSlayerId", null);
@@ -903,11 +920,15 @@ module.exports = class StankBot {
 
                 if (this.ongoingChain > this.recordChain) {
                     this.recordChain = this.ongoingChain;
-                    if (this.settings.enableRecordAnnouncement) {
-                        this.toast(`🎉 FINALIZED RECORD RUN BROKEN! Sending to #memes...`);
-                        this.sendBotReply(this.MEMES_CHANNEL_ID, this.getRecordAnnouncementTemplate(true));
+                    if ((this.settings.recordTemplate || "").trim()) {
+                        this.toast(`🎉 FINALIZED RECORD RUN BROKEN! Announcing...`);
+                        const announcement = this.getRecordAnnouncementTemplate();
+                        const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
+                        for (const ch of channels) {
+                            this.sendBotReply(ch, announcement);
+                        }
                     } else {
-                        this.toast(`🎉 FINALIZED RECORD RUN BROKEN! (announcement disabled)`);
+                        this.toast(`🎉 FINALIZED RECORD RUN BROKEN! (no announcement template set)`);
                     }
                 }
 
@@ -956,27 +977,22 @@ module.exports = class StankBot {
 
         // Native check: Direct Messages and Group Chats do not have a guildId attached to the payload
         const isDM = !msg.guild_id;
-        const inMemes = msg.channel_id === this.MEMES_CHANNEL_ID;
-        const inDevThread = msg.channel_id === this.DEV_THREAD_ID;
+        const allowedChannels = (this.settings.autoReplyChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
+        let isAllowlisted = allowedChannels.includes(msg.channel_id);
+        if (!isAllowlisted && this.ChannelStore) {
+            const channel = this.ChannelStore.getChannel(msg.channel_id);
+            if (channel && channel.parent_id && allowedChannels.includes(channel.parent_id)) {
+                isAllowlisted = true;
+            }
+        }
 
         let shootReply = false;
         if (isDM) {
             this.toast(`Routing auto-reply to DM!`);
             shootReply = true;
-        } else if (inDevThread) {
-            this.toast(`Routing auto-reply to isolated DEV thread!`);
+        } else if (isAllowlisted) {
+            this.toast(`Routing auto-reply to allowlisted channel!`);
             shootReply = true;
-        } else if (inMemes) {
-            if (this.settings.enableMemesReplies) {
-                if ((isBoardCommand || isXpCommand) && !this.settings.enableBoardInMemes) {
-                    this.toast(`Ignored stank tracking command in #memes due to settings!`);
-                } else {
-                    this.toast(`Routing auto-reply to #memes!`);
-                    shootReply = true;
-                }
-            } else {
-                this.toast(`Ignored command: #memes auto-reply disabled!`);
-            }
         }
 
         if (shootReply) {
@@ -1003,21 +1019,21 @@ module.exports = class StankBot {
 
     // ─── Settings Panel Factory Helpers ───
 
-    _addNote(parent, text, marginBottom = "20px") {
+    _addNote(parent, text) {
         const note = document.createElement("div");
-        Object.assign(note.style, { marginTop: "8px", marginBottom, fontSize: "14px", color: "var(--text-muted)" });
+        Object.assign(note.style, { marginTop: "4px", marginBottom: "16px", fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.4" });
         note.innerText = text;
         parent.appendChild(note);
     }
 
     _addCheckbox(parent, label, settingKey, note, onChange) {
         const container = document.createElement("label");
-        Object.assign(container.style, { display: "flex", alignItems: "center", gap: "10px", fontSize: "16px", cursor: "pointer" });
+        Object.assign(container.style, { display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", cursor: "pointer", marginBottom: "2px" });
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = this.settings[settingKey];
-        Object.assign(checkbox.style, { width: "20px", height: "20px", cursor: "pointer" });
+        Object.assign(checkbox.style, { width: "18px", height: "18px", cursor: "pointer", accentColor: "#5865f2" });
 
         checkbox.addEventListener("change", (e) => {
             this.settings[settingKey] = e.target.checked;
@@ -1029,32 +1045,37 @@ module.exports = class StankBot {
         container.appendChild(checkbox);
         container.appendChild(document.createTextNode(label));
         parent.appendChild(container);
-        this._addNote(parent, note);
+        if (note) this._addNote(parent, note);
     }
 
     _addTextarea(parent, label, value, height, note, onChange) {
-        const container = document.createElement("label");
-        Object.assign(container.style, { display: "flex", flexDirection: "column", gap: "10px", fontSize: "16px" });
-        container.appendChild(document.createTextNode(label));
+        const lbl = document.createElement("div");
+        Object.assign(lbl.style, { fontSize: "14px", fontWeight: "500", marginBottom: "6px", color: "var(--header-secondary)" });
+        lbl.textContent = label;
+        parent.appendChild(lbl);
 
         const textarea = document.createElement("textarea");
         textarea.value = value;
         Object.assign(textarea.style, {
-            width: "100%", height: height, fontFamily: "monospace", padding: "10px",
-            backgroundColor: "rgba(0, 0, 0, 0.4)", color: "var(--text-normal)",
-            border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "4px", resize: "vertical"
+            width: "100%", height: height, fontFamily: "monospace", fontSize: "13px", padding: "8px",
+            backgroundColor: "var(--input-background, rgba(0,0,0,0.4))", color: "var(--text-normal)",
+            border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px", resize: "vertical",
+            boxSizing: "border-box"
         });
         textarea.addEventListener("change", (e) => onChange(e.target.value.trim(), e));
 
-        container.appendChild(textarea);
-        parent.appendChild(container);
-        this._addNote(parent, note, "25px");
+        parent.appendChild(textarea);
+        if (note) this._addNote(parent, note);
     }
 
     _addNumberInput(parent, label, settingKey, defaultVal) {
-        const container = document.createElement("label");
-        Object.assign(container.style, { display: "flex", alignItems: "center", gap: "10px", fontSize: "16px", marginBottom: "8px" });
-        container.appendChild(document.createTextNode(label));
+        const container = document.createElement("div");
+        Object.assign(container.style, { display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", marginBottom: "10px" });
+
+        const lbl = document.createElement("span");
+        Object.assign(lbl.style, { color: "var(--header-secondary)", fontWeight: "500" });
+        lbl.textContent = label;
+        container.appendChild(lbl);
 
         const input = document.createElement("input");
         input.type = "number";
@@ -1062,9 +1083,9 @@ module.exports = class StankBot {
         input.max = "100";
         input.value = this.settings[settingKey] || defaultVal;
         Object.assign(input.style, {
-            width: "60px", padding: "4px",
-            backgroundColor: "rgba(0, 0, 0, 0.4)", color: "var(--text-normal)",
-            border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "4px"
+            width: "55px", padding: "4px 6px", fontSize: "13px", fontFamily: "monospace",
+            backgroundColor: "var(--input-background, rgba(0,0,0,0.4))", color: "var(--text-normal)",
+            border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px"
         });
 
         input.addEventListener("change", (e) => {
@@ -1079,73 +1100,87 @@ module.exports = class StankBot {
     }
 
     _addTextInput(parent, label, value, note, onChange) {
-        const container = document.createElement("label");
-        Object.assign(container.style, { display: "flex", flexDirection: "column", gap: "10px", fontSize: "16px" });
-        container.appendChild(document.createTextNode(label));
+        const lbl = document.createElement("div");
+        Object.assign(lbl.style, { fontSize: "14px", fontWeight: "500", marginBottom: "6px", color: "var(--header-secondary)" });
+        lbl.textContent = label;
+        parent.appendChild(lbl);
 
         const input = document.createElement("input");
         input.type = "text";
         input.value = value;
         Object.assign(input.style, {
-            width: "100%", padding: "10px", fontFamily: "monospace",
-            backgroundColor: "rgba(0, 0, 0, 0.4)", color: "var(--text-normal)",
-            border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "4px"
+            width: "100%", padding: "8px", fontSize: "13px", fontFamily: "monospace",
+            backgroundColor: "var(--input-background, rgba(0,0,0,0.4))", color: "var(--text-normal)",
+            border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px",
+            boxSizing: "border-box"
         });
         input.addEventListener("change", (e) => onChange(e.target.value.trim()));
 
-        container.appendChild(input);
-        parent.appendChild(container);
-        this._addNote(parent, note);
+        parent.appendChild(input);
+        if (note) this._addNote(parent, note);
     }
 
     // ─── Settings Panel ───
 
     getSettingsPanel() {
         const panel = document.createElement("div");
-        panel.style.padding = "20px";
-        panel.style.color = "var(--text-normal)";
+        Object.assign(panel.style, { padding: "16px", color: "var(--text-normal)", maxWidth: "600px" });
 
-        const createGroup = (title) => {
-            const fieldset = document.createElement("fieldset");
-            Object.assign(fieldset.style, { border: "1px solid var(--background-modifier-accent)", borderRadius: "8px", padding: "15px", marginBottom: "25px" });
-            const legend = document.createElement("legend");
-            Object.assign(legend.style, { padding: "0 8px", fontWeight: "bold", fontSize: "16px", color: "var(--header-primary)" });
-            legend.innerText = title;
-            fieldset.appendChild(legend);
-            return fieldset;
+        const createSection = (title) => {
+            const header = document.createElement("div");
+            Object.assign(header.style, {
+                fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px",
+                color: "var(--header-secondary)", marginBottom: "12px", paddingBottom: "6px",
+                borderBottom: "1px solid rgba(255,255,255,0.06)"
+            });
+            header.textContent = title;
+
+            const section = document.createElement("div");
+            Object.assign(section.style, { marginBottom: "24px" });
+            section.appendChild(header);
+            return section;
         };
 
-        const groupCore = createGroup("Core Behavior & Triggers");
-        const groupTemplates = createGroup("Template Customization");
+        // ── Core ──
+        const sCore = createSection("Behavior");
 
-        // ── Core Checkboxes ──
-        this._addCheckbox(groupCore, "Require exact text match for commands", "exactCommandMatch",
-            "If checked, '!stank-board' must be the only text in the message to successfully trigger a reply. If unchecked, the bot will wildly reply even if the command keyword is embedded deep inside a longer paragraph.");
-
-        this._addCheckbox(groupCore, "Enable commands auto-reply in #memes channel", "enableMemesReplies",
-            "If checked, the bot will visibly reply to user's incoming !stank-board commands inside the #memes channel. If unchecked, it drops them and ONLY processes command tags silently in Direct Messages.");
-
-        this._addCheckbox(groupCore, "Send !stank-board to #memes channel", "enableBoardInMemes",
-            "If unchecked, drops !stank-board commands in #memes to reduce spam, and ALSO cleanly omits {stankBoard} injections from the broken chain auto-announcements.");
-
-        this._addCheckbox(groupCore, "Enable Record Broken specific announcements in #memes", "enableRecordAnnouncement",
-            "If checked, the bot will autonomously shoot out an announcement natively inside the #memes channel whenever the active chain physically breaks the highest recorded score.");
-
-        this._addCheckbox(groupCore, "Synchronize server nickname with ongoing chain", "enableNicknameSync",
-            "If checked, automatically overwrites your Maphra server nickname on initial plugin load and upon every link added or shattered. Unchecking this immediately resets your nickname back to solely 'YourName' via API push.\n*Note: Discord limits all user nickname changes to approximately 10 per hour.*",
+        this._addCheckbox(sCore, "Sync server nickname with chain", "enableNicknameSync",
+            "Auto-update your Maphra nickname on chain changes. Discord limits ~10 changes/hour.",
             () => this.updateNickname());
 
-        // ── Rows Configuration ──
-        this._addNumberInput(groupTemplates, "Stank Rankings Rows: ", "stankRankingRows", 5);
-        this._addNumberInput(groupTemplates, "Punishment Rankings Rows: ", "punishmentRankingRows", 5);
+        this._addCheckbox(sCore, "Require exact text match for commands", "exactCommandMatch",
+            "Only trigger when the command is the entire message content.");
 
-        // ── Template Editors ──
-        this._addTextarea(groupTemplates, "Discord Profile Bio Layout",
-            this.settings.bioTemplate || this.defaultBioTemplate, "60px",
-            "Design the layout specifically applied to your personal Discord Bio.\nWARNING: The plugin uses a dynamic RegExp parser under the hood tied strictly to this layout string. If you change this out of sync with your physical profile bio, it aggressively triggers an API push matching this layout immediately to protect data memory sync.",
+        this._addTextarea(sCore, "Command channels",
+            this.settings.autoReplyChannelIds || "", "55px",
+            "Channel IDs for command auto-replies (one per line). Threads inherit. DMs always work.",
+            (val) => {
+                this.settings.autoReplyChannelIds = val;
+                BdApi.Data.save("StankBot", "settings", this.settings);
+                this.toast("Command channels updated!");
+            });
+
+        this._addTextarea(sCore, "Announcement channels",
+            this.settings.announcementChannelIds || "", "55px",
+            "Channel IDs for record-broken and cheater-caught announcements (one per line).",
+            (val) => {
+                this.settings.announcementChannelIds = val;
+                BdApi.Data.save("StankBot", "settings", this.settings);
+                this.toast("Announcement channels updated!");
+            });
+
+        // ── Templates ──
+        const sTemplates = createSection("Templates");
+
+        this._addNumberInput(sTemplates, "Stank ranking rows:", "stankRankingRows", 5);
+        this._addNumberInput(sTemplates, "Punishment ranking rows:", "punishmentRankingRows", 5);
+
+        this._addTextarea(sTemplates, "Bio layout",
+            this.settings.bioTemplate || this.defaultBioTemplate, "55px",
+            "Your Discord server bio. Must contain {record} and {ongoing}. Syncs on change.",
             (val, e) => {
                 if (!val.includes("{record}") || !val.includes("{ongoing}")) {
-                    this.toast("Bio template must contain both {record} and {ongoing} for memory reading!", true);
+                    this.toast("Bio template must contain both {record} and {ongoing}!", true);
                     e.target.value = this.settings.bioTemplate || this.defaultBioTemplate;
                     return;
                 }
@@ -1157,36 +1192,45 @@ module.exports = class StankBot {
 
         const defaultBoardTemplate = "chain record: {record}\nongoing chain: {ongoing}\n\n# Stank Rankings (top {stankRowsLimit})\nnew slayer: {slayerRank}, {slayerName}, {slayerXp} Stank Points\n{stankRankingsTable}\n\n# Punishment Rankings (top {punishRowsLimit})\nnew goat: {goatRank}, {goatName}, {goatPunish} Punishment Points\n{punishmentRankingsTable}";
 
-        this._addTextarea(groupTemplates, "Internal ASCII {stankBoard} Format",
-            this.settings.boardLayoutTemplate || defaultBoardTemplate, "160px",
-            "Configures the precise internal table structure that replaces the {stankBoard} variable. Available placeholders: {record}, {ongoing}, {stankRowsLimit}, {slayerRank}, {slayerName}, {slayerXp}, {punishRowsLimit}, {goatRank}, {goatName}, {goatPunish}, :Stank:, {stankRankingsTable}, {punishmentRankingsTable}.",
+        this._addTextarea(sTemplates, "Leaderboard layout ({stankBoard})",
+            this.settings.boardLayoutTemplate || defaultBoardTemplate, "140px",
+            "Internal table structure for {stankBoard}. Vars: {record}, {ongoing}, {stankRowsLimit}, {slayerRank}, {slayerName}, {slayerXp}, {punishRowsLimit}, {goatRank}, {goatName}, {goatPunish}, {stankRankingsTable}, {punishmentRankingsTable}",
             (val) => {
                 this.settings.boardLayoutTemplate = val;
                 BdApi.Data.save("StankBot", "settings", this.settings);
                 this.toast("StankBoard Format Saved!");
             });
 
-        this._addTextarea(groupTemplates, "Board Auto-Reply Format",
-            this.settings.scoreTemplate || this.defaultTemplate, "80px",
-            "Design the layout of your Stank Bot replies (`!stank-board`). Available placeholders: {record}, {ongoing}, {stankBoard}, and :Stank:",
+        this._addTextarea(sTemplates, "Board reply format",
+            this.settings.scoreTemplate || this.defaultTemplate, "55px",
+            "Reply layout for !stank-board. Vars: {record}, {ongoing}, {stankBoard}, :Stank:",
             (val) => {
                 this.settings.scoreTemplate = val;
                 BdApi.Data.save("StankBot", "settings", this.settings);
                 this.toast("Score Template Saved!");
             });
 
-        this._addTextarea(groupTemplates, "Record Announcement Format",
-            this.settings.recordTemplate || "```\nnew record chain: {record}\n\n{stankBoard}\n```", "120px",
-            "Custom formatting applied globally to Record Broken messages. Available variables: {record}, :Stank:, {chainStarterServerNickname}, {stankBoard}",
+        this._addTextarea(sTemplates, "Record broken announcement",
+            this.settings.recordTemplate || "", "80px",
+            "Leave empty to disable. Vars: {record}, {stankBoard}, {chainStarterServerNickname}, :Stank:",
             (val) => {
                 this.settings.recordTemplate = val;
                 BdApi.Data.save("StankBot", "settings", this.settings);
-                this.toast("Announcement Template Saved!");
+                this.toast("Record Announcement Template Saved!");
             });
 
-        this._addTextInput(groupTemplates, "Custom Nickname Format",
+        this._addTextarea(sTemplates, "Cheater caught announcement",
+            this.settings.cheaterTemplate || "", "55px",
+            "Leave empty to disable. Vars: {username}",
+            (val) => {
+                this.settings.cheaterTemplate = val;
+                BdApi.Data.save("StankBot", "settings", this.settings);
+                this.toast("Cheater Announcement Template Saved!");
+            });
+
+        this._addTextInput(sTemplates, "Nickname format",
             this.settings.nicknameTemplate || "Randowned ({ongoing}/{record})",
-            "Custom formatting applied to your Server Nickname if sync is turned on. Available variables: {record}, {ongoing}",
+            "Used when nickname sync is on. Vars: {record}, {ongoing}",
             (val) => {
                 this.settings.nicknameTemplate = val;
                 BdApi.Data.save("StankBot", "settings", this.settings);
@@ -1194,8 +1238,8 @@ module.exports = class StankBot {
                 if (this.settings.enableNicknameSync) this.updateNickname();
             });
 
-        panel.appendChild(groupCore);
-        panel.appendChild(groupTemplates);
+        panel.appendChild(sCore);
+        panel.appendChild(sTemplates);
         return panel;
     }
 };

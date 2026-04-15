@@ -4,11 +4,11 @@
 
 **StankBot** is a custom [BetterDiscord](https://betterdiscord.app/) plugin built for tracking community sticker chains in the [Maphra Discord Server](https://discord.gg/maphra).
 
-It listens to the `#maphra-worship` channel for "Stank" sticker chains, awards Stank Points and Punishment Points, and dynamically updates your Server Bio and Nickname when the current or record chain lengths are changed.
+It listens to the `#altar` channel for "Stank" sticker chains, awards Stank Points and Punishment Points, and dynamically updates your Server Bio and Nickname when the current or record chain lengths are changed.
 
 ## 🎮 The Game
 
-Players cooperate to build the longest chain of "Stank" stickers in `#worship`. Each **unique user** can contribute once per chain. The chain breaks when anyone posts a non-sticker message.
+Players cooperate to build the longest chain of "Stank" stickers in `#altar`. Each **unique user** can contribute once per chain. The chain breaks when anyone posts a non-sticker message.
 
 | Action | Points |
 |---|---|
@@ -40,12 +40,13 @@ Players cooperate to build the longest chain of "Stank" stickers in `#worship`. 
 ## 🌟 Features
 
 - **Chain Tracking**: Tracks the longest unbroken chain of Stank stickers by unique users.
-- **XP & Punishment System**: Awards and punishes players based on their contributions and chain-breaking behavior.
+- **SP & Punishment System**: Awards and punishes players based on their contributions and chain-breaking behavior.
 - **Anti-Cheat**: Detects and punishes users who break a chain then immediately start the next one.
 - **History Scraping**: Reconstructs chain state from channel history on startup.
 - **Dynamic Updates**: Auto-updates your Server Bio and Nickname (e.g. `Username (10/32)`) with current scores.
-- **Auto-Reply**: Responds to commands in DMs, dev thread, and #memes (configurable).
-- **Customization**: Configurable templates for Bio, Nickname, record announcements, and board layout.
+- **Command Channels**: Configurable allowlist of channel IDs for command auto-replies. DMs always work. Threads under listed channels are included.
+- **Announcement Channels**: Separate allowlist for record-broken and cheater-caught announcements. Template-driven — leave a template empty to disable that announcement.
+- **Customization**: Configurable templates for Bio, Nickname, board layout, record announcements, and cheater caught messages.
 
 ![](static/screenshot-1.png)
 ![](static/screenshot-2.png)
