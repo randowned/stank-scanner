@@ -836,6 +836,12 @@ module.exports = class StankBot {
                 method: "PUT",
                 headers: { "Authorization": token }
             });
+            // Cancel the +5 SP that will be auto-awarded to us for our own reaction
+            const me = this.UserStore?.getCurrentUser();
+            if (me && this.stankboard[me.id]) {
+                this.stankboard[me.id].xp = Math.max(0, (this.stankboard[me.id].xp || 0) - 5);
+                BdApi.Data.save("StankBot", "stankboard", this.stankboard);
+            }
         } catch (e) {
             this.toast(`Failed to react: ${e.toString()}`, true);
         }
