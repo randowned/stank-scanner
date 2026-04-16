@@ -865,11 +865,10 @@ module.exports = class StankBot {
                 const emojiKey = event.emoji?.id || event.emoji?.name || "";
                 const reactionKey = `${event.messageId}:${userId}:${emojiKey}`;
                 if (this.processedReactions.has(reactionKey)) return;
-                // Evict oldest entries (Set preserves insertion order) when over the cap.
-                while (this.processedReactions.size >= 5000) {
-                    const oldestKey = this.processedReactions.values().next().value;
-                    if (oldestKey === undefined) break;
-                    this.processedReactions.delete(oldestKey);
+                // Evict the oldest 100 entries in one shot when the cap is hit
+                // (Set preserves insertion order, so slicing from index 100 keeps the newest).
+                if (this.processedReactions.size >= 5000) {
+                    this.processedReactions = new Set(Array.from(this.processedReactions).slice(100));
                 }
                 this.processedReactions.add(reactionKey);
                 BdApi.Data.save("StankBot", "processedReactions", Array.from(this.processedReactions));
