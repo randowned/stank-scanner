@@ -8,21 +8,21 @@ It listens to the `#altar` channel for "Stank" sticker chains, awards Stank Poin
 
 ## The Game
 
-Players cooperate to build the longest chain of "Stank" stickers in `#altar`. Each **unique user** can contribute once per chain. The chain breaks when anyone posts a non-sticker message.
+Players cooperate to build the longest chain of "Stank" stickers in `#altar`. The chain breaks when anyone posts a non-sticker message.
 
 Rankings are based on **net Stank Points** (earned SP minus punishment points).
 
 | Action | Points |
 |---|---|
-| Start a new chain (1st sticker after break) | +100 SP, become **Slayer** |
-| First-ever sticker contribution (lifetime) | +50 SP bonus |
-| Valid unique chain contribution | +25 SP |
-| Stank emoji reaction on an ongoing-chain sticker | +5 SP (once per user per sticker) |
-| Break the chain | +3× chain length punishment, become **Goat** |
-| Chat during a broken chain | +1× chain length punishment |
-| Break chain then start the next one | +50 flat punishment (cheating!) |
+| Chain starter (first stank) | +10 + 15 SP bonus = **+25 SP**, become **Slayer** |
+| Each subsequent valid stank (position N) | +10 + (N−1) SP |
+| Last poster when chain breaks | +15 SP retroactive finish bonus |
+| Stank emoji reaction on ongoing-chain sticker | +1 SP (once per user per sticker) |
+| Break the chain | −(25 + chain length × 2) PP |
 
-> **Anti-Cheat:** If the chain breaker immediately starts the next chain, they receive the cheating penalty and **no SP**. The next legitimate contributor inherits the chain starter bonus (+100 SP) and the **Slayer** title.
+> **Cooldown:** The same user cannot stank again for **5 minutes** within a chain. Cooldowns reset when the chain breaks.
+
+> **The Chainbreaker:** The leaderboard footer highlights the player with the highest all-time punishment points.
 
 ## Commands
 
@@ -38,21 +38,23 @@ Rankings are based on **net Stank Points** (earned SP minus punishment points).
 | Command | Description |
 |---|---|
 | `!stank-record-test` | Preview record announcement |
-| `!stank-cheater-test` | Preview cheater caught message |
 | `!stank-board-reset` | Reset all board data |
 | `!stank-board-reload` | Reset and reload from channel history |
 
 ## Features
 
 - **Net Score Ranking**: Players ranked by `earned SP - punishment points`. Breakdown shown in `!stank-points`.
-- **Chain Tracking**: Tracks the longest unbroken chain of Stank stickers by unique users.
-- **Anti-Cheat**: Detects cheaters who break then restart a chain. Bonus transfers to the next legitimate contributor.
-- **History Scraping**: Reconstructs chain state from channel history on startup.
+- **Chain Tracking**: Tracks the longest unbroken chain of Stank stickers. Displays total stanks and unique stanker count.
+- **Position-based XP**: Each stank earns more SP as the chain grows — position N earns `10 + (N−1)` SP.
+- **Retroactive Finish Bonus**: The last valid poster gets +15 SP when the chain breaks.
+- **Per-user Cooldown**: 5-minute cooldown per user prevents spam-stanking; violations get a callout with the time remaining.
+- **The Chainbreaker**: Board footer shows the player with the highest all-time punishment points.
+- **History Scraping**: Reconstructs chain state from channel history on startup, including cooldown tracking.
 - **Dynamic Updates**: Auto-updates your Server Bio and Nickname (e.g. `Username (10/32)`) with current scores.
 - **Command Channels**: Configurable allowlist of channel IDs for command auto-replies. DMs always work.
-- **Announcement Channels**: Separate allowlist for record-broken and cheater-caught announcements. `!stank-help` works in both command and announcement channels.
+- **Announcement Channels**: Separate allowlist for record-broken announcements. `!stank-help` works in both command and announcement channels.
 - **Logging**: Persistent log file (`StankBot.log`) in the plugins folder with ISO timestamps and session separators.
-- **Customization**: Configurable templates for Bio, Nickname, board layout, record announcements, and cheater caught messages.
+- **Customization**: Configurable templates for Bio, Nickname, board layout, and record announcements.
 
 ## Installation
 
