@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra Discord community #altar management bot.
- * @version 3.2.3
+ * @version 3.3.0
  */
 
 module.exports = class StankBot {
@@ -25,6 +25,7 @@ module.exports = class StankBot {
             this.ALTAR_CHANNEL_ID = "1489889364392546375";
             this.STANK_EMOJI = "<a:Stank:1487854129349922816>";
             this.BOT_OWNER_ID = "129508601730564096";
+            this.AUSTIN_POWERS_GIF = "https://tenor.com/view/bh187-austin-powers-spotlight-search-light-busted-gif-19285562";
 
             this.UserStore = BdApi.Webpack.getStore("UserStore");
             this.MessageActions = BdApi.Webpack.getModule(m => m && typeof m.sendMessage === "function" && typeof m.editMessage === "function", { searchExports: true });
@@ -116,26 +117,32 @@ module.exports = class StankBot {
                 const [channelId, message] = args;
                 if (message && message.content) {
                     const text = message.content.trim();
+                    const normalized = text.toLowerCase().replace(/-/g, "");
                     const isAllowed = this.isChannelAllowed(channelId, text.includes("stank-help")) || this.isDmAllowlisted(channelId);
-                    if ((text === "!stank-board" || text === "/stank-board") && isAllowed) {
+                    const me = this.UserStore.getCurrentUser();
+
+                    if ((normalized === "!stankboard" || normalized === "/stankboard") && isAllowed) {
                         message.content = this.getScoreTemplate();
-                    } else if (text === "!stank-record-test" || text === "/stank-record-test") {
+                    } else if (normalized === "!stankrecordtest" || normalized === "/stankrecordtest") {
                         message.content = this.getRecordAnnouncementTemplate();
-                    } else if ((text === "!stank-help" || text === "/stank-help") && isAllowed) {
+                    } else if ((normalized === "!stankhelp" || normalized === "/stankhelp") && isAllowed) {
                         message.content = this.getHelpTemplate();
-                    } else if ((text.startsWith("!stank-points") || text.startsWith("/stank-points")) && isAllowed) {
-                        const me = this.UserStore.getCurrentUser();
+                    } else if ((normalized.startsWith("!stankpoints") || normalized.startsWith("/stankpoints")) && isAllowed) {
                         if (me) {
                             const parts = text.split(/\s+/);
                             const rankParam = parts.length > 1 ? parts[1] : null;
                             message.content = this.getPointsResponse(me.id, rankParam);
                         }
-                    } else if (text === "!stank-board-reset" || text === "/stank-board-reset") {
+                    } else if ((normalized === "!stankcooldown" || normalized === "/stankcooldown") && isAllowed) {
+                        if (me) {
+                            message.content = this.getCooldownTextForUser(me.id);
+                        }
+                    } else if (normalized === "!stankboardreset" || normalized === "/stankboardreset") {
                         this.resetBoard();
                         this.updateBio();
                         this.updateNickname();
                         message.content = `\`\`\`\nboard reset\n\n${this.generateStankBoardAscii()}\n\`\`\``;
-                    } else if (text === "!stank-board-reload" || text === "/stank-board-reload") {
+                    } else if (normalized === "!stankboardreload" || normalized === "/stankboardreload") {
                         this.resetBoard();
                         message.content = "board reloading...";
                         const reloadChannelId = channelId;
@@ -145,7 +152,7 @@ module.exports = class StankBot {
                             this.updateNickname();
                             this.sendBotReply(reloadChannelId, `\`\`\`\nboard reloaded\n\n${this.generateStankBoardAscii()}\n\`\`\``);
                         })();
-                    } else if (text === "!stank-log" || text === "/stank-log" || text.startsWith("!stank-log ") || text.startsWith("/stank-log ")) {
+                    } else if ((normalized === "!stanklog" || normalized === "/stanklog") || normalized.startsWith("!stanklog ") || normalized.startsWith("/stanklog ")) {
                         const parts = text.split(/\s+/);
                         const count = parts.length > 1 ? parseInt(parts[1], 10) : 50;
                         message.content = this.getLogTail(count);
@@ -249,6 +256,50 @@ module.exports = class StankBot {
         return date.toISOString().replace("T", " ").replace("Z", "");
     }
 
+    getChannelIds(settingKey) {
+        const raw = this.settings[settingKey] || "";
+        return [...new Set(raw.split("\n").map(s => s.trim()).filter(Boolean))];
+    }
+
+    dispatchOutgoingMessage(type, text, replyToMessageId = null) {
+        const commandChannels = this.getChannelIds("autoReplyChannelIds");
+        const announcementChannels = this.getChannelIds("announcementChannelIds");
+        const channelSet = new Set();
+
+        if (type === "command" || type === "both") {
+            for (const channelId of commandChannels) channelSet.add(channelId);
+        }
+        if (type === "announcement" || type === "both") {
+            if (announcementChannels.length > 0) {
+                for (const channelId of announcementChannels) channelSet.add(channelId);
+            } else if (type === "announcement") {
+                for (const channelId of commandChannels) channelSet.add(channelId);
+            }
+        }
+
+        const message = this.applyCommonReplacements(text);
+        for (const channelId of channelSet) {
+            this.sendBotReply(channelId, message, replyToMessageId);
+        }
+    }
+
+    formatDurationMs(ms) {
+        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}m${String(seconds).padStart(2, "0")}s`;
+    }
+
+    getCooldownTextForUser(userId, timestamp) {
+        const lastTs = this.lastStankTimestamps[userId] || 0;
+        const now = typeof timestamp === "number" ? timestamp : (timestamp ? Date.parse(timestamp) : Date.now());
+        const remainingMs = StankBot.RESTANK_COOLDOWN_MS - (now - lastTs);
+        if (remainingMs <= 0) {
+            return this.applyCommonReplacements("✅ Ready to :Stank:");
+        }
+        return this.applyCommonReplacements(`⏳ Cooldown: ${this.formatDurationMs(remainingMs)} remaining!`);
+    }
+
     getNextAutoResetDelay() {
         const now = this.getISODateTime();
         const nowHour = now.getUTCHours();
@@ -318,14 +369,9 @@ module.exports = class StankBot {
 
     sendAutoResetWarning(minutes) {
         this.updateNextResetCountdown();
-        const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
-        if (!channels.length) return;
-
         const announcement = this.applyCommonReplacements(`:Stank: Auto board reset in ${minutes} minute${minutes === 1 ? "" : "s"}!`);
         this.log(`Auto-reset warning (${minutes} min) triggered at ${this.getTimestamp()}`);
-        for (const channelId of channels) {
-            this.sendBotReply(channelId, announcement);
-        }
+        this.dispatchOutgoingMessage("announcement", announcement);
     }
 
     scheduleAutoBoardReset() {
@@ -350,13 +396,10 @@ module.exports = class StankBot {
         this.updateBio();
         this.updateNickname();
 
-        const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
         const boardMessage = this.getScoreTemplate();
         const announcement = this.applyCommonReplacements(`:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`);
-        for (const channelId of channels) {
-            this.sendBotReply(channelId, boardMessage);
-            this.sendBotReply(channelId, announcement);
-        }
+        this.dispatchOutgoingMessage("command", boardMessage);
+        this.dispatchOutgoingMessage("announcement", announcement);
     }
 
     isChannelAllowed(channelId, includeAnnouncement = false) {
@@ -1036,12 +1079,13 @@ module.exports = class StankBot {
             if (msgTs - lastTs < StankBot.RESTANK_COOLDOWN_MS) {
                 // Cooldown violation — react but award nothing; don't add to chain
                 this.addStankReaction(msg.channel_id, msg.id);
+                const cooldownText = this.getCooldownTextForUser(authorId, msgTs);
                 const secsLeft = Math.ceil((StankBot.RESTANK_COOLDOWN_MS - (msgTs - lastTs)) / 1000);
                 const commandChannels = (this.settings.autoReplyChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
                 for (const ch of commandChannels) {
-                    this.sendBotReply(ch, `⏳ ${username}, reStank cooldown! Wait ${secsLeft}s.`);
+                    this.sendBotReply(ch, `⏳ ${username}, reStank cooldown! Wait ${this.formatDurationMs(secsLeft * 1000)}.`);
                 }
-                this.toast(`⏳ ${username} reStanked too soon (${secsLeft}s left)`);
+                this.toast(`⏳ ${username} reStanked too soon (${this.formatDurationMs(secsLeft * 1000)} left)`);
                 return;
             }
 
@@ -1102,16 +1146,18 @@ module.exports = class StankBot {
                 this.toast(`💥 ${username} broke chain of ${brokenLength} → -${penalty} PP`);
                 BdApi.Data.save("StankBot", "lastPunishedMessageId", msg.id);
 
-                // Callout in command channels
-                const commandChannels = (this.settings.autoReplyChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
-                for (const ch of commandChannels) {
-                    this.sendBotReply(ch, `💥 **${username}** broke the Stank chain at **${brokenLength}** stanks! (-${penalty} PP)`);
-                }
+                const message = this.applyCommonReplacements(`💥 **${username}** broke the Stank chain at **${brokenLength}** stanks! (-${penalty} PP)`);
+                this.dispatchOutgoingMessage("announcement", this.AUSTIN_POWERS_GIF);
+                
+                // delay next message so that the GIF is processed first.
+                setTimeout(() => {
+                    this.dispatchOutgoingMessage("announcement", message);
+                }, 250);
             }
 
             // Record check
             if (this.ongoingChain > this.recordChain ||
-            (this.ongoingChain === this.recordChain && this.chainUniqueUsers.length > this.recordChainUnique)) {
+                (this.ongoingChain === this.recordChain && this.chainUniqueUsers.length > this.recordChainUnique)) {
                 this.recordChain = this.ongoingChain;
                 this.recordChainUnique = this.chainUniqueUsers.length;
                 this.settings.recordChain = this.recordChain;
@@ -1120,8 +1166,7 @@ module.exports = class StankBot {
                 if ((this.settings.recordTemplate || "").trim()) {
                     this.toast(`🎉 New record! Announcing...`);
                     const announcement = this.getRecordAnnouncementTemplate();
-                    const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
-                    for (const ch of channels) this.sendBotReply(ch, announcement);
+                    this.dispatchOutgoingMessage("announcement", announcement);
                 } else {
                     this.toast(`🎉 New record! (no announcement template)`);
                 }
@@ -1153,20 +1198,29 @@ module.exports = class StankBot {
 
         if (!msg.content) return;
         const rawContent = msg.content.trim();
-        const match = (cmd) => this.settings.exactCommandMatch ? (rawContent === cmd) : msg.content.includes(cmd);
+        const normalizedContent = rawContent.toLowerCase().replace(/-/g, "");
+        const match = (cmd) => {
+            const normalizedCmd = cmd.toLowerCase().replace(/-/g, "");
+            return this.settings.exactCommandMatch
+                ? normalizedContent === normalizedCmd
+                : normalizedContent.includes(normalizedCmd);
+        };
 
         const isAdminReset = match("!stank-board-reset") || match("/stank-board-reset");
         const isAdminReload = match("!stank-board-reload") || match("/stank-board-reload");
         const isAdminRecordTest = match("!stank-record-test") || match("/stank-record-test");
-        const isAdminLog = rawContent === "!stank-log" || rawContent.startsWith("!stank-log ") ||
-            rawContent === "/stank-log" || rawContent.startsWith("/stank-log ");
+        const isAdminLog = normalizedContent === "!stanklog" || normalizedContent.startsWith("!stanklog ") ||
+            normalizedContent === "/stanklog" || normalizedContent.startsWith("/stanklog ");
         const isAdminCommand = isAdminReset || isAdminReload || isAdminRecordTest || isAdminLog;
 
-        const isBoardCommand = match("!stank-board");
-        const isXpCommand = rawContent === "!stank-points" || rawContent.startsWith("!stank-points ");
-        const isHelpCommand = match("!stank-help");
+        const isBoardCommand = match("!stank-board") || match("/stank-board");
+        const isXpCommand = normalizedContent === "!stankpoints" || normalizedContent.startsWith("!stankpoints ") ||
+            normalizedContent === "/stankpoints" || normalizedContent.startsWith("/stankpoints ");
+        const isCooldownCommand = normalizedContent === "!stankcooldown" || normalizedContent.startsWith("!stankcooldown ") ||
+            normalizedContent === "/stankcooldown" || normalizedContent.startsWith("/stankcooldown ");
+        const isHelpCommand = match("!stank-help") || match("/stank-help");
 
-        if (!isAdminCommand && !isBoardCommand && !isXpCommand && !isHelpCommand) return;
+        if (!isAdminCommand && !isBoardCommand && !isXpCommand && !isHelpCommand && !isCooldownCommand) return;
 
         const isAllowlisted = this.isChannelAllowed(msg.channel_id, isHelpCommand);
         const isDmAllowlisted = !msg.guild_id && this.isDmAllowlisted(msg.channel_id, msg.author.id);
@@ -1200,7 +1254,9 @@ module.exports = class StankBot {
             return;
         }
 
-        if (isXpCommand) {
+        if (isCooldownCommand) {
+            this.sendBotReply(msg.channel_id, this.getCooldownTextForUser(msg.author.id), msg.id);
+        } else if (isXpCommand) {
             const parts = rawContent.split(/\s+/);
             const rankParam = parts.length > 1 ? parts[1] : null;
             const replyText = this.getPointsResponse(msg.author.id, rankParam);
