@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra Discord community #altar management bot.
- * @version 3.2.0
+ * @version 3.2.1
  */
 
 module.exports = class StankBot {
@@ -14,6 +14,7 @@ module.exports = class StankBot {
     static SP_BREAK_PER_STANK  = 2;    // Additional penalty per stank in the broken chain
     static RESTANK_COOLDOWN_MS = 10 * 60 * 1000;  // 5-minute per-Stanker restank cooldown
     static RESET_TARGETS       = [7, 15, 23];
+    static RESET_WARNING_MINS  = [30, 5];
 
     async start() {
         try {
@@ -87,6 +88,7 @@ module.exports = class StankBot {
             this.chainStarterId = BdApi.Data.load("StankBot", "chainStarterId") || null;
 
             this.autoResetTimer = null;
+            this.autoResetWarningTimers = [];
             this.nextResetIn = "00:00";
             this.nextResetTimestamp = null;
 
@@ -287,16 +289,57 @@ module.exports = class StankBot {
         this.nextResetIn = String(hours).padStart(2, "0") + ":" + String(minutes).padStart(2, "0");
     }
 
+    clearAutoResetWarningTimers() {
+        if (Array.isArray(this.autoResetWarningTimers) && this.autoResetWarningTimers.length) {
+            for (const timer of this.autoResetWarningTimers) {
+                clearTimeout(timer);
+            }
+        }
+        this.autoResetWarningTimers = [];
+    }
+
+    scheduleAutoResetWarningTimers() {
+        this.clearAutoResetWarningTimers();
+        if (!this.nextResetTimestamp || isNaN(this.nextResetTimestamp.getTime())) return;
+
+        const now = this.getISODateTime();
+        const nowMs = now.getTime();
+
+        for (const minutes of StankBot.RESET_WARNING_MINS) {
+            const triggerTime = this.nextResetTimestamp.getTime() - minutes * 60000;
+            const delayMs = triggerTime - nowMs;
+            if (delayMs <= 0) continue;
+
+            const timer = setTimeout(() => this.sendAutoResetWarning(minutes), delayMs);
+            this.autoResetWarningTimers.push(timer);
+            this.log(`Auto-reset warning scheduled for ${minutes} minute${minutes === 1 ? "" : "s"} remaining (in ${Math.ceil(delayMs / 60000)} min)`);
+        }
+    }
+
+    sendAutoResetWarning(minutes) {
+        this.updateNextResetCountdown();
+        const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
+        if (!channels.length) return;
+
+        const announcement = `:Stank: Auto board reset in ${minutes} minute${minutes === 1 ? "" : "s"}!`;
+        this.log(`Auto-reset warning (${minutes} min) triggered at ${this.getTimestamp()}`);
+        for (const channelId of channels) {
+            this.sendBotReply(channelId, announcement);
+        }
+    }
+
     scheduleAutoBoardReset() {
         if (this.autoResetTimer) {
             clearTimeout(this.autoResetTimer);
             this.autoResetTimer = null;
         }
+        this.clearAutoResetWarningTimers();
 
         const delayMs = this.getNextAutoResetDelay();
         this.updateNextResetCountdown();
         this.autoResetTimer = setTimeout(() => this.autoBoardReset(), delayMs);
         this.log(`Auto-reset scheduled in ${this.nextResetIn} (at ${this.getTimestamp(this.nextResetTimestamp)})`);
+        this.scheduleAutoResetWarningTimers();
     }
 
     async autoBoardReset() {
@@ -737,6 +780,8 @@ module.exports = class StankBot {
             this.autoResetTimer = null;
             this.log("Auto-reset timer cleared.");
         }
+
+        this.clearAutoResetWarningTimers();
 
         if (this.Dispatcher) {
             this.Dispatcher.unsubscribe("MESSAGE_CREATE", this.onMessageCreate);
