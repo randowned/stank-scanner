@@ -17,6 +17,7 @@ module.exports = class StankBot {
     async start() {
         try {
             this.logSeparator();
+            this.initToastConfig();
             this.toast("Starting...", false);
             this.MAPHRA_GUILD_ID = "1482266782306799646";
             this.ALTAR_CHANNEL_ID = "1489889364392546375";
@@ -140,30 +141,32 @@ module.exports = class StankBot {
                     }
                 }
             });
-
-            // Hijack BetterDiscord's toast container globally to force them to render at the Top Center!
-            const bdDOM = BdApi?.DOM || BdApi;
-            if (bdDOM && bdDOM.addStyle) {
-                bdDOM.addStyle("StankBot-Toast", `
-                    .bd-toasts, #bd-toasts {
-                        position: fixed !important;
-                        top: 30px !important;
-                        bottom: auto !important;
-                        left: 50% !important;
-                        transform: translateX(-50%) !important;
-                        z-index: 99999 !important;
-                        display: flex !important;
-                        flex-direction: column !important;
-                        align-items: center !important;
-                        pointer-events: none !important;
-                    }
-                `);
-            }
         } catch (err) {
             const bdUI = BdApi.UI || BdApi;
             if (bdUI && bdUI.alert) {
                 bdUI.alert("StankBot Startup Error", "Failed to start!\n\n" + (err.stack || err.toString()));
             }
+        }
+    }
+
+    initToastConfig() {
+        // Hijack BetterDiscord's toast container globally to force them to render at the Top Center!
+        const bdDOM = BdApi?.DOM || BdApi;
+        if (bdDOM && bdDOM.addStyle) {
+            bdDOM.addStyle("StankBot-Toast", `
+                .bd-toasts, #bd-toasts {
+                    position: fixed !important;
+                    top: 30px !important;
+                    bottom: auto !important;
+                    left: 50% !important;
+                    transform: translateX(-50%) !important;
+                    z-index: 99999 !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    align-items: center !important;
+                    pointer-events: none !important;
+                }
+            `);
         }
     }
 
@@ -284,12 +287,23 @@ module.exports = class StankBot {
         return this.AuthStore ? this.AuthStore.getToken() : "";
     }
 
-    getUsername(msg) {
-        const authorId = msg.author?.id;
-        if (authorId === this.BOT_OWNER_ID) return this.cleanBotOwnerNick();
+    getUser(userId) {
+        return this.UserStore?.getUser(userId);
+    }
+
+    getMember(userId) {
         const GuildMemberStore = BdApi.Webpack.getStore("GuildMemberStore");
-        const memberInfo = GuildMemberStore ? GuildMemberStore.getMember(this.MAPHRA_GUILD_ID, authorId) : null;
-        return memberInfo?.nick || msg.member?.nick || msg.author?.global_name || msg.author?.username || "Unknown";
+        return GuildMemberStore ? GuildMemberStore.getMember(this.MAPHRA_GUILD_ID, userId) : null;
+    }
+
+    getUsername(userId) {
+        if (userId === this.BOT_OWNER_ID)
+            return this.cleanBotOwnerNick();
+
+        const userInfo = this.getUser(userId);
+        const memberInfo = this.getMember(userId);
+
+        return memberInfo?.nick || userInfo?.globalName || userInfo?.username || "Unknown";
     }
 
     isStankMessage(msg) {
@@ -322,6 +336,7 @@ module.exports = class StankBot {
         let cleaned = this.settings.nicknameTemplate || "Randowned";
         cleaned = cleaned.replace(/\{ongoing\}/g, "").replace(/\{record\}/g, "");
         cleaned = cleaned.replace(/\s*\([^)]*\)/g, "").trim();
+        cleaned = cleaned.replace(/\s\/ StankBot/g, "");
         return cleaned || "Randowned";
     }
 
@@ -383,19 +398,10 @@ module.exports = class StankBot {
         let tmpl = this.settings.boardLayoutTemplate || this.defaultBoardTemplate;
 
         // Refresh display names from Discord stores
-        const GuildMemberStore = BdApi.Webpack.getStore("GuildMemberStore");
-        if (GuildMemberStore) {
-            for (const id in this.stankboard) {
-                const memberInfo = GuildMemberStore.getMember(this.MAPHRA_GUILD_ID, id);
-                if (memberInfo && memberInfo.nick) {
-                    this.stankboard[id].username = (id === this.BOT_OWNER_ID) ? this.cleanBotOwnerNick() : memberInfo.nick;
-                } else {
-                    const user = this.UserStore ? this.UserStore.getUser(id) : null;
-                    if (user && (user.globalName || user.username)) {
-                        this.stankboard[id].username = user.globalName || user.username;
-                    }
-                }
-            }
+        for (const id in this.stankboard) {
+            const username = this.getUsername(id);
+            if (username)
+                this.stankboard[id].username = username;
         }
 
         const stankRowsLimit = parseInt(this.settings.stankRankingRows, 10) || 5;
@@ -406,7 +412,7 @@ module.exports = class StankBot {
             net: (u.xp || 0) - (u.punishments || 0)
         })).sort((a, b) => b.net - a.net);
 
-        // Slayer
+        // Chain starter info
         let chainStarterName = "Unknown", chainStarterRank = "N/A", chainStarterSP = 0;
         if (this.chainStarterId && this.stankboard[this.chainStarterId]) {
             chainStarterName = this.stankboard[this.chainStarterId].username;
@@ -430,6 +436,7 @@ module.exports = class StankBot {
             const net  = Number(stankTopN[i].net).toLocaleString();
             stankTableStr += `${rank} | ${user} | ${net} SP\n`;
         }
+
         if (stankTopN.length === 0) stankTableStr += "No records yet.\n";
 
         tmpl = this.applyCommonReplacements(tmpl);
@@ -440,9 +447,6 @@ module.exports = class StankBot {
         tmpl = tmpl.replace(/{chainbreakerName}/g, chainbreakerName);
         tmpl = tmpl.replace(/{chainbreakerPunishments}/g, Number(chainbreakerPP).toLocaleString());
         tmpl = tmpl.replace(/{stankRankingsTable}/g, stankTableStr.replace(/\n$/, ""));
-        // Backward-compat stubs
-        tmpl = tmpl.replace(/{punishmentRankingsTable}/g, "");
-        tmpl = tmpl.replace(/{punishRowsLimit}/g, "");
 
         return tmpl;
     }
@@ -517,7 +521,7 @@ module.exports = class StankBot {
                     for (let i = 0; i < group.messages.length; i++) {
                         const hMsg      = group.messages[i];
                         const hAuthorId = hMsg.author.id;
-                        const hUsername = this.getUsername(hMsg);
+                        const hUsername = this.getUsername(hAuthorId);
                         const hTs       = hMsg.timestamp ? Date.parse(hMsg.timestamp) : 0;
                         const prevTs    = perUserLastTs[hAuthorId] || 0;
 
@@ -552,7 +556,7 @@ module.exports = class StankBot {
                     lastBrokenLength = runningChainTotal;
                     const breakerMsg = group.messages[0];
                     if (breakerMsg && BigInt(breakerMsg.id) > BigInt(lastPunished)) {
-                        const breakerName = this.getUsername(breakerMsg);
+                        const breakerName = this.getUsername(breakerMsg.author?.id);
                         const penalty = StankBot.SP_BREAK_BASE + (lastBrokenLength * StankBot.SP_BREAK_PER_STANK);
                         this.awardPunishment(breakerMsg.author.id, breakerName, penalty);
                         if (BigInt(breakerMsg.id) > BigInt(highestPunished)) highestPunished = breakerMsg.id;
@@ -577,7 +581,7 @@ module.exports = class StankBot {
                     if (!uniqueUserIds.includes(m.author.id)) uniqueUserIds.push(m.author.id);
                     // Track last contributor for finish bonus on next break
                     this.lastChainContributorId       = m.author.id;
-                    this.lastChainContributorUsername = this.getUsername(m);
+                    this.lastChainContributorUsername = this.getUsername(m.author.id);
                     // Rebuild per-user cooldown state
                     this.lastStankTimestamps[m.author.id] = ts;
                 }
@@ -586,7 +590,7 @@ module.exports = class StankBot {
                 this.chainUniqueUsers   = uniqueUserIds;
                 this.currentChainMessageIds = new Set(latestGroup.messages.map(m => m.id));
 
-                // Slayer = chain starter (first valid poster)
+                //  = chain starter (first valid poster)
                 const starterMsg = latestGroup.messages.find(m => {
                     const ts = m.timestamp ? Date.parse(m.timestamp) : 0;
                     return true; // first message that passed cooldown — simplified: just use first
@@ -654,10 +658,10 @@ module.exports = class StankBot {
 
     async updateNickname() {
         let targetNick = "Randowned";
+
         if (this.settings.enableNicknameSync) {
             targetNick = this.applyCommonReplacements(this.settings.nicknameTemplate || "Randowned ({ongoing}/{record})");
         }
-
 
         const token = this.getToken();
         try {
@@ -669,14 +673,12 @@ module.exports = class StankBot {
                 },
                 body: JSON.stringify({ nick: targetNick })
             });
-            if (res.ok) {
-                this.toast(`Nickname updated to: ${targetNick}`);
-            } else {
+            if (!res.ok) {
                 const text = await res.text();
                 this.toast(`Nickname sync failed! ${res.status}: ${text.substring(0, 50)}`, true);
             }
         } catch (err) {
-            this.toast(`Nickname patch crash! ${err.toString()}`, true);
+            this.toast(`Nickname update error! ${err.toString()}`, true);
         }
     }
 
@@ -745,9 +747,7 @@ module.exports = class StankBot {
             body: JSON.stringify({ bio: this.getBioTemplate() })
         })
             .then(async res => {
-                if (res.ok) {
-                    this.toast(`Bio fully updated!`);
-                } else {
+                if (!res.ok) {
                     const text = await res.text();
                     // We add the exact error message text from Discord here for debugging
                     this.toast(`Bio API push failed! ${res.status}: ${text.substring(0, 70)}`, true);
@@ -884,7 +884,7 @@ module.exports = class StankBot {
             if (this.seenMsgIds.has(msg.id)) return;
             this.seenMsgIds.add(msg.id);
 
-            const username = this.getUsername(msg);
+            const username = this.getUsername(authorId);
             const msgTs = msg.timestamp ? Date.parse(msg.timestamp) : Date.now();
             const lastTs = this.lastStankTimestamps[authorId] || 0;
 
@@ -905,7 +905,12 @@ module.exports = class StankBot {
 
             // Valid stank — advance chain
             this.ongoingChain += 1;
-            if (!this.chainUniqueUsers.includes(authorId)) this.chainUniqueUsers.push(authorId);
+
+            // Valid & unique stank — track for the record unique stanks
+            const isUnique = !this.chainUniqueUsers.includes(authorId);
+            if (isUnique)
+                this.chainUniqueUsers.push(authorId);
+                
             this.lastStankTimestamps[authorId] = msgTs;
             this.lastChainContributorId = authorId;
             this.lastChainContributorUsername = username;
@@ -920,14 +925,20 @@ module.exports = class StankBot {
             }
 
             this.awardXp(authorId, username, xp);
-            this.toast(`+${xp} SP -> ${username} (chain #${this.ongoingChain})`);
+
+            if (isUnique) {
+                this.toast(`+${xp} SP -> ${username} (unique chain #${this.chainUniqueUsers.length})`);
+            } else {
+                this.toast(`+${xp} SP -> ${username} (chain #${this.ongoingChain})`);
+            }
+            
             BdApi.Data.save("StankBot", "lastXpMessageId", msg.id);
             stateChanged = true;
 
         } else if (this.ongoingChain > 0 || this.chainUniqueUsers.length > 0) {
             // Chain break
             const authorId = msg.author?.id;
-            const username = this.getUsername(msg);
+            const username = this.getUsername(authorId);
 
             // Award finish bonus to the last valid poster
             if (this.lastChainContributorId) {
@@ -1235,10 +1246,8 @@ module.exports = class StankBot {
                 this.updateBio();
             });
 
-        const defaultBoardTemplate = "# Stank Rankings (top {stankRowsLimit})\nLast Slayer: {chainStarterRank}. {chainStarterName} — {chainStarterSP} SP\n\n{stankRankingsTable}\n\n💀 The Chainbreaker: {chainbreakerName} ({chainbreakerPunishments} PP)";
-
         this._addTextarea(sTemplates, "Leaderboard layout ({stankBoard})",
-            this.settings.boardLayoutTemplate || defaultBoardTemplate, "140px",
+            this.settings.boardLayoutTemplate || this.defaultBoardTemplate, "140px",
             "Layout for {stankBoard}. Vars: {record}, {recordUnique}, {ongoing}, {ongoingUnique}, {stankRowsLimit}, {chainStarterRank}, {chainStarterName}, {chainStarterSP}, {chainbreakerName}, {chainbreakerPunishments}, {stankRankingsTable}",
             (val) => {
                 this.settings.boardLayoutTemplate = val;
