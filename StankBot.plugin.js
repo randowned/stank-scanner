@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra Discord community #altar management bot.
- * @version 3.2.1
+ * @version 3.2.2
  */
 
 module.exports = class StankBot {
@@ -321,7 +321,7 @@ module.exports = class StankBot {
         const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
         if (!channels.length) return;
 
-        const announcement = `:Stank: Auto board reset in ${minutes} minute${minutes === 1 ? "" : "s"}!`;
+        const announcement = this.applyCommonReplacements(`:Stank: Auto board reset in ${minutes} minute${minutes === 1 ? "" : "s"}!`);
         this.log(`Auto-reset warning (${minutes} min) triggered at ${this.getTimestamp()}`);
         for (const channelId of channels) {
             this.sendBotReply(channelId, announcement);
@@ -351,7 +351,7 @@ module.exports = class StankBot {
         this.updateNickname();
 
         const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
-        const announcement = `:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`;
+        const announcement = this.applyCommonReplacements(`:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`);
         for (const channelId of channels) {
             this.sendBotReply(channelId, announcement);
         }
