@@ -14,7 +14,7 @@ module.exports = class StankBot {
     static SP_REACTION        = 1;    // SP per Stank emoji reaction
     static SP_BREAK_BASE      = 25;   // Base penalty for breaking the chain
     static SP_BREAK_PER_STANK = 2;    // Additional penalty per stank in the broken chain
-    static RESTANK_COOLDOWN_MS = 5 * 60 * 1000;  // 5-minute per-user restank cooldown
+    static RESTANK_COOLDOWN_MS = 10 * 60 * 1000;  // 5-minute per-user restank cooldown
     // ─────────────────────────────────────────────────────────────────────────
 
     toast(msg, isError = false, timeout = 5000, skipLog = false) {
