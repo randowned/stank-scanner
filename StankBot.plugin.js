@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra community #altar management bot.
- * @version 3.1.0
+ * @version 3.1.1
  */
 
 module.exports = class StankBot {
@@ -35,7 +35,7 @@ module.exports = class StankBot {
 
             // Load Settings
             this.defaultTemplate = "\n# :Stank: Stank Board :Stank:     `!stank-board)`\n\n```\n🔗 Chain record: {record} stanks / {recordUnique} unique\n⛓️ Ongoing chain: {ongoing} stanks / {ongoingUnique} unique\n\n{stankBoard}\n```";
-            this.defaultBioTemplate = "Current :Stank: record: {record} stanks / {recordUnique} unique\nOngoing :Stank: chain: {ongoing} stanks / {ongoingUnique} unique";
+            this.defaultBioTemplate = "Current :Stank: record: {record} Stanks / {recordUnique} unique Stanks\nOngoing :Stank: chain: {ongoing} stanks / {ongoingUnique} unique";
             this.defaultBoardTemplate = "# Stank Rankings (top {stankRowsLimit})\n\n" +
                 "🏃‍➡️ Chain starter: {chainStarterName} [{chainStarterSP} SP]\n\n" +
                 "{stankRankingsTable}\n\n" +
@@ -927,9 +927,9 @@ module.exports = class StankBot {
             this.awardXp(authorId, username, xp);
 
             if (isUnique) {
-                this.toast(`+${xp} SP -> ${username} (unique chain #${this.chainUniqueUsers.length})`);
+                this.toast(`+${xp} SP -> ${username} (unique Stank #${this.chainUniqueUsers.length})`);
             } else {
-                this.toast(`+${xp} SP -> ${username} (chain #${this.ongoingChain})`);
+                this.toast(`+${xp} SP -> ${username} (Stank #${this.ongoingChain})`);
             }
             
             BdApi.Data.save("StankBot", "lastXpMessageId", msg.id);
