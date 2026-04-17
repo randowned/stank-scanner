@@ -1,8 +1,8 @@
 ﻿/**
  * @name StankBot
  * @author randowned
- * @description Maphra community #altar management bot.
- * @version 3.1.1
+ * @description Maphra Discord community #altar management bot.
+ * @version 3.2.0
  */
 
 module.exports = class StankBot {
@@ -13,6 +13,7 @@ module.exports = class StankBot {
     static SP_BREAK_BASE       = 25;   // Base penalty for breaking the chain
     static SP_BREAK_PER_STANK  = 2;    // Additional penalty per stank in the broken chain
     static RESTANK_COOLDOWN_MS = 10 * 60 * 1000;  // 5-minute per-Stanker restank cooldown
+    static RESET_TARGETS       = [7, 15, 23];
 
     async start() {
         try {
@@ -34,9 +35,10 @@ module.exports = class StankBot {
             this.syncConfigFromDisk();
 
             // Load Settings
-            this.defaultTemplate = "\n# :Stank: Stank Board :Stank:\n\n```\n🔗 Chain record: {record} stanks / {recordUnique} unique\n⛓️ Ongoing chain: {ongoing} stanks / {ongoingUnique} unique\n\n{stankBoard}\n```";
+            this.defaultTemplate = "\n# :Stank: Stank Board :Stank:\n\n```\n🔗 Chain record: {record} stanks / {recordUnique} unique\n⛓️ Ongoing chain: {ongoing} stanks / {ongoingUnique} unique\n⏳ Next reset in: {nextResetIn}\n\n{stankBoard}\n```";
             this.defaultBioTemplate = "Current :Stank: record: {record} Stanks / {recordUnique} unique Stanks\nOngoing :Stank: chain: {ongoing} stanks / {ongoingUnique} unique";
             this.defaultBoardTemplate = "# Stank Rankings (top {stankRowsLimit})\n\n" +
+                "⏳ Next board reset in: {nextResetIn}\n\n" +
                 "🏃‍➡️ Chain starter: {chainStarterName} [{chainStarterSP} SP]\n\n" +
                 "{stankRankingsTable}\n\n" +
                 "💀 The Chainbreaker: {chainbreakerName} ({chainbreakerPunishments} PP)";
@@ -84,11 +86,16 @@ module.exports = class StankBot {
             this.lastBrokenChainLength = BdApi.Data.load("StankBot", "lastBrokenChainLength") || 0;
             this.chainStarterId = BdApi.Data.load("StankBot", "chainStarterId") || null;
 
+            this.autoResetTimer = null;
+            this.nextResetIn = "00:00";
+            this.nextResetTimestamp = null;
+
             // Next, heavily synchronize the active full set natively from the #altar history deeply
             await this.syncOngoingChainFromHistory();
 
             // Synchronize the server nickname on startup!
             this.updateNickname();
+            this.scheduleAutoBoardReset();
 
             // ONLY activate the plugin listeners if the Bio and History data were successfully synced and confirmed
             this.onMessageCreate = this.onMessageCreate.bind(this);
@@ -123,6 +130,8 @@ module.exports = class StankBot {
                         }
                     } else if (text === "!stank-board-reset" || text === "/stank-board-reset") {
                         this.resetBoard();
+                        this.updateBio();
+                        this.updateNickname();
                         message.content = `\`\`\`\nboard reset\n\n${this.generateStankBoardAscii()}\n\`\`\``;
                     } else if (text === "!stank-board-reload" || text === "/stank-board-reload") {
                         this.resetBoard();
@@ -238,6 +247,73 @@ module.exports = class StankBot {
         return date.toISOString().replace("T", " ").replace("Z", "");
     }
 
+    getNextAutoResetDelay() {
+        const now = this.getISODateTime();
+        const nowHour = now.getUTCHours();
+        const nowMin = now.getUTCMinutes();
+        const nowSec = now.getUTCSeconds();
+        const nowMs = now.getUTCMilliseconds();
+
+        let nextTargetHour = null;
+        for (const targetHour of StankBot.RESET_TARGETS) {
+            if (targetHour > nowHour || (targetHour === nowHour && (nowMin > 0 || nowSec > 0 || nowMs > 0))) {
+                nextTargetHour = targetHour;
+                break;
+            }
+        }
+        if (nextTargetHour === null) {
+            nextTargetHour = StankBot.RESET_TARGETS[0];
+        }
+
+        const next = new Date(now.getTime());
+        next.setUTCHours(nextTargetHour, 0, 0, 0);
+        if (next.getTime() <= now.getTime()) {
+            next.setUTCDate(next.getUTCDate() + 1);
+        }
+
+        this.nextResetTimestamp = next;
+        return next.getTime() - now.getTime();
+    }
+
+    updateNextResetCountdown() {
+        if (!this.nextResetTimestamp || isNaN(this.nextResetTimestamp.getTime())) {
+            this.getNextAutoResetDelay();
+        }
+        const now = this.getISODateTime();
+        let remainingMs = this.nextResetTimestamp.getTime() - now.getTime();
+        if (remainingMs < 0) remainingMs = 0;
+        const hours = Math.floor(remainingMs / 3600000);
+        const minutes = Math.floor((remainingMs % 3600000) / 60000);
+        this.nextResetIn = String(hours).padStart(2, "0") + ":" + String(minutes).padStart(2, "0");
+    }
+
+    scheduleAutoBoardReset() {
+        if (this.autoResetTimer) {
+            clearTimeout(this.autoResetTimer);
+            this.autoResetTimer = null;
+        }
+
+        const delayMs = this.getNextAutoResetDelay();
+        this.updateNextResetCountdown();
+        this.autoResetTimer = setTimeout(() => this.autoBoardReset(), delayMs);
+        this.log(`Auto-reset scheduled in ${this.nextResetIn} (at ${this.getTimestamp(this.nextResetTimestamp)})`);
+    }
+
+    async autoBoardReset() {
+        this.log(`Auto-reset triggered at ${this.getTimestamp()}`);
+        this.resetBoard();
+
+        this.scheduleAutoBoardReset();
+        this.updateBio();
+        this.updateNickname();
+
+        const channels = (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
+        const announcement = `:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`;
+        for (const channelId of channels) {
+            this.sendBotReply(channelId, announcement);
+        }
+    }
+
     isChannelAllowed(channelId, includeAnnouncement = false) {
         const commandChannels = (this.settings.autoReplyChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean);
         const announcementChannels = includeAnnouncement ? (this.settings.announcementChannelIds || "").split("\n").map(s => s.trim()).filter(Boolean) : [];
@@ -334,11 +410,13 @@ module.exports = class StankBot {
     }
 
     applyCommonReplacements(tmpl) {
+        this.updateNextResetCountdown();
         return tmpl
             .replace(/{record}/g, this.recordChain !== null ? this.recordChain : 0)
             .replace(/{recordUnique}/g, this.recordChainUnique !== null ? this.recordChainUnique : 0)
             .replace(/{ongoing}/g, this.ongoingChain !== null ? this.ongoingChain : 0)
             .replace(/{ongoingUnique}/g, this.chainUniqueUsers ? this.chainUniqueUsers.length : 0)
+            .replace(/{nextResetIn}/g, this.nextResetIn || "00:00")
             .replace(/:Stank:/g, this.STANK_EMOJI);
     }
 
@@ -653,17 +731,27 @@ module.exports = class StankBot {
 
     stop() {
         this.toast("Stopping...");
+
+        if (this.autoResetTimer) {
+            clearTimeout(this.autoResetTimer);
+            this.autoResetTimer = null;
+            this.log("Auto-reset timer cleared.");
+        }
+
         if (this.Dispatcher) {
             this.Dispatcher.unsubscribe("MESSAGE_CREATE", this.onMessageCreate);
             this.Dispatcher.unsubscribe("MESSAGE_REACTION_ADD", this.onMessageReactionAdd);
             this.Dispatcher.unsubscribe("MESSAGE_REACTION_REMOVE", this.onMessageReactionRemove);
         }
+
         BdApi.Patcher.unpatchAll("StankBot");
 
         const bdDOM = BdApi?.DOM || BdApi;
         if (bdDOM && bdDOM.removeStyle) {
             bdDOM.removeStyle("StankBot-Toast");
         }
+
+        this.toast("Stopped");
     }
 
     async updateNickname() {
@@ -1043,6 +1131,8 @@ module.exports = class StankBot {
         if (isAdminCommand) {
             if (isAdminReset) {
                 this.resetBoard();
+                this.updateBio();
+                this.updateNickname();
                 this.sendBotReply(msg.channel_id, `\`\`\`\nboard reset\n\n${this.generateStankBoardAscii()}\n\`\`\``, msg.id);
             } else if (isAdminReload) {
                 this.resetBoard();

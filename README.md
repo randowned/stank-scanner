@@ -20,7 +20,7 @@ Rankings are based on **net Stank Points** (earned SP minus punishment points).
 | Stank emoji reaction on ongoing-chain sticker | +1 SP (once per user per sticker) |
 | Break the chain | −(25 + chain length × 2) PP |
 
-> **Cooldown:** The same user cannot stank again for **5 minutes** within a chain. Cooldowns reset when the chain breaks.
+> **Cooldown:** The same user cannot stank again for **10 minutes** within a chain. Cooldowns reset when the chain breaks.
 
 > **The Chainbreaker:** The leaderboard footer highlights the player with the highest all-time punishment points.
 
@@ -45,15 +45,26 @@ Rankings are based on **net Stank Points** (earned SP minus punishment points).
 
 - **Net Score Ranking**: Players ranked by `earned SP - punishment points`. Breakdown shown in `!stank-points`.
 - **Chain Tracking**: Tracks the longest unbroken chain of Stank stickers. Displays total stanks and unique stanker count.
+
+## v3 Highlights
+
+- **Automatic reset schedule**: Board resets automatically at **7:00**, **15:00**, and **23:00** local time.
+- **Announcement support**: Auto-reset events are announced through configured announcement channels.
+- **Countdown display**: `{nextResetIn}` is available in board templates to show time until the next reset.
+- **Persistent scheduling**: Reset timers survive plugin reloads and continue logging schedules.
+- **Improved reset handling**: Manual `!stank-board-reset` and bot board reloads now behave consistently with auto-reset state.
 - **Position-based XP**: Each stank earns more SP as the chain grows — position N earns `10 + (N−1)` SP.
 - **Retroactive Finish Bonus**: The last valid poster gets +15 SP when the chain breaks.
 - **Per-user Cooldown**: 5-minute cooldown per user prevents spam-stanking; violations get a callout with the time remaining.
 - **The Chainbreaker**: Board footer shows the player with the highest all-time punishment points.
 - **History Scraping**: Reconstructs chain state from channel history on startup, including cooldown tracking.
+- **Automated Reset**: The board automatically resets three times daily at **7:00**, **15:00**, and **23:00** local time.
+- **Reset Announcements**: Auto-reset completion is posted to configured announcement channels.
+- **Next Reset Countdown**: Default board templates include `{nextResetIn}` so the next auto-reset time is visible.
 - **Dynamic Updates**: Auto-updates your Server Bio and Nickname (e.g. `Username (10/32)`) with current scores.
 - **Command Channels**: Configurable allowlist of channel IDs for command auto-replies. DMs always work.
 - **Announcement Channels**: Separate allowlist for record-broken announcements. `!stank-help` works in both command and announcement channels.
-- **Logging**: Persistent log file (`StankBot.log`) in the plugins folder with ISO timestamps and session separators.
+- **Logging**: Persistent log file (`StankBot.log`) in the plugins folder with ISO timestamps and session separators. Auto-reset scheduling and trigger events are logged for easier confirmation.
 - **Customization**: Configurable templates for Bio, Nickname, board layout, and record announcements.
 
 ## Installation
