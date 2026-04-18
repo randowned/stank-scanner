@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra Discord community #altar management bot.
- * @version 3.3.2
+ * @version 3.3.3
  */
 
 module.exports = class StankBot {
@@ -389,13 +389,15 @@ module.exports = class StankBot {
 
     async autoBoardReset() {
         this.log(`Auto-reset triggered at ${this.getTimestamp()}`);
+
+        const boardMessage = this.getScoreTemplate();
+
         this.resetBoard();
 
         this.scheduleAutoBoardReset();
         this.updateBio();
         this.updateNickname();
 
-        const boardMessage = this.getScoreTemplate();
         const announcement = this.applyCommonReplacements(`:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`);
         this.dispatchOutgoingMessage("command", boardMessage);
         this.dispatchOutgoingMessage("announcement", announcement);
