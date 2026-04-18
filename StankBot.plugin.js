@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra Discord community #altar management bot.
- * @version 3.3.3
+ * @version 3.4.0
  */
 
 module.exports = class StankBot {
@@ -57,7 +57,8 @@ module.exports = class StankBot {
                 scoreTemplate: this.defaultTemplate,
                 bioTemplate: this.defaultBioTemplate,
                 recordChain: 0,
-                recordChainUnique: 0
+                recordChainUnique: 0,
+                boardUpdateIntervalSeconds: 10
             }, savedSettings);
 
             // Normalize persisted record values now stored in settings
@@ -88,10 +89,19 @@ module.exports = class StankBot {
             this.lastBrokenChainLength = BdApi.Data.load("StankBot", "lastBrokenChainLength") || 0;
             this.chainStarterId = BdApi.Data.load("StankBot", "chainStarterId") || null;
 
+            this.lastBoardMessageId = BdApi.Data.load("StankBot", "lastBoardMessageId") || null;
+            this.lastBoardChannelId = BdApi.Data.load("StankBot", "lastBoardChannelId") || null;
+            this.boardUpdateInterval = null;
+
             this.autoResetTimer = null;
             this.autoResetWarningTimers = [];
             this.nextResetIn = "0h0m";
             this.nextResetTimestamp = null;
+
+            // Restore board auto-update if previously saved and setting is enabled
+            if (this.lastBoardMessageId && this.lastBoardChannelId && this.settings.boardUpdateIntervalSeconds > 0) {
+                this.setupBoardUpdateInterval(this.settings.boardUpdateIntervalSeconds, true);
+            }
 
             // Next, heavily synchronize the active full set natively from the #altar history deeply
             await this.syncOngoingChainFromHistory();
@@ -397,10 +407,12 @@ module.exports = class StankBot {
         this.scheduleAutoBoardReset();
         this.updateBio();
         this.updateNickname();
-
-        const announcement = this.applyCommonReplacements(`:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`);
+        
         this.dispatchOutgoingMessage("command", boardMessage);
-        this.dispatchOutgoingMessage("announcement", announcement);
+        setTimeout(() => {
+            const announcement = this.applyCommonReplacements(`:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`);
+            this.dispatchOutgoingMessage("announcement", announcement);
+        }, 500);
     }
 
     isChannelAllowed(channelId, includeAnnouncement = false) {
@@ -818,6 +830,24 @@ module.exports = class StankBot {
         }
     }
 
+    setupBoardUpdateInterval(intervalSeconds, showToast = false) {
+        if (this.boardUpdateInterval) {
+            clearInterval(this.boardUpdateInterval);
+            this.boardUpdateInterval = null;
+        }
+        if (intervalSeconds > 0 && this.lastBoardMessageId && this.lastBoardChannelId) {
+            this.boardUpdateInterval = setInterval(() => {
+                if (this.lastBoardMessageId && this.lastBoardChannelId) {
+                    this.MessageActions.editMessage(this.lastBoardChannelId, this.lastBoardMessageId, { content: this.getScoreTemplate() });
+                    this.log(`✅ Board updated.`);
+                }
+            }, intervalSeconds * 1000);
+            if (showToast) this.toast(`🔄 Board auto-update: every ${intervalSeconds}s`);
+        } else if (showToast && intervalSeconds === 0) {
+            this.toast("🔄 Board auto-update is OFF");
+        }
+    }
+
     stop() {
         this.toast("Stopping...");
 
@@ -836,6 +866,10 @@ module.exports = class StankBot {
         }
 
         BdApi.Patcher.unpatchAll("StankBot");
+
+        this.setupBoardUpdateInterval(0, false);
+        this.lastBoardMessageId = null;
+        this.lastBoardChannelId = null;
 
         const bdDOM = BdApi?.DOM || BdApi;
         if (bdDOM && bdDOM.removeStyle) {
@@ -1045,6 +1079,23 @@ module.exports = class StankBot {
     onMessageCreate(event) {
         if (!event || !event.message) return;
         const msg = event.message;
+
+        // Detect our own board messages to capture the message ID
+        const me = this.UserStore?.getCurrentUser();
+        if (me && msg.author?.id === me.id && msg.content) {
+            const header = (this.settings.scoreTemplate || this.defaultTemplate)
+                .split("\n")
+                .find(line => line.trim() !== "") || "";
+            const normalizedHeader = this.applyCommonReplacements(header).trim();
+            if (normalizedHeader && msg.content.trim().startsWith(normalizedHeader)) {
+                this.log(`Board message created: id=${msg.id}, channel=${msg.channel_id}`);
+                this.lastBoardMessageId = msg.id;
+                this.lastBoardChannelId = msg.channel_id;
+                BdApi.Data.save("StankBot", "lastBoardMessageId", msg.id);
+                BdApi.Data.save("StankBot", "lastBoardChannelId", msg.channel_id);
+                this.setupBoardUpdateInterval(this.settings.boardUpdateIntervalSeconds, false);
+            }
+        }
 
         if (msg.channel_id === this.ALTAR_CHANNEL_ID) {
             try {
@@ -1320,7 +1371,7 @@ module.exports = class StankBot {
         if (note) this._addNote(parent, note);
     }
 
-    _addNumberInput(parent, label, settingKey, defaultVal) {
+    _addNumberInput(parent, label, settingKey, defaultVal, note, onChange) {
         const container = document.createElement("div");
         Object.assign(container.style, { display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", marginBottom: "10px" });
 
@@ -1331,7 +1382,7 @@ module.exports = class StankBot {
 
         const input = document.createElement("input");
         input.type = "number";
-        input.min = "1";
+        input.min = settingKey === "boardUpdateIntervalSeconds" ? "0" : "1";
         input.max = "100";
         input.value = this.settings[settingKey] || defaultVal;
         Object.assign(input.style, {
@@ -1342,13 +1393,15 @@ module.exports = class StankBot {
 
         input.addEventListener("change", (e) => {
             let val = parseInt(e.target.value, 10);
-            if (isNaN(val) || val < 1) val = defaultVal;
+            if (isNaN(val) || val < (settingKey === "boardUpdateIntervalSeconds" ? 0 : 1)) val = defaultVal;
             this.settings[settingKey] = val;
             BdApi.Data.save("StankBot", "settings", this.settings);
+            if (onChange) onChange(val);
         });
 
         container.appendChild(input);
         parent.appendChild(container);
+        if (note) this._addNote(parent, note);
     }
 
     _addTextInput(parent, label, value, note, onChange) {
@@ -1403,6 +1456,12 @@ module.exports = class StankBot {
         this._addCheckbox(sCore, "Require exact text match for commands", "exactCommandMatch",
             "Only trigger when the command is the entire message content.");
 
+        this._addNumberInput(sCore, "Board update interval (seconds):", "boardUpdateIntervalSeconds", 10,
+            "How often to auto-update the last !stank-board message. Set to 0 to disable.",
+            (val) => {
+                this.setupBoardUpdateInterval(val, true);
+            });
+
         this._addTextarea(sCore, "Command channels",
             this.settings.autoReplyChannelIds || "", "55px",
             "Channel IDs for command auto-replies (one per line). Threads inherit. DMs always work.",
@@ -1433,7 +1492,8 @@ module.exports = class StankBot {
         // Templates
         const sTemplates = createSection("Templates");
 
-        this._addNumberInput(sTemplates, "Stank ranking rows:", "stankRankingRows", 5);
+        this._addNumberInput(sTemplates, "Stank ranking rows:", "stankRankingRows", 5,
+            "Number of top stankers to show in rankings.");
 
         this._addTextarea(sTemplates, "Bio layout",
             this.settings.bioTemplate || this.defaultBioTemplate, "55px",
