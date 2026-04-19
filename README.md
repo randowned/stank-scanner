@@ -38,8 +38,9 @@ Rankings are based on **net Stank Points** (earned SP minus punishment points).
 | Command | Description |
 |---|---|
 | `!stank-record-test` | Preview record announcement |
-| `!stank-board-reset` | Reset all board data |
-| `!stank-board-reload` | Reset and reload from channel history |
+| `!stank-new-session` | End the current session (wipes SP/PP and session records) without breaking the chain |
+| `!stank-board-reset` | Full wipe: scoreboard, records, **and** the ongoing chain |
+| `!stank-board-reload` | Full wipe and replay from channel history |
 
 ## Features
 
@@ -48,19 +49,19 @@ Rankings are based on **net Stank Points** (earned SP minus punishment points).
 
 ## v3 Highlights
 
-- **Automatic reset schedule**: Board resets automatically at **7:00**, **15:00**, and **23:00** local time.
-- **Announcement support**: Auto-reset events are announced through configured announcement channels.
-- **Countdown display**: `{nextResetIn}` is available in board templates to show time until the next reset.
-- **Persistent scheduling**: Reset timers survive plugin reloads and continue logging schedules.
-- **Improved reset handling**: Manual `!stank-board-reset` and bot board reloads now behave consistently with auto-reset state.
+- **Automatic session schedule**: Sessions end automatically at **7:00**, **15:00**, and **23:00** local time. Session end wipes SP/PP and session records but **keeps the ongoing chain alive** — chain length, unique stankers, chain starter, and per-user cooldowns all carry over. Session records restart at the continuing chain's current length. Use `!stank-board-reset` if you need to wipe the chain too.
+- **Announcement support**: Session-end events are announced through configured announcement channels.
+- **Countdown display**: `{nextResetIn}` is available in board templates to show time until the next session.
+- **Persistent scheduling**: Session timers survive plugin reloads and continue logging schedules.
+- **Improved reset handling**: Manual `!stank-board-reset` and bot board reloads still do a full wipe (chain included) for when you really need to start fresh.
 - **Position-based XP**: Each stank earns more SP as the chain grows — position N earns `10 + (N−1)` SP.
 - **Retroactive Finish Bonus**: When the chain breaks, +15 SP goes to the most recent valid stanker who is **not** the chainbreaker. The chain is walked backwards to skip any trailing stanks by the breaker themselves; if the whole chain was the breaker, no bonus is awarded.
 - **Per-user Cooldown**: 5-minute cooldown per user prevents spam-stanking; violations get a callout with the time remaining.
 - **The Chainbreaker**: Board footer shows the player with the highest all-time punishment points.
 - **History Scraping**: Reconstructs chain state from channel history on startup, including cooldown tracking.
-- **Automated Reset**: The board automatically resets three times daily at **7:00**, **15:00**, and **23:00** local time.
-- **Reset Announcements**: Auto-reset completion is posted to configured announcement channels.
-- **Next Reset Countdown**: Default board templates include `{nextResetIn}` so the next auto-reset time is visible.
+- **Automated Sessions**: Sessions end three times daily at **7:00**, **15:00**, and **23:00** local time. The scoreboard resets; the chain keeps going.
+- **Session Announcements**: New-session announcements are posted to configured announcement channels.
+- **Next Session Countdown**: Default board templates include `{nextResetIn}` so the next session-start time is visible.
 - **Dynamic Updates**: Auto-updates your Server Bio and Nickname (e.g. `Username (10/32)`) with current scores.
 - **Command Channels**: Configurable allowlist of channel IDs for command auto-replies. DMs always work.
 - **Announcement Channels**: Separate allowlist for record-broken announcements. `!stank-help` works in both command and announcement channels.

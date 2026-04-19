@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra Discord community #altar management bot.
- * @version 3.5.1
+ * @version 3.6.0
  */
 
 module.exports = class StankBot {
@@ -161,6 +161,14 @@ module.exports = class StankBot {
                         this.updateBio();
                         this.updateNickname();
                         message.content = `\`\`\`\nboard reset\n\n${this.generateStankBoardAscii()}\n\`\`\``;
+                    } else if (normalized === "!stanknewsession" || normalized === "/stanknewsession") {
+                        this.endSession();
+                        this.updateBio();
+                        this.updateNickname();
+                        const header = this.currentChain > 0
+                            ? `new session started — chain continues at ${this.currentChain}`
+                            : `new session started — no active chain`;
+                        message.content = `\`\`\`\n${header}\n\n${this.generateStankBoardAscii()}\n\`\`\``;
                     } else if (normalized === "!stankboardreload" || normalized === "/stankboardreload") {
                         this.resetBoard();
                         message.content = "board reloading...";
@@ -387,7 +395,7 @@ module.exports = class StankBot {
 
     sendAutoResetWarning(minutes) {
         this.updateNextResetCountdown();
-        const announcement = this.applyCommonReplacements(`:Stank: Auto board reset in ${minutes} minute${minutes === 1 ? "" : "s"}!`);
+        const announcement = this.applyCommonReplacements(`:Stank: New session starts in ${minutes} minute${minutes === 1 ? "" : "s"}!`);
         this.log(`Auto-reset warning (${minutes} min) triggered at ${this.getTimestamp()}`);
         this.dispatchOutgoingMessage("announcement", announcement);
     }
@@ -411,7 +419,7 @@ module.exports = class StankBot {
 
         const boardMessage = this.getScoreTemplate();
 
-        this.resetBoard();
+        this.endSession();
 
         this.scheduleAutoBoardReset();
         this.updateBio();
@@ -419,7 +427,10 @@ module.exports = class StankBot {
         
         this.dispatchOutgoingMessage("command", boardMessage);
         setTimeout(() => {
-            const announcement = this.applyCommonReplacements(`:Stank: Auto board reset complete! Next reset in ${this.nextResetIn}.`);
+            const body = this.currentChain > 0
+                ? `:Stank: New session started — chain continues at **${this.currentChain}** (${this.chainUniqueUsers.length} unique)!`
+                : `:Stank: New session started — no active chain.`;
+            const announcement = this.applyCommonReplacements(`${body} Next session in ${this.nextResetIn}.`);
             this.dispatchOutgoingMessage("announcement", announcement);
         }, 500);
     }
@@ -599,6 +610,25 @@ module.exports = class StankBot {
         this.settings.recordChainUnique = 0;
         BdApi.Data.save("StankBot", "settings", this.settings);
         this.toast("Board reset complete!");
+    }
+
+    // Scoreboard-only reset used by the scheduled auto-reset. The live chain continues
+    // across the session boundary: chain length, unique stankers, chain starter, per-user
+    // cooldowns, message/reaction dedupe sets all survive. Only SP/PP and session records
+    // are reset. Session records start from the ongoing chain's current length so the
+    // continuing chain is the new session's baseline record.
+    endSession() {
+        const chainOngoing = this.currentChain > 0;
+        this.stankboard = {};
+        this.lastBrokenChainLength = 0;
+        this.recordChain = this.currentChain;
+        this.recordChainUnique = this.chainUniqueUsers.length;
+        BdApi.Data.save("StankBot", "stankboard", {});
+        BdApi.Data.save("StankBot", "lastBrokenChainLength", 0);
+        this.settings.recordChain = this.recordChain;
+        this.settings.recordChainUnique = this.recordChainUnique;
+        BdApi.Data.save("StankBot", "settings", this.settings);
+        this.toast(chainOngoing ? "Session ended — chain continues!" : "Session ended — no active chain.");
     }
 
     generateStankBoardAscii() {
@@ -1348,10 +1378,11 @@ module.exports = class StankBot {
 
         const isAdminReset = match("!stank-board-reset") || match("/stank-board-reset");
         const isAdminReload = match("!stank-board-reload") || match("/stank-board-reload");
+        const isAdminNewSession = match("!stank-new-session") || match("/stank-new-session");
         const isAdminRecordTest = match("!stank-record-test") || match("/stank-record-test");
         const isAdminLog = normalizedContent === "!stanklog" || normalizedContent.startsWith("!stanklog ") ||
             normalizedContent === "/stanklog" || normalizedContent.startsWith("/stanklog ");
-        const isAdminCommand = isAdminReset || isAdminReload || isAdminRecordTest || isAdminLog;
+        const isAdminCommand = isAdminReset || isAdminReload || isAdminNewSession || isAdminRecordTest || isAdminLog;
 
         const isBoardCommand = match("!stank-board") || match("/stank-board");
         const isXpCommand = normalizedContent === "!stankpoints" || normalizedContent.startsWith("!stankpoints ") ||
@@ -1375,6 +1406,14 @@ module.exports = class StankBot {
                 this.updateBio();
                 this.updateNickname();
                 this.sendBotReply(msg.channel_id, `\`\`\`\nboard reset\n\n${this.generateStankBoardAscii()}\n\`\`\``, msg.id);
+            } else if (isAdminNewSession) {
+                this.endSession();
+                this.updateBio();
+                this.updateNickname();
+                const header = this.currentChain > 0
+                    ? `new session started — chain continues at ${this.currentChain}`
+                    : `new session started — no active chain`;
+                this.sendBotReply(msg.channel_id, `\`\`\`\n${header}\n\n${this.generateStankBoardAscii()}\n\`\`\``, msg.id);
             } else if (isAdminReload) {
                 this.resetBoard();
                 this.sendBotReply(msg.channel_id, "board reloading...", msg.id);
