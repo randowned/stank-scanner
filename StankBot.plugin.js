@@ -2,7 +2,7 @@
  * @name StankBot
  * @author randowned
  * @description Maphra Discord community #altar management bot.
- * @version 3.5.0
+ * @version 3.5.1
  */
 
 module.exports = class StankBot {
@@ -93,8 +93,7 @@ module.exports = class StankBot {
             this.chainUniqueUsers = [];      // unique user IDs (for unique-stanker count)
             this.currentChainMessageIds = new Set();
             this.seenMsgIds = new Set();
-            this.lastChainContributorId = null;       // last valid stank poster (for finish bonus)
-            this.lastChainContributorUsername = null;
+            this.chainContributors = [];              // ordered [{id, username}] of valid stankers in current chain (for finish bonus)
             this.lastStankTimestamps = {};   // { [userId]: timestampMs } — cooldown tracking (per-Stanker)
             this.lastBrokenChainLength = BdApi.Data.load("StankBot", "lastBrokenChainLength") || 0;
             this.chainStarterId = BdApi.Data.load("StankBot", "chainStarterId") || null;
@@ -587,8 +586,7 @@ module.exports = class StankBot {
         this.chainUniqueUsers = [];
         this.currentChainMessageIds = new Set();
         this.seenMsgIds = new Set();
-        this.lastChainContributorId = null;
-        this.lastChainContributorUsername = null;
+        this.chainContributors = [];
         this.lastStankTimestamps = {};
         this.recordChain = 0;
         this.recordChainUnique = 0;
@@ -724,6 +722,43 @@ module.exports = class StankBot {
                 if (group.type === "CHAIN") {
                     seenChain = true;
                     const isLastGroup = (g === allGroups.length - 1);
+
+                    // Determine the chainbreaker for this (completed) chain — first message of the
+                    // following GAP group. For the in-progress last group there is no breaker yet.
+                    let breakerId = null;
+                    if (!isLastGroup) {
+                        const nextGroup = allGroups[g + 1];
+                        if (nextGroup?.type === "GAP") {
+                            breakerId = nextGroup.messages[0]?.author?.id ?? null;
+                        }
+                    }
+
+                    // First pass: collect the indices of valid (cooldown-passing) stanks so we can
+                    // locate the finish-bonus recipient: the most recent valid stank whose author
+                    // is NOT the chainbreaker. If the whole chain is the breaker, no bonus.
+                    const validIndices = [];
+                    {
+                        const perUserLastTsScan = {};
+                        for (let i = 0; i < group.messages.length; i++) {
+                            const m = group.messages[i];
+                            const ts = m.timestamp ? Date.parse(m.timestamp) : 0;
+                            const prevTs = perUserLastTsScan[m.author.id] || 0;
+                            if (ts - prevTs < StankBot.RESTANK_COOLDOWN_MS) continue;
+                            perUserLastTsScan[m.author.id] = ts;
+                            validIndices.push(i);
+                        }
+                    }
+                    let finishBonusIndex = -1;
+                    if (!isLastGroup) {
+                        for (let k = validIndices.length - 1; k >= 0; k--) {
+                            const idx = validIndices[k];
+                            if (group.messages[idx].author.id !== breakerId) {
+                                finishBonusIndex = idx;
+                                break;
+                            }
+                        }
+                    }
+
                     let position = 0;                       // valid stank counter within this group
                     const perUserLastTs = {};               // { [userId]: timestampMs } for cooldown (per-Stanker)
 
@@ -743,15 +778,7 @@ module.exports = class StankBot {
                             let xp = StankBot.SP_FLAT + (position - 1);
                             if (position === 1) xp += StankBot.SP_STARTER_BONUS;
 
-                            // For completed chains (not the last group), award finish bonus to last poster
-                            const isLastInGroup = (i === group.messages.length - 1) ||
-                                // check no more valid (non-cooldown) messages follow this one
-                                !group.messages.slice(i + 1).some(m => {
-                                    const ts = m.timestamp ? Date.parse(m.timestamp) : 0;
-                                    return (ts - (perUserLastTs[m.author.id] || 0)) >= StankBot.RESTANK_COOLDOWN_MS;
-                                });
-
-                            if (!isLastGroup && isLastInGroup) xp += StankBot.SP_FINISH_BONUS;
+                            if (i === finishBonusIndex) xp += StankBot.SP_FINISH_BONUS;
 
                             this.awardXp(hAuthorId, hUsername, xp);
                             if (BigInt(hMsg.id) > BigInt(highestXp)) highestXp = hMsg.id;
@@ -780,6 +807,7 @@ module.exports = class StankBot {
                 let position = 0;
                 const perUserLastTs = {};
                 const uniqueUserIds = [];
+                this.chainContributors = [];
 
                 for (const m of latestGroup.messages) {
                     const ts     = m.timestamp ? Date.parse(m.timestamp) : 0;
@@ -788,9 +816,8 @@ module.exports = class StankBot {
                     perUserLastTs[m.author.id] = ts;
                     position++;
                     if (!uniqueUserIds.includes(m.author.id)) uniqueUserIds.push(m.author.id);
-                    // Track last contributor for finish bonus on next break
-                    this.lastChainContributorId       = m.author.id;
-                    this.lastChainContributorUsername = this.getUsername(m.author.id);
+                    // Track ordered chain contributors for finish-bonus walk-back on next break
+                    this.chainContributors.push({ id: m.author.id, username: this.getUsername(m.author.id) });
                     // Rebuild per-user cooldown state
                     this.lastStankTimestamps[m.author.id] = ts;
                 }
@@ -812,8 +839,7 @@ module.exports = class StankBot {
                 // Latest group is a GAP — no current chain
                 this.currentChain   = 0;
                 this.chainUniqueUsers = [];
-                this.lastChainContributorId = null;
-                this.lastChainContributorUsername = null;
+                this.chainContributors = [];
 
                 const recentChain = allGroups.slice().reverse().find(g => g.type === "CHAIN");
                 if (recentChain?.messages.length > 0) {
@@ -1179,8 +1205,7 @@ module.exports = class StankBot {
             if (isUnique)
                 this.chainUniqueUsers.push(authorId);
                 
-            this.lastChainContributorId = authorId;
-            this.lastChainContributorUsername = username;
+            this.chainContributors.push({ id: authorId, username });
 
             this.addStankReaction(msg.channel_id, msg.id);
 
@@ -1207,10 +1232,20 @@ module.exports = class StankBot {
             const authorId = msg.author?.id;
             const username = this.getUsername(authorId);
 
-            // Award finish bonus to the last valid poster
-            if (this.lastChainContributorId) {
-                this.awardXp(this.lastChainContributorId, this.lastChainContributorUsername, StankBot.SP_FINISH_BONUS);
-                this.toast(`+${StankBot.SP_FINISH_BONUS} SP -> ${this.lastChainContributorUsername} (chain finish!)`);
+            // Award finish bonus to the most recent valid poster who is NOT the chainbreaker.
+            // Walk the chain backwards so that if the breaker was also the last stanker, the
+            // bonus falls to the previous different stanker (2nd-last, 3rd-last, ...).
+            // If the chain contains only the breaker, no finish bonus is awarded.
+            let bonusRecipient = null;
+            for (let i = this.chainContributors.length - 1; i >= 0; i--) {
+                if (this.chainContributors[i].id !== authorId) {
+                    bonusRecipient = this.chainContributors[i];
+                    break;
+                }
+            }
+            if (bonusRecipient) {
+                this.awardXp(bonusRecipient.id, bonusRecipient.username, StankBot.SP_FINISH_BONUS);
+                this.toast(`+${StankBot.SP_FINISH_BONUS} SP -> ${bonusRecipient.username} (chain finish!)`);
             }
 
             // Punish chain breaker
@@ -1285,8 +1320,7 @@ module.exports = class StankBot {
             this.seenMsgIds.clear();
             this.processedReactions.clear();
             BdApi.Data.save("StankBot", "processedReactions", []);
-            this.lastChainContributorId = null;
-            this.lastChainContributorUsername = null;
+            this.chainContributors = [];
             this.lastStankTimestamps = {};
             stateChanged = true;
         }

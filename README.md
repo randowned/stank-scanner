@@ -16,7 +16,7 @@ Rankings are based on **net Stank Points** (earned SP minus punishment points).
 |---|---|
 | Chain starter (first stank) | +10 + 15 SP bonus = **+25 SP**, become **Slayer** |
 | Each subsequent valid stank (position N) | +10 + (N−1) SP |
-| Last poster when chain breaks | +15 SP retroactive finish bonus |
+| Last poster when chain breaks (excluding the chainbreaker) | +15 SP retroactive finish bonus |
 | Stank emoji reaction on ongoing-chain sticker | +1 SP (once per user per sticker) |
 | Break the chain | −(25 + chain length × 2) PP |
 
@@ -54,7 +54,7 @@ Rankings are based on **net Stank Points** (earned SP minus punishment points).
 - **Persistent scheduling**: Reset timers survive plugin reloads and continue logging schedules.
 - **Improved reset handling**: Manual `!stank-board-reset` and bot board reloads now behave consistently with auto-reset state.
 - **Position-based XP**: Each stank earns more SP as the chain grows — position N earns `10 + (N−1)` SP.
-- **Retroactive Finish Bonus**: The last valid poster gets +15 SP when the chain breaks.
+- **Retroactive Finish Bonus**: When the chain breaks, +15 SP goes to the most recent valid stanker who is **not** the chainbreaker. The chain is walked backwards to skip any trailing stanks by the breaker themselves; if the whole chain was the breaker, no bonus is awarded.
 - **Per-user Cooldown**: 5-minute cooldown per user prevents spam-stanking; violations get a callout with the time remaining.
 - **The Chainbreaker**: Board footer shows the player with the highest all-time punishment points.
 - **History Scraping**: Reconstructs chain state from channel history on startup, including cooldown tracking.
