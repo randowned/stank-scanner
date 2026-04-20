@@ -885,6 +885,16 @@ class StankAdmin(commands.GroupCog, name="stank-admin"):
         if isinstance(error, app_commands.CheckFailure):
             msg = "You don't have permission to use this command."
         else:
+            if isinstance(error, app_commands.TransformerError):
+                raw = getattr(interaction, "data", None)
+                resolved = (raw or {}).get("resolved", {}) if isinstance(raw, dict) else {}
+                log.error(
+                    "transformer error: value=%r value_type=%s target=%s resolved=%r",
+                    error.value,
+                    type(error.value).__name__,
+                    getattr(error.transformer, "_error_display_name", "?"),
+                    resolved,
+                )
             log.exception("admin command error", exc_info=error)
             msg = f"Command failed: `{type(error).__name__}`."
         if interaction.response.is_done():
