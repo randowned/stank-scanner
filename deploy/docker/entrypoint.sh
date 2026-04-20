@@ -3,6 +3,11 @@
 # mounts volumes as root), then drop to the stankbot user.
 set -e
 
+# uvicorn and alembic write INFO logs to stderr by default; Railway
+# colors anything on fd2 red. Merge stderr into stdout so routine
+# startup/request logs aren't mis-flagged as errors.
+exec 2>&1
+
 echo "[entrypoint] chown /data"
 chown -R stankbot:stankbot /data 2>/dev/null || true
 
