@@ -20,11 +20,18 @@ async def _run_web(bot: StankBot, config: AppConfig) -> None:
     from stankbot.web.app import build_app
 
     app = build_app(config, bot.engine, bot.session_factory, bot=bot)
+    # ``log_config=None`` stops uvicorn from installing its own stderr
+    # handlers with the ``INFO:     msg`` style — its loggers propagate
+    # to our root handler instead, keeping one format across the app.
+    # ``access_log=False`` mutes per-request lines; Railway's healthcheck
+    # polls /healthz every few seconds and would otherwise flood the log.
     uvicorn_config = uvicorn.Config(
         app,
         host=config.web_host,
         port=config.web_port,
         log_level=config.log_level.lower(),
+        log_config=None,
+        access_log=False,
         lifespan="on",
     )
     server = uvicorn.Server(uvicorn_config)

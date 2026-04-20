@@ -25,9 +25,18 @@ Type=simple
 User=stankbot
 WorkingDirectory=/opt/stankbot
 EnvironmentFile=/etc/stankbot/stankbot.env
+# Run pending Alembic migrations before the bot starts. systemd fails
+# the unit if this exits non-zero, matching the Docker entrypoint.
+ExecStartPre=/opt/stankbot/.venv/bin/alembic upgrade head
 ExecStart=/opt/stankbot/.venv/bin/python -m stankbot
 Restart=on-failure
 RestartSec=5s
+# Graceful shutdown: ``__main__`` catches SIGTERM and drains the
+# scheduler + Discord gateway + DB engine. Give it room to finish the
+# gateway close handshake before systemd escalates to SIGKILL.
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+SyslogIdentifier=stankbot
 # Light hardening — tighten further once the host is locked down.
 NoNewPrivileges=true
 ProtectSystem=full
