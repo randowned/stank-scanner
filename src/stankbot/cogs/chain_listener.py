@@ -68,9 +68,22 @@ class ChainListener(commands.Cog):
         if message.author.bot or message.guild is None:
             return
 
+        try:
+            await self._handle_message(message)
+        except Exception:
+            log.exception(
+                "unhandled error in on_message guild=%s channel=%s",
+                getattr(message.guild, "id", None),
+                message.channel.id,
+            )
+
+    async def _handle_message(self, message: discord.Message) -> None:
         async with self.bot.db() as session:
             altar = await altars_repo.for_guild(session, message.guild.id)
-            if altar is None or altar.channel_id != message.channel.id:
+            if altar is None:
+                log.info("on_message: no altar configured guild=%d", message.guild.id)
+                return
+            if altar.channel_id != message.channel.id:
                 return
             settings = SettingsService(session)
             maintenance = bool(
@@ -97,7 +110,7 @@ class ChainListener(commands.Cog):
             result = await chain_svc.process(stank_input, config)
 
             if result.outcome == ChainOutcome.VALID_STANK:
-                log.debug(
+                log.info(
                     "valid stank guild=%d altar=%d user=%d length=%d maintenance=%s",
                     message.guild.id,
                     altar.id,
