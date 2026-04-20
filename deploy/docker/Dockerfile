@@ -23,7 +23,6 @@ USER stankbot
 
 ENV DATABASE_URL=sqlite+aiosqlite:////data/stankbot.db
 
-VOLUME ["/data"]
 EXPOSE 8000
 
 CMD ["python", "-m", "stankbot"]
