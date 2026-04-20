@@ -38,6 +38,22 @@ log = logging.getLogger(__name__)
 
 _CUSTOM_EMOJI_RE = re.compile(r"<(a?):([A-Za-z0-9_~]+):(\d+)>")
 
+_TEXT_BASED_CHANNEL_TYPES = frozenset(
+    {
+        discord.ChannelType.text,
+        discord.ChannelType.news,
+        discord.ChannelType.voice,
+        discord.ChannelType.stage_voice,
+        discord.ChannelType.public_thread,
+        discord.ChannelType.private_thread,
+        discord.ChannelType.news_thread,
+    }
+)
+
+
+def _is_text_based(channel: app_commands.AppCommandChannel | discord.abc.GuildChannel | discord.Thread) -> bool:
+    return getattr(channel, "type", None) in _TEXT_BASED_CHANNEL_TYPES
+
 
 def _parse_reaction_emoji(
     raw: str,
@@ -503,6 +519,11 @@ class StankAdmin(commands.GroupCog, name="stank-admin"):
     ) -> None:
         if interaction.guild is None:
             return
+        if not _is_text_based(channel):
+            await interaction.response.send_message(
+                f"{channel.mention} isn't a text-based channel.", ephemeral=True
+            )
+            return
         purpose = ChannelPurpose.ANNOUNCEMENTS.value
         async with self.bot.db() as session:
             await guilds_repo.ensure(
@@ -765,6 +786,11 @@ class StankAdmin(commands.GroupCog, name="stank-admin"):
         reaction_emoji: str | None = None,
     ) -> None:
         if interaction.guild is None:
+            return
+        if not _is_text_based(channel):
+            await interaction.response.send_message(
+                f"{channel.mention} isn't a text-based channel.", ephemeral=True
+            )
             return
         pattern = sticker_name.strip().lower()
         if not pattern:
