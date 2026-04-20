@@ -84,6 +84,8 @@ class StankBot(commands.Bot):
                 guild = discord.Object(id=gid)
                 self.tree.copy_global_to(guild=guild)
                 await self.tree.sync(guild=guild)
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync()
             log.info("Synced slash commands to %d guild(s)", len(self.config.guild_ids))
         else:
             await self.tree.sync()
