@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import EventType, SessionEndReason
+from stankbot.db.repositories import cooldowns as cooldowns_repo
 from stankbot.db.repositories import events as events_repo
 from stankbot.services import achievements as achievements_svc
 from stankbot.services.chain_service import SessionIdProvider
@@ -96,6 +97,9 @@ class SessionService(SessionIdProvider):
                 reason=str(reason),
                 created_at=now,
             )
+            # Cooldowns reset at the shift boundary so a player can be the
+            # last stank of one shift and the first of the next.
+            await cooldowns_repo.clear_for_guild(self.session, guild_id=guild_id)
             participants = await events_repo.session_participants(
                 self.session, guild_id, ended_id
             )

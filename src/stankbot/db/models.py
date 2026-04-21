@@ -55,6 +55,7 @@ class EventType(StrEnum):
     SP_STARTER_BONUS = "sp_starter_bonus"
     SP_FINISH_BONUS = "sp_finish_bonus"
     SP_REACTION = "sp_reaction"
+    SP_TEAM_PLAYER = "sp_team_player"
     PP_BREAK = "pp_break"
     # Lifecycle (zero-delta marker events)
     SESSION_START = "session_start"

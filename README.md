@@ -15,12 +15,13 @@ Rankings are **net SP** (earned SP minus PP).
 | Chain starter (first stank in a new chain) | +10 SP base + 15 SP starter bonus |
 | Each subsequent stank at position *N* | +10 SP base + (N−1) SP position bonus |
 | Last contributor when a chain breaks (not the breaker) | +15 SP finish bonus |
+| Last stank of one shift + first stank of the next (chain must survive the rollover) | +20 SP Team Player bonus |
 | React to an in-chain sticker with the altar emoji | +1 SP (once per user per message) |
 | Break the chain | −(25 + chain_length × 2) PP |
 
 All values are per-guild defaults, editable on the web dashboard. The same user cannot stank twice within the configurable cooldown (default 20 minutes).
 
-Sessions roll over on a cron (default 07:00 / 15:00 / 23:00 UTC) with configurable warning minutes. Chain continuity across sessions is on by default — the live chain survives the session boundary.
+Sessions roll over on a cron (default 07:00 / 15:00 / 23:00 UTC) with configurable warning minutes. Chain continuity across sessions is on by default — the live chain survives the session boundary. Per-user cooldowns reset at the rollover so the same player can be last-of-shift and first-of-next for a Team Player bonus.
 
 ## Feature highlights
 
@@ -29,7 +30,7 @@ Sessions roll over on a cron (default 07:00 / 15:00 / 23:00 UTC) with configurab
 - **Multi-guild from day one.** Every row keyed by guild id.
 - **Event-sourced.** Every SP/PP change is an immutable event row. Player totals, session summaries, and records are derived — `rebuild-from-history` can always reconstruct them.
 - **Multi-altar per guild.** Run a themed event (Halloween sticker, Founders Day) alongside the normal chain with its own scoring overrides and a `custom_event_key` tag on every emitted event.
-- **Achievements / badges** derived from the event log — First Stank, Centurion, Finisher, Chainbreaker, Comeback Kid, Perfect Session, Streaker.
+- **Achievements / badges** derived from the event log — First Stank, Centurion, Finisher, Chainbreaker, Comeback Kid, Perfect Session, Streaker, Team Player.
 - **Web dashboard** (FastAPI + Jinja2 + HTMX) with Discord OAuth — public board, player profiles, chain/session history, admin pages with live embed-template preview.
 
 ## Running it yourself

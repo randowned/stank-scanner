@@ -247,6 +247,7 @@ async def _build_rollover_embed(
         if continues
         else "Fresh start — who claims position 1?"
     )
+    continuity_summary += " Cooldowns reset — Team Player bonus up for grabs."
 
     from stankbot.db.repositories import events as events_repo
 

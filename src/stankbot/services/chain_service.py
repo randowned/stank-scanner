@@ -180,6 +180,13 @@ class ChainService:
 
         # Emit scoring events (split so history slices cleanly).
         sp_awarded = 0
+        # Check "first SP_BASE in this session for this altar" BEFORE appending.
+        prior_sp_base = await events_repo.count_sp_base_in_session(
+            self.session,
+            msg.guild_id,
+            altar_id=msg.altar.id,
+            session_id=session_id,
+        ) if session_id is not None else 1
         await events_repo.append(
             self.session,
             guild_id=msg.guild_id,
@@ -195,6 +202,52 @@ class ChainService:
             created_at=msg.created_at,
         )
         sp_awarded += config.sp_flat
+
+        # Team Player: first stank of this session + same user was the last
+        # stank of the previous (ended) session on this altar.
+        if (
+            prior_sp_base == 0
+            and session_id is not None
+            and config.sp_team_player_bonus > 0
+        ):
+            prev_session_id = await events_repo.previous_ended_session_id(
+                self.session, msg.guild_id, before_id=session_id
+            )
+            if prev_session_id is not None:
+                prev_last = await events_repo.last_sp_base_in_session(
+                    self.session,
+                    msg.guild_id,
+                    altar_id=msg.altar.id,
+                    session_id=prev_session_id,
+                )
+                # Require the chain to have survived the rollover: this stank
+                # must be part of the same chain as the last stank of the
+                # prior shift. If the chain broke between shifts, no bonus.
+                chain_continued = (
+                    prev_last is not None
+                    and prev_last[1] is not None
+                    and prev_last[1] == current.id
+                )
+                if (
+                    chain_continued
+                    and prev_last is not None
+                    and prev_last[0] == msg.author_id
+                ):
+                    await events_repo.append(
+                        self.session,
+                        guild_id=msg.guild_id,
+                        type=EventType.SP_TEAM_PLAYER,
+                        delta=config.sp_team_player_bonus,
+                        user_id=msg.author_id,
+                        altar_id=msg.altar.id,
+                        session_id=session_id,
+                        chain_id=current.id,
+                        message_id=msg.message_id,
+                        custom_event_key=msg.altar.custom_event_key,
+                        reason="last of prev shift, first of this one",
+                        created_at=msg.created_at,
+                    )
+                    sp_awarded += config.sp_team_player_bonus
 
         if position > 1 and config.sp_position_bonus > 0:
             bonus = (position - 1) * config.sp_position_bonus

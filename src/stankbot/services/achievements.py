@@ -208,6 +208,24 @@ async def _streaker(
     return False
 
 
+async def _team_player(
+    session: AsyncSession, guild_id: int, user_id: int
+) -> bool:
+    # Awarded whenever an SP_TEAM_PLAYER event has been recorded for the
+    # user; the condition itself is checked when the event is emitted in
+    # ChainService so this rule just needs presence.
+    stmt = (
+        select(Event.id)
+        .where(
+            Event.guild_id == guild_id,
+            Event.user_id == user_id,
+            Event.type == EventType.SP_TEAM_PLAYER,
+        )
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none() is not None
+
+
 # --- catalog --------------------------------------------------------------
 
 
@@ -262,6 +280,13 @@ _RULES: tuple[AchievementDef, ...] = (
         icon="⚡",
         rule=_streaker,
         session_close_only=True,
+    ),
+    AchievementDef(
+        key="team_player",
+        name="Team Player",
+        description="Last stank of one shift, first stank of the next.",
+        icon="🤝",
+        rule=_team_player,
     ),
     AchievementDef(
         key="chainbreaker",

@@ -33,6 +33,7 @@ from stankbot.services.scoring_service import (
     DEFAULT_SP_POSITION_BONUS,
     DEFAULT_SP_REACTION,
     DEFAULT_SP_STARTER_BONUS,
+    DEFAULT_SP_TEAM_PLAYER_BONUS,
     ScoringConfig,
 )
 
@@ -44,6 +45,7 @@ class Keys(StrEnum):
     SP_STARTER_BONUS = "sp_starter_bonus"
     SP_FINISH_BONUS = "sp_finish_bonus"
     SP_REACTION = "sp_reaction"
+    SP_TEAM_PLAYER_BONUS = "sp_team_player_bonus"
     PP_BREAK_BASE = "pp_break_base"
     PP_BREAK_PER_STANK = "pp_break_per_stank"
     RESTANK_COOLDOWN_SECONDS = "restank_cooldown_seconds"
@@ -72,6 +74,7 @@ DEFAULTS: dict[str, Any] = {
     Keys.SP_STARTER_BONUS: DEFAULT_SP_STARTER_BONUS,
     Keys.SP_FINISH_BONUS: DEFAULT_SP_FINISH_BONUS,
     Keys.SP_REACTION: DEFAULT_SP_REACTION,
+    Keys.SP_TEAM_PLAYER_BONUS: DEFAULT_SP_TEAM_PLAYER_BONUS,
     Keys.PP_BREAK_BASE: DEFAULT_PP_BREAK_BASE,
     Keys.PP_BREAK_PER_STANK: DEFAULT_PP_BREAK_PER_STANK,
     Keys.RESTANK_COOLDOWN_SECONDS: DEFAULT_RESTANK_COOLDOWN_SECONDS,
@@ -108,6 +111,10 @@ LABELS: dict[str, tuple[str, str]] = {
     Keys.SP_REACTION: (
         "Reaction SP",
         "SP awarded per Stank reaction on an altar message (if reaction bonus is enabled).",
+    ),
+    Keys.SP_TEAM_PLAYER_BONUS: (
+        "Team Player bonus",
+        "Extra SP awarded when the same user is the last stanker of one shift and the first stanker of the next.",
     ),
     Keys.PP_BREAK_BASE: (
         "Break penalty (base)",
@@ -222,6 +229,13 @@ class SettingsService:
             ),
             sp_reaction=await resolve(
                 Keys.SP_REACTION, altar.sp_reaction_override, DEFAULT_SP_REACTION
+            ),
+            sp_team_player_bonus=int(
+                await self.get(
+                    guild_id,
+                    Keys.SP_TEAM_PLAYER_BONUS,
+                    DEFAULT_SP_TEAM_PLAYER_BONUS,
+                )
             ),
             pp_break_base=await resolve(
                 Keys.PP_BREAK_BASE,

@@ -60,6 +60,13 @@ async def clear_for_altar(
     )
 
 
+async def clear_for_guild(session: AsyncSession, *, guild_id: int) -> None:
+    """Remove every cooldown row for a guild — called on session rollover so
+    the same user can be the last stanker of one shift and first of the next.
+    """
+    await session.execute(delete(Cooldown).where(Cooldown.guild_id == guild_id))
+
+
 def seconds_remaining(
     last_stank_at: datetime | None,
     *,

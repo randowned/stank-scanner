@@ -15,6 +15,7 @@ DEFAULT_SP_POSITION_BONUS: int = 1  # added as (position - 1) * this
 DEFAULT_SP_STARTER_BONUS: int = 15
 DEFAULT_SP_FINISH_BONUS: int = 15
 DEFAULT_SP_REACTION: int = 1
+DEFAULT_SP_TEAM_PLAYER_BONUS: int = 20
 DEFAULT_PP_BREAK_BASE: int = 25
 DEFAULT_PP_BREAK_PER_STANK: int = 2
 DEFAULT_RESTANK_COOLDOWN_SECONDS: int = 20 * 60  # 20 minutes
@@ -34,6 +35,7 @@ class ScoringConfig:
     sp_starter_bonus: int = DEFAULT_SP_STARTER_BONUS
     sp_finish_bonus: int = DEFAULT_SP_FINISH_BONUS
     sp_reaction: int = DEFAULT_SP_REACTION
+    sp_team_player_bonus: int = DEFAULT_SP_TEAM_PLAYER_BONUS
     pp_break_base: int = DEFAULT_PP_BREAK_BASE
     pp_break_per_stank: int = DEFAULT_PP_BREAK_PER_STANK
     cooldown_seconds: int = DEFAULT_RESTANK_COOLDOWN_SECONDS

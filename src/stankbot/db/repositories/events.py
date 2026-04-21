@@ -115,6 +115,7 @@ async def sp_pp_totals(
         EventType.SP_STARTER_BONUS,
         EventType.SP_FINISH_BONUS,
         EventType.SP_REACTION,
+        EventType.SP_TEAM_PLAYER,
     }
     where = [Event.guild_id == guild_id, Event.user_id == user_id]
     if session_id is not None:
@@ -164,6 +165,7 @@ _SP_TYPES = (
     EventType.SP_STARTER_BONUS,
     EventType.SP_FINISH_BONUS,
     EventType.SP_REACTION,
+    EventType.SP_TEAM_PLAYER,
 )
 
 
@@ -276,6 +278,71 @@ async def session_participants(
         .distinct()
     )
     return [int(uid) for uid in (await session.execute(stmt)).scalars().all() if uid]
+
+
+async def previous_ended_session_id(
+    session: AsyncSession, guild_id: int, *, before_id: int
+) -> int | None:
+    """Most recent ended session_id for the guild that is older than ``before_id``.
+
+    A session is considered ended when a SESSION_END event exists for it.
+    """
+    stmt = (
+        select(Event.session_id)
+        .where(
+            Event.guild_id == guild_id,
+            Event.type == EventType.SESSION_END,
+            Event.session_id.is_not(None),
+            Event.session_id < before_id,
+        )
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def last_sp_base_in_session(
+    session: AsyncSession,
+    guild_id: int,
+    *,
+    altar_id: int,
+    session_id: int,
+) -> tuple[int, int | None] | None:
+    """``(user_id, chain_id)`` of the last SP_BASE event in a session for a
+    given altar, or ``None`` if no SP_BASE was recorded there.
+    """
+    stmt = (
+        select(Event.user_id, Event.chain_id)
+        .where(
+            Event.guild_id == guild_id,
+            Event.altar_id == altar_id,
+            Event.session_id == session_id,
+            Event.type == EventType.SP_BASE,
+        )
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).first()
+    if row is None or row[0] is None:
+        return None
+    return int(row[0]), (int(row[1]) if row[1] is not None else None)
+
+
+async def count_sp_base_in_session(
+    session: AsyncSession,
+    guild_id: int,
+    *,
+    altar_id: int,
+    session_id: int,
+) -> int:
+    """Count SP_BASE events for a (guild, altar, session)."""
+    stmt = select(func.count(Event.id)).where(
+        Event.guild_id == guild_id,
+        Event.altar_id == altar_id,
+        Event.session_id == session_id,
+        Event.type == EventType.SP_BASE,
+    )
+    return int((await session.execute(stmt)).scalar_one() or 0)
 
 
 async def last_stank_at(
