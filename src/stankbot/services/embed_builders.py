@@ -17,8 +17,9 @@ from typing import Any
 import discord
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stankbot.db.models import Altar, Player, Record, RecordScope
+from stankbot.db.models import Altar, Record, RecordScope
 from stankbot.db.repositories import events as events_repo
+from stankbot.db.repositories import players as players_repo
 from stankbot.services.board_renderer import PlayerRow
 from stankbot.services.default_templates import (
     CHAIN_BREAK_EMBED,
@@ -265,8 +266,8 @@ async def display_name_of(
 ) -> str:
     if user_id is None:
         return "—"
-    player = await session.get(Player, (guild_id, user_id))
-    return (player.display_name if player else None) or str(user_id)
+    player = await players_repo.get(session, guild_id, user_id)
+    return player.display_name if player else str(user_id)
 
 
 async def current_record(

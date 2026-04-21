@@ -15,8 +15,9 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stankbot.db.models import Chain, Event, EventType, Player
+from stankbot.db.models import Chain, Event, EventType
 from stankbot.db.repositories import events as events_repo
+from stankbot.db.repositories import players as players_repo
 
 if TYPE_CHECKING:
     pass
@@ -71,8 +72,8 @@ async def user_summary(
     started = await events_repo.chains_started(session, guild_id, user_id)
     broken = await events_repo.chains_broken(session, guild_id, user_id)
     last = await events_repo.last_stank_at(session, guild_id, user_id)
-    player = await session.get(Player, (guild_id, user_id))
-    name = (player.display_name if player else None) or str(user_id)
+    player = await players_repo.get(session, guild_id, user_id)
+    name = player.display_name if player else str(user_id)
     return UserSummary(
         user_id=user_id,
         display_name=name,
