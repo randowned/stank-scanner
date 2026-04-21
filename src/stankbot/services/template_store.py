@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ from stankbot.services.default_templates import ALL_DEFAULTS
 
 log = logging.getLogger(__name__)
 
-_TEMPLATES_ROOT = Path("data/templates")
+_TEMPLATES_ROOT = Path(os.getenv("TEMPLATES_DIR", "./data/templates"))
 
 _VALID_TOP_KEYS = frozenset({
     "color",
