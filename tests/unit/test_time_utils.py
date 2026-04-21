@@ -14,9 +14,14 @@ def test_humanize_seconds_only_when_under_a_minute() -> None:
     assert humanize_duration(45) == "45s"
 
 
-def test_humanize_drops_seconds_once_minutes_present() -> None:
-    # 2m 30s → "2m" (seconds suppressed when minutes are present)
-    assert humanize_duration(150) == "2m"
+def test_humanize_keeps_seconds_with_minutes() -> None:
+    assert humanize_duration(150) == "2m 30s"
+    assert humanize_duration(120) == "2m"
+
+
+def test_humanize_drops_seconds_once_hours_present() -> None:
+    assert humanize_duration(3600 + 45) == "1h"
+    assert humanize_duration(3600 + 120 + 5) == "1h 2m"
 
 
 def test_humanize_hours_and_minutes() -> None:

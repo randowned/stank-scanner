@@ -22,9 +22,8 @@ def humanize_duration(seconds: float) -> str:
         parts.append(f"{hours}h")
     if minutes:
         parts.append(f"{minutes}m")
-    # Seconds only shown when no coarser unit is present; above a minute the
-    # trailing seconds add noise without meaningful precision.
-    if secs and not parts:
+    # Suppress seconds once hours/days are present — they're noise at that scale.
+    if secs and not (days or hours):
         parts.append(f"{secs}s")
     return " ".join(parts) or "0s"
 
