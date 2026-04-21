@@ -17,8 +17,6 @@ Event triggers:
       a single COUNT or EXISTS query.
     * Session-end calls ``evaluate_session_close`` to settle achievements
       that only resolve once a session boundary exists.
-
-v1 had no achievements; this is a new v2 capability.
 """
 
 from __future__ import annotations

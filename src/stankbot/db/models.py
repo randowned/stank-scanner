@@ -179,7 +179,7 @@ class Altar(Base):
     )
     channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     # Optional exact-sticker snowflake (kept for thumbnail rendering only).
-    # Matching happens by name, per v1 semantics.
+    # Matching happens by name.
     sticker_id: Mapped[int | None] = mapped_column(BigInteger)
     # Substring matched (case-insensitive) against incoming sticker names.
     sticker_name_pattern: Mapped[str] = mapped_column(

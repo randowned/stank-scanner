@@ -1,16 +1,14 @@
-"""ChainService — the heart of v2. Framework-agnostic.
+"""ChainService — framework-agnostic core.
 
 Accepts a ``StankInput`` describing an altar channel message, decides
 whether it's a valid stank / cooldown violation / chain break / noise,
 updates persistent state accordingly, and emits the correct events.
 
-Direct port of v1's ``processAltarMessage`` (StankBot.plugin.js:1196-1362)
-with these structural changes:
-    * Every mutation goes through the event log (no hidden JSON blobs).
+Invariants:
+    * Every mutation goes through the event log.
     * Chain identity is persisted: each active chain has a ``Chain`` row
-      with rows in ``chain_messages`` — v1's in-memory lists are gone.
-    * Cooldowns are per (guild, altar, user), not a global dict.
-    * The finish-bonus / break-penalty split is preserved verbatim.
+      with rows in ``chain_messages``.
+    * Cooldowns are per (guild, altar, user).
 """
 
 from __future__ import annotations

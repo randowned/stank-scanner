@@ -202,7 +202,7 @@ async def leaderboard(
 async def top_pp_user(
     session: AsyncSession, guild_id: int
 ) -> tuple[int, int] | None:
-    """All-time PP leader — the "chainbreaker" per v1 semantics. Returns
+    """All-time PP leader — the "chainbreaker". Returns
     ``(user_id, punishments)`` or ``None`` if no one has any PP yet.
     """
     pp_expr = func.coalesce(func.sum(Event.delta), 0).label("pp")

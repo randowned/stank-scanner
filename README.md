@@ -84,7 +84,7 @@ Deploys are gated on the `/healthz` endpoint, which returns 200 only when the DB
 4. **OAuth2 → URL Generator**: scopes `bot` + `applications.commands`; permissions Send Messages, Embed Links, Read Message History, Add Reactions, Use External Stickers, Manage Messages.
 5. Open the generated URL, pick your guild, authorize.
 6. In the Developer Portal, add your dashboard URL + `/auth/callback` to **OAuth2 → Redirects** so web login works.
-7. Leave the **Interactions Endpoint URL** field empty — v2 uses the Gateway, not webhook interactions.
+7. Leave the **Interactions Endpoint URL** field empty — the bot uses the Gateway, not webhook interactions.
 
 ## Configuration
 

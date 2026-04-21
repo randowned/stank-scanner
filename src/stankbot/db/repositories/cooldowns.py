@@ -66,10 +66,7 @@ def seconds_remaining(
     cooldown_seconds: int,
     now: datetime,
 ) -> int:
-    """Return seconds left on the cooldown, or 0 if the user can stank.
-
-    Mirrors v1's cooldown check at StankBot.plugin.js:1212.
-    """
+    """Return seconds left on the cooldown, or 0 if the user can stank."""
     if last_stank_at is None:
         return 0
     elapsed = (now - last_stank_at).total_seconds()

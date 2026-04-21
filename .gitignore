@@ -1,4 +1,9 @@
-.claude/
+# Include skills and commands
+.claude/*
+!.claude/skills
+!.claude/skills/**
+!.claude/commands
+!.claude/commands/**
 
 # Python
 __pycache__/

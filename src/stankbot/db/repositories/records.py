@@ -65,8 +65,8 @@ def beats(
     current_length: int,
     current_unique: int,
 ) -> bool:
-    """v1 tie-breaker (StankBot.plugin.js:1307): longer chain wins; equal
-    length → more unique contributors wins.
+    """Tie-breaker: longer chain wins; equal length → more unique
+    contributors wins.
     """
     if new_length > current_length:
         return True

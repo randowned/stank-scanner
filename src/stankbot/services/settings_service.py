@@ -194,7 +194,7 @@ class SettingsService:
 
     async def effective_scoring(self, guild_id: int, altar: Altar) -> ScoringConfig:
         """Resolve scoring config with altar overrides taking precedence
-        over guild settings, which take precedence over v1 defaults.
+        over guild settings, which take precedence over built-in defaults.
         """
 
         async def resolve(key: Keys, override: int | None, default_val: int) -> int:

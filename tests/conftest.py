@@ -1,4 +1,4 @@
-"""Shared fixtures: in-memory SQLite with the full v2 schema.
+"""Shared fixtures: in-memory SQLite with the full schema.
 
 Uses ``Base.metadata.create_all`` (not Alembic) so tests don't depend on
 the migration files — schema authority for tests is ``db/models.py``.

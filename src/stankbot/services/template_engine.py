@@ -8,11 +8,6 @@ ready-to-send ``discord.Embed``.
 Convention: all variables are ``snake_case`` — the engine rejects any
 ``{CamelCase}`` / ``{kebab-case}`` token to catch user typos in the web
 editor before they hit Discord.
-
-v1 reference: ``applyCommonReplacements`` in StankBot.plugin.js:533-552.
-The v1 vocabulary (``{current}``, ``{record}``, ``{next_reset_in}``, ...)
-is preserved; the v1 camelCase tokens (``{alltimeRecord}``, etc.) were
-renamed to snake_case as part of the v2 rewrite.
 """
 
 from __future__ import annotations

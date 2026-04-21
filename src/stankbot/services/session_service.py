@@ -9,8 +9,6 @@ Session boundaries are events in the log:
 Because sessions are derived from events, **no ``sessions`` table exists**.
 Any past session can be reconstructed by filtering the event stream
 between two matching start/end markers.
-
-v1 reference: ``endSession`` + ``resetBoard`` in StankBot.plugin.js:590-632.
 """
 
 from __future__ import annotations
