@@ -230,6 +230,15 @@ class StankCommands(commands.GroupCog, name="stank"):
             last_stank = await events_repo.last_stank_at(
                 session, interaction.guild.id, target_id
             )
+            from stankbot.cogs._identity import ensure_player
+
+            await ensure_player(
+                session,
+                self.bot,
+                guild_id=interaction.guild.id,
+                user_id=target_id,
+                hint=user,
+            )
             player = await players_repo.get_or_create(
                 session, interaction.guild.id, target_id
             )

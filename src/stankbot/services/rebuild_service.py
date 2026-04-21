@@ -185,6 +185,10 @@ async def _replay_altar(
                         sticker_id=sticker_key,
                         config=config,
                         created_at=message.created_at,
+                        user_display_name=(
+                            getattr(user, "display_name", None)
+                            or getattr(user, "name", None)
+                        ),
                     )
                     if awarded:
                         reactions += 1

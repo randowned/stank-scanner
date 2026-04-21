@@ -431,12 +431,16 @@ class ChainService:
         config: ScoringConfig,
         chain_id: int | None = None,
         created_at: datetime | None = None,
+        user_display_name: str | None = None,
     ) -> int:
         """Idempotent reaction SP. Returns the amount awarded (0 if this
         (message, user, sticker) was already claimed, or the bonus is off).
         """
         if config.sp_reaction <= 0:
             return 0
+        await players_repo.get_or_create(
+            self.session, guild_id, user_id, user_display_name
+        )
         claimed = await reaction_repo.try_claim(
             self.session,
             guild_id=guild_id,

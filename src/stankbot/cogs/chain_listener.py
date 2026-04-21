@@ -21,6 +21,7 @@ from stankbot.db.repositories import events as events_repo
 from stankbot.db.repositories import guilds as guilds_repo
 from stankbot.services import embed_builders
 from stankbot.services.announcement_service import broadcast_to_guild
+from stankbot.cogs._identity import ensure_player
 from stankbot.services.chain_service import ChainOutcome, ChainService, StankInput
 from stankbot.services.session_service import SessionService
 from stankbot.services.settings_service import Keys, SettingsService
@@ -169,6 +170,14 @@ class ChainListener(commands.Cog):
 
             session_svc = SessionService(session)
             chain_svc = ChainService(session, session_id_provider=session_svc)
+
+            await ensure_player(
+                session,
+                self.bot,
+                guild_id=payload.guild_id,
+                user_id=payload.user_id,
+                hint=payload.member,
+            )
 
             config = await settings.effective_scoring(payload.guild_id, altar)
             sticker_key = emoji.id or -abs(hash(emoji.name or "")) % (10**12)
