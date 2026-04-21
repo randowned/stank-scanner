@@ -19,9 +19,6 @@ async def _run_web(bot: StankBot, config: AppConfig) -> None:
     """Serve the FastAPI dashboard on the bot's event loop."""
     from stankbot.web.app import build_app
 
-    await bot._guilds_loaded.wait()
-    from stankbot.services.template_store import seed_all
-    seed_all()
     app = build_app(config, bot.engine, bot.session_factory, bot=bot)
     # ``log_config=None`` stops uvicorn from installing its own stderr
     # handlers with the ``INFO:     msg`` style — its loggers propagate
@@ -47,6 +44,9 @@ async def run() -> None:
     config = load_config()
     configure_logging(level=config.log_level, fmt=config.log_format)
     log.info("StankBot starting")
+
+    from stankbot.services.template_store import seed_all
+    seed_all()
 
     bot = StankBot(config)
     async with bot:
