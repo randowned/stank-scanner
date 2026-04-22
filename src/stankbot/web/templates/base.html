@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}StankBot{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/json-enc.js"></script>
   <style>
@@ -21,7 +24,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
@@ -95,6 +98,12 @@
       opacity: 1; transition: opacity 0.6s ease-out;
     }
     .saved-indicator.fade-out { opacity: 0; }
+    .bot-invite-group { display: inline-flex; align-items: center; border-radius: 6px; overflow: hidden; margin-right: 12px; }
+    .bot-invite-group a { display: inline-flex; align-items: center; background: var(--gold); color: #1a1425; text-decoration: none; font-weight: 600; font-size: 0.9em; padding: 6px 12px; border-radius: 0; }
+    .bot-invite-group a:hover { background: #e5be5d; }
+    .bot-invite-group button { display: inline-flex; align-items: center; background: var(--border); color: var(--text); border: none; font-size: 0.9em; padding: 6px 10px; cursor: pointer; margin-left: -1px; }
+    .bot-invite-group button:hover { background: var(--border); color: var(--accent); }
+    .main-nav a { transition: all 0.15s ease; }
   </style>
 </head>
 <body>
@@ -117,7 +126,12 @@
     {% endif %}
     {% endif %}
     <nav>
-      <a href="https://discord.com/oauth2/authorize?client_id=1494266000064122930&scope=bot" target="_blank" style="color:var(--gold);">Add bot</a>
+      {% if is_admin %}
+      <div class="bot-invite-group">
+        <a href="https://discord.com/oauth2/authorize?client_id=1494266000064122930&scope=bot" target="_blank">Add Bot</a>
+        <button onclick="navigator.clipboard.writeText('https://discord.com/oauth2/authorize?client_id=1494266000064122930&scope=bot')" title="Copy invite link">📋</button>
+      </div>
+      {% endif %}
       {% if user %}
         <span class="muted">{{ user.username }}</span>
         <a href="/auth/logout">Logout</a>

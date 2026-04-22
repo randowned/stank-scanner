@@ -154,6 +154,7 @@ CLI alternative for rebuild: `python -m stankbot.rebuild --guild-id <id>`.
 - `/admin/settings` — scoring, reset hours, feature toggles.
 - `/admin/maintenance` — toggle maintenance mode.
 - `/admin/config` — read-only snapshot of current settings.
+- **Invite** — "Add Bot" button with copy-to-clipboard (admin-only, nav bar)
 - `/admin/templates` — live JSON editor for embed templates (stored in `data/templates/`).
 - `/admin/new-session` · `/admin/reset` · `/admin/rebuild` — session/state operations.
 - `/admin/audit` — audit trail.

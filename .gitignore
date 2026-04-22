@@ -1,9 +1,5 @@
-# Include skills and commands
+# Ignore Claude, we have .opencode, Claude users can create symlinks
 .claude/*
-!.claude/skills
-!.claude/skills/**
-!.claude/commands
-!.claude/commands/**
 
 # Python
 __pycache__/
