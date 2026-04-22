@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { boardState, currentChain, currentUnique } from '$lib/stores';
 	import { apiFetch } from '$lib/api';
 	import type { BoardState, PlayerRow } from '../app.d';
 
@@ -8,6 +7,8 @@
 
 	const board = $derived(data.state as BoardState | null);
 	const isLoading = $derived(!board);
+	const liveChain = $derived(board?.current ?? 0);
+	const liveUnique = $derived(board?.current_unique ?? 0);
 
 	let displayedRankings: PlayerRow[] = $state([]);
 	let loadOffset = $state(0);
@@ -17,7 +18,6 @@
 
 	$effect(() => {
 		if (board) {
-			boardState.set(board);
 			displayedRankings = board.rankings ?? [];
 			loadOffset = displayedRankings.length;
 			hasMore = displayedRankings.length >= PAGE_SIZE;
@@ -91,8 +91,8 @@
 					{data.guild_name}
 				</h1>
 				<p class="text-muted text-sm mt-1">
-					{#if $currentChain > 0}
-						Live chain: <span class="text-accent font-semibold">{$currentChain}</span> stanks · <span>{$currentUnique}</span> unique
+					{#if liveChain > 0}
+						Live chain: <span class="text-accent font-semibold">{liveChain}</span> stanks · <span>{liveUnique}</span> unique
 					{:else}
 						No active chain
 					{/if}
