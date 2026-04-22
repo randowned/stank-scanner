@@ -107,7 +107,7 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
     }
 
 
-@_API_ROUTER.websocket("ws")
+@_API_ROUTER.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
     request: Request,
@@ -162,7 +162,13 @@ def _is_guild_member_check(request: Request, guild_id: int, user_id: int) -> boo
     return member is not None
 
 
-@_API_ROUTER.get("auth")
+@_API_ROUTER.get("/ping")
+async def ping() -> JSONResponse:
+    """Health check for v2 API."""
+    return JSONResponse({"status": "ok", "version": "v2"})
+
+
+@_API_ROUTER.get("/auth")
 async def auth_check(request: Request, user: dict = Depends(require_login)) -> JSONResponse:
     """Return current user info for SvelteKit authentication."""
     return JSONResponse(
@@ -191,7 +197,7 @@ class MsgPackResponse(JSONResponse):
             super().__init__(content)
 
 
-@_API_ROUTER.get("api/board")
+@_API_ROUTER.get("/api/board")
 async def api_board(
     request: Request,
     session: AsyncSession = Depends(get_db),
@@ -205,7 +211,7 @@ async def api_board(
     return MsgPackResponse(state, request)
 
 
-@_API_ROUTER.get("api/player/{user_id}")
+@_API_ROUTER.get("/api/player/{user_id}")
 async def api_player(
     user_id: str,
     request: Request,
@@ -263,7 +269,7 @@ async def api_player(
     )
 
 
-@_API_ROUTER.get("api/chains")
+@_API_ROUTER.get("/api/chains")
 async def api_chains(
     request: Request,
     session: AsyncSession = Depends(get_db),
@@ -295,7 +301,7 @@ async def api_chains(
     return MsgPackResponse(result, request)
 
 
-@_API_ROUTER.get("api/chain/{chain_id}")
+@_API_ROUTER.get("/api/chain/{chain_id}")
 async def api_chain(
     chain_id: int,
     request: Request,
@@ -323,7 +329,7 @@ async def api_chain(
     )
 
 
-@_API_ROUTER.get("api/sessions")
+@_API_ROUTER.get("/api/sessions")
 async def api_sessions(
     request: Request,
     session: AsyncSession = Depends(get_db),
@@ -346,7 +352,7 @@ async def api_sessions(
     return MsgPackResponse(result, request)
 
 
-@_API_ROUTER.get("api/session/{session_id}")
+@_API_ROUTER.get("/api/session/{session_id}")
 async def api_session(
     session_id: int,
     request: Request,
