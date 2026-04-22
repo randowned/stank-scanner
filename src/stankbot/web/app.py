@@ -65,11 +65,11 @@ def build_app(
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    app.include_router(v2_app._API_ROUTER)
+
     v2_build_dir = _WEB_DIR / "build"
     if v2_build_dir.is_dir():
         app.mount("/v2", StaticFiles(directory=str(v2_build_dir), html=True), name="v2_static")
-
-    app.include_router(v2_app._API_ROUTER)
 
     @app.exception_handler(_LoginRedirect)
     async def _login_redirect_handler(_: Request, exc: _LoginRedirect):
