@@ -143,22 +143,26 @@ async def websocket_endpoint(
         return
 
     config = getattr(app_state, "config", None)
-    if config is not None and config.env == "dev" and config.mock_auth:
-        # In dev mock-auth mode, skip strict guild membership checks.
-        pass
-    else:
-        bot = getattr(app_state, "bot", None)
-        if bot is None:
-            await websocket.close(code=4003, reason="Not in guild")
+    is_dev_mock = config is not None and config.env == "dev" and getattr(config, "mock_auth", False)
+
+    if not is_dev_mock:
+        # Session-based auth avoids relying on discord.py's member cache,
+        # which is often incomplete in production and causes spurious 403s.
+        session = websocket.session
+        user = session.get("user")
+        if user is None:
+            await websocket.close(code=4003, reason="Not authenticated")
             return
-        guild = bot.get_guild(guild_id)
-        if guild is None:
-            await websocket.close(code=4003, reason="Not in guild")
+        if int(user.get("id", 0)) != user_id:
+            await websocket.close(code=4003, reason="User mismatch")
             return
-        member = guild.get_member(user_id)
-        if member is None:
-            await websocket.close(code=4003, reason="Not in guild")
-            return
+        guilds = session.get("guilds", [])
+        is_member = any(int(g.get("id", 0)) == guild_id for g in guilds)
+        if not is_member:
+            owner_id = int(getattr(config, "owner_id", 0) or 0)
+            if int(user.get("id", 0)) != owner_id:
+                await websocket.close(code=4003, reason="Not in guild")
+                return
 
     await manager.connect(websocket, guild_id)
 

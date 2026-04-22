@@ -32,6 +32,12 @@ htmlcov/
 # Frontend build artifacts (committed source is in git, node_modules/build are not)
 web/node_modules
 web/build
+web/.svelte-kit
+web/playwright-report
+web/test-results
+
+# Root-level accidental package-lock (web/package-lock.json is intentional)
+/package-lock.json
 
 # IDE
 .idea/
