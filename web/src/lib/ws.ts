@@ -1,10 +1,12 @@
+import { base } from '$app/paths';
 import { Packr } from 'msgpackr';
-import { connectionStatus, wsLatency, boardState, addToast, type BoardState, type Badge, type ChainSummary, type SessionSummary } from './stores';
+import { connectionStatus, wsLatency, boardState, addToast } from './stores';
+import type { BoardState, Badge } from '../app.d';
 import { get } from 'svelte/store';
 
 const packr = new Packr();
 
-export const enum MsgType {
+export enum MsgType {
 	SUBSCRIBE = 1,
 	PING = 2,
 
@@ -96,7 +98,7 @@ export function connect(guildId: number, userId: number): void {
 
 	const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 	const host = window.location.host;
-	const url = `${protocol}//${host}/v2/ws?guild_id=${guildId}&user_id=${userId}`;
+	const url = `${protocol}//${host}${base}/ws?guild_id=${guildId}&user_id=${userId}`;
 
 	try {
 		ws = new WebSocket(url);
@@ -151,24 +153,26 @@ export function disconnect(): void {
 	connectionStatus.set('disconnected');
 }
 
-function subscribe(guildId: number): void {
+function _sendPacked(msg: SubscribeMsg | PingMsg): void {
 	if (ws?.readyState !== WebSocket.OPEN) {
 		return;
 	}
+	const packed = packr.pack(msg) as Uint8Array;
+	const buf = packed.buffer.slice(
+		packed.byteOffset,
+		packed.byteOffset + packed.byteLength,
+	) as ArrayBuffer;
+	ws.send(buf);
+}
 
-	const msg: SubscribeMsg = { t: MsgType.SUBSCRIBE, s: guildId };
-	ws.send(packr.pack(msg));
+function subscribe(guildId: number): void {
+	_sendPacked({ t: MsgType.SUBSCRIBE, s: guildId });
 }
 
 function startPingLoop(): void {
 	lastPingTime = Date.now();
 	pingInterval = setInterval(() => {
-		if (ws?.readyState !== WebSocket.OPEN) {
-			return;
-		}
-
-		const msg: PingMsg = { t: MsgType.PING };
-		ws.send(packr.pack(msg));
+		_sendPacked({ t: MsgType.PING });
 		lastPingTime = Date.now();
 	}, 15000);
 }

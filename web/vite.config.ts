@@ -11,10 +11,5 @@ export default defineConfig({
 				changeOrigin: true
 			}
 		}
-	},
-	kit: {
-		alias: {
-			$lib: './src/lib'
-		}
 	}
 });

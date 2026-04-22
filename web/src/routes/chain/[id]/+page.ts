@@ -1,7 +1,7 @@
-import type { PageServerLoad } from './$types';
-import type { ChainSummary } from '../../app.d';
+import type { PageLoad } from './$types';
+import type { ChainSummary } from '../../../app.d';
 
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageLoad = async ({ params, fetch }) => {
 	const chainId = params.id;
 
 	try {

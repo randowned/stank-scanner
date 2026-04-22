@@ -1,4 +1,7 @@
-import type { PageServerLoad } from './$types';
+import { Packr } from 'msgpackr';
+import type { PageLoad } from './$types';
+
+const packr = new Packr();
 
 const mockState = {
 	guild_name: 'Test Server',
@@ -22,7 +25,7 @@ const mockState = {
 	chainbreaker: { user_id: 444, display_name: 'QuickFinger', earned_sp: 7650, punishments: 200 }
 };
 
-export const load: PageServerLoad = async ({ fetch, url }) => {
+export const load: PageLoad = async ({ fetch, url }) => {
 	const devMode = url.searchParams.get('dev') === 'true';
 
 	if (devMode) {
@@ -41,7 +44,7 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 		const contentType = response.headers.get('content-type') || '';
 		let state;
 		if (contentType.includes('msgpack')) {
-			state = msgpackr.unpack(new Uint8Array(await response.arrayBuffer()));
+			state = packr.unpack(new Uint8Array(await response.arrayBuffer()));
 		} else {
 			state = await response.json();
 		}

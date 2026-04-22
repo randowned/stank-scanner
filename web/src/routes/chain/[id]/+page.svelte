@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import type { ChainSummary } from '../../app.d';
+	import { base } from '$app/paths';
+	import type { ChainSummary } from '../../../app.d';
 
 	let { data } = $props();
 
@@ -18,7 +18,7 @@
 	}
 
 	function getPlayerUrl(userId: number): string {
-		return `/v2/player/${userId}`;
+		return `${base}/player/${userId}`;
 	}
 </script>
 
@@ -78,5 +78,5 @@
 		</div>
 	{/if}
 
-	<a href="/v2/chains" class="btn btn-secondary w-full text-center">← All Chains</a>
+	<a href="{base}/chains" class="btn btn-secondary w-full text-center">← All Chains</a>
 </div>

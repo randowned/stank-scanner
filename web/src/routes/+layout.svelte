@@ -1,5 +1,6 @@
 <script lang="ts">
 	import '../app.css';
+	import { base } from '$app/paths';
 	import { page } from '$app/stores';
 	import { user, guildId, connectionStatus, toasts, removeToast } from '$lib/stores';
 	import { onMount } from 'svelte';
@@ -9,7 +10,7 @@
 
 	const userData = $derived(data.user as { id: string; username: string; avatar: string | null } | null);
 	const guildIdData = $derived(data.guild_id as string | null);
-	const isAdmin = $derived($page.url.pathname.startsWith('/v2/admin'));
+	const isAdmin = $derived($page.url.pathname.startsWith(base + '/admin'));
 	const currentPath = $derived($page.url.pathname);
 
 	onMount(() => {
@@ -27,16 +28,16 @@
 	});
 
 	const navItems = $derived([
-		{ href: '/v2', label: 'Board', icon: '🏠' },
-		{ href: '/v2/chains', label: 'Chains', icon: '⛓️' },
-		{ href: '/v2/sessions', label: 'Sessions', icon: '📜' },
-		{ href: '/v2/player/' + (userData?.id ?? ''), label: 'Me', icon: '👤' }
+		{ href: base, label: 'Board', icon: '🏠' },
+		{ href: base + '/chains', label: 'Chains', icon: '⛓️' },
+		{ href: base + '/sessions', label: 'Sessions', icon: '📜' },
+		{ href: base + '/player/' + (userData?.id ?? ''), label: 'Me', icon: '👤' }
 	]);
 
 	const adminItems = $derived([
-		{ href: '/v2/admin/settings', label: 'Settings', icon: '⚙️' },
-		{ href: '/v2/admin/altar', label: 'Altar', icon: '🗿' },
-		{ href: '/v2/admin/templates', label: 'Templates', icon: '📝' }
+		{ href: base + '/admin/settings', label: 'Settings', icon: '⚙️' },
+		{ href: base + '/admin/altar', label: 'Altar', icon: '🗿' },
+		{ href: base + '/admin/templates', label: 'Templates', icon: '📝' }
 	]);
 </script>
 
@@ -44,7 +45,7 @@
 	<!-- Header -->
 	<header class="sticky top-0 z-50 bg-panel border-b border-border">
 		<div class="flex items-center justify-between px-4 py-3">
-			<a href="/v2" class="flex items-center gap-2">
+			<a href={base} class="flex items-center gap-2">
 				<img src="/static/Stank.gif" alt="Stank" class="w-6 h-6" />
 				<span class="font-semibold text-text">StankBot</span>
 			</a>

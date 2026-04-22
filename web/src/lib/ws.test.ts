@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { Packr } from 'msgpackr';
 
 describe('WebSocket Client', () => {
 	describe('Message Types', () => {
@@ -33,7 +34,6 @@ describe('WebSocket Client', () => {
 
 	describe('MessagePack Encoding', () => {
 		it('should use msgpackr for binary encoding', () => {
-			const { Packr } = require('msgpackr');
 			const packr = new Packr();
 			const encoded = packr.pack({ t: 1, s: 123 });
 			expect(encoded).toBeDefined();
@@ -41,7 +41,6 @@ describe('WebSocket Client', () => {
 		});
 
 		it('should decode packed messages', () => {
-			const { Packr } = require('msgpackr');
 			const packr = new Packr();
 			const original = { t: 101, d: { current: 50 } };
 			const encoded = packr.pack(original);

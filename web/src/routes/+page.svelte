@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
-	import { boardState, playerProfiles, selectedPlayerId, chainStarter, chainbreaker, currentChain, currentUnique } from '$lib/stores';
+	import { base } from '$app/paths';
+	import { boardState, currentChain, currentUnique } from '$lib/stores';
 	import type { BoardState, PlayerRow } from '../app.d';
 
 	let { data } = $props();
@@ -36,7 +34,7 @@
 	}
 
 	function getPlayerUrl(userId: number): string {
-		return `/v2/player/${userId}`;
+		return `${base}/player/${userId}`;
 	}
 </script>
 
@@ -130,7 +128,6 @@
 			<div class="space-y-2">
 				{#each state.rankings as row, i}
 					{@const rank = i + 1}
-					{@const isTop3 = rank <= 3}
 					{@const userId = data.user?.id}
 					{@const isMe = userId && row.user_id === Number(userId)}
 					<a
@@ -163,7 +160,7 @@
 	</div>
 
 	<!-- Your Rank (if not in top N) -->
-	{#if data.state && data.user && !state?.rankings?.some(r => r.user_id === Number(data.user.id))}
+	{#if state && data.user && !state.rankings.some(r => r.user_id === Number(data.user.id))}
 		{@const myRank = getPlayerRank(state.rankings, Number(data.user.id))}
 		{#if myRank}
 			<div class="panel">

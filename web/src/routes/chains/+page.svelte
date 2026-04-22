@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import type { ChainSummary } from '../../app.d';
 
 	let { data } = $props();
@@ -32,7 +33,7 @@
 	{:else}
 		<div class="space-y-2">
 			{#each chains as chain}
-				<a href="/v2/chain/{chain.chain_id}" class="panel flex items-center justify-between">
+				<a href="{base}/chain/{chain.chain_id}" class="panel flex items-center justify-between">
 					<div>
 						<div class="font-medium">#{chain.chain_id}</div>
 						<div class="text-xs text-muted">
@@ -48,5 +49,5 @@
 		</div>
 	{/if}
 
-	<a href="/v2" class="btn btn-secondary w-full text-center">← Back to Board</a>
+	<a href={base} class="btn btn-secondary w-full text-center">← Back to Board</a>
 </div>

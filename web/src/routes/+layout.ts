@@ -1,6 +1,6 @@
-import type { LayoutServerLoad } from './$types';
+import type { LayoutLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ fetch, cookies, url }) => {
+export const load: LayoutLoad = async ({ fetch, url }) => {
 	const devMode = url.searchParams.get('dev') === 'true';
 
 	if (devMode) {
@@ -11,11 +11,18 @@ export const load: LayoutServerLoad = async ({ fetch, cookies, url }) => {
 		};
 	}
 
-	const response = await fetch('/v2/auth');
-	const user = response.ok ? await response.json() : null;
+	try {
+		const response = await fetch('/v2/auth');
+		const user = response.ok ? await response.json() : null;
 
-	return {
-		user,
-		guild_id: cookies.get('active_guild_id')
-	};
+		return {
+			user,
+			guild_id: null
+		};
+	} catch {
+		return {
+			user: null,
+			guild_id: null
+		};
+	}
 };

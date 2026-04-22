@@ -1,7 +1,7 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/stores';
-	import { playerProfiles, selectedPlayerId } from '$lib/stores';
-	import type { PlayerProfile } from '../../app.d';
+	import type { PlayerProfile } from '../../../app.d';
 
 	let { data } = $props();
 
@@ -116,5 +116,5 @@
 		</div>
 	{/if}
 
-	<a href="/v2" class="btn btn-secondary w-full text-center">← Back to Board</a>
+	<a href={base} class="btn btn-secondary w-full text-center">← Back to Board</a>
 </div>

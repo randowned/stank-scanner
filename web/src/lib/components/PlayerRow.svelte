@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { PlayerRow } from '../app.d';
+	import { base } from '$app/paths';
+	import type { PlayerRow } from '../../app.d';
 
 	let { row, rank, isCurrentUser = false } = $props<{
 		row: PlayerRow;
@@ -12,11 +13,10 @@
 		return net >= 0 ? `+${net}` : `${net}`;
 	}
 
-	const medals = ['🥇', '🥈', '🥉'];
 </script>
 
 <a
-	href="/v2/player/{row.user_id}"
+	href="{base}/player/{row.user_id}"
 	class="flex items-center gap-3 p-3 -mx-2 rounded-lg transition-colors hover:bg-border/50 {isCurrentUser
 		? 'bg-accent/10 border border-accent/30'
 		: ''}"

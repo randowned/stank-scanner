@@ -1,7 +1,7 @@
-import type { PageServerLoad } from './$types';
+import type { PageLoad } from './$types';
 import type { SessionSummary } from '../../app.d';
 
-export const load: PageServerLoad = async ({ fetch }) => {
+export const load: PageLoad = async ({ fetch }) => {
 	try {
 		const response = await fetch('/v2/api/sessions');
 		if (!response.ok) {
