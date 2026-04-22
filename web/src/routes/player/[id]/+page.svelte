@@ -7,7 +7,7 @@
 
 	const profile = $derived(data.profile as PlayerProfile | null);
 	const isLoading = $derived(!profile);
-	const targetId = $derived(Number($page.params.id));
+	const targetId = $derived($page.params.id);
 
 	function formatNumber(n: number): string {
 		if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';

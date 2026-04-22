@@ -18,7 +18,7 @@
 			user.set(userData);
 			if (guildIdData) {
 				guildId.set(guildIdData);
-				connect(Number(guildIdData), Number(userData.id));
+				connect(guildIdData, userData.id);
 			}
 		}
 

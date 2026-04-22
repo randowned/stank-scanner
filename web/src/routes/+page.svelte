@@ -77,7 +77,7 @@
 		return null;
 	}
 
-	function getPlayerUrl(userId: number): string {
+	function getPlayerUrl(userId: string): string {
 		return `${base}/player/${userId}`;
 	}
 </script>
@@ -129,7 +129,7 @@
 		<div class="grid grid-cols-2 gap-3">
 			{#if board.chain_starter}
 				{@const starter = board.chain_starter}
-				<a href={getPlayerUrl(starter.user_id)} class="panel flex items-center gap-3">
+				<a href={getPlayerUrl(String(starter.user_id))} class="panel flex items-center gap-3">
 					<div class="text-2xl">🏃</div>
 					<div>
 						<div class="text-xs text-muted uppercase">Starter</div>
@@ -140,7 +140,7 @@
 			{/if}
 			{#if board.chainbreaker}
 				{@const breaker = board.chainbreaker}
-				<a href={getPlayerUrl(breaker.user_id)} class="panel flex items-center gap-3">
+				<a href={getPlayerUrl(String(breaker.user_id))} class="panel flex items-center gap-3">
 					<div class="text-2xl">💀</div>
 					<div>
 						<div class="text-xs text-muted uppercase">Breaker</div>
@@ -177,7 +177,7 @@
 					{@const userId = data.user?.id}
 					{@const isMe = userId && row.user_id === Number(userId)}
 					<a
-						href={getPlayerUrl(row.user_id)}
+						href={getPlayerUrl(String(row.user_id))}
 						class="flex items-center gap-3 p-2 -mx-2 rounded-lg transition-colors
 							{isMe ? 'bg-accent/20' : 'hover:bg-border/50'}"
 						data-testid="rank-row"
@@ -218,7 +218,7 @@
 		{@const myRank = getPlayerRank(displayedRankings, Number(data.user.id))}
 		{#if myRank}
 			<div class="panel">
-				<a href={getPlayerUrl(Number(data.user.id))} class="flex items-center justify-between">
+				<a href={getPlayerUrl(data.user.id)} class="flex items-center justify-between">
 					<div>
 						<div class="text-muted text-sm">Your rank</div>
 						<div class="text-xl font-bold">#{myRank}</div>

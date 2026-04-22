@@ -21,7 +21,7 @@ export enum MsgType {
 
 interface SubscribeMsg {
 	t: typeof MsgType.SUBSCRIBE;
-	s: number;
+	s: string;
 }
 
 interface PingMsg {
@@ -89,7 +89,7 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 1000;
 
-export function connect(guildId: number, userId: number): void {
+export function connect(guildId: string, userId: string): void {
 	if (ws?.readyState === WebSocket.OPEN) {
 		return;
 	}
@@ -168,7 +168,7 @@ function _sendPacked(msg: SubscribeMsg | PingMsg): void {
 	ws.send(buf);
 }
 
-function subscribe(guildId: number): void {
+function subscribe(guildId: string): void {
 	_sendPacked({ t: MsgType.SUBSCRIBE, s: guildId });
 }
 
@@ -187,7 +187,7 @@ function stopPingLoop(): void {
 	}
 }
 
-function attemptReconnect(guildId: number, userId: number): void {
+function attemptReconnect(guildId: string, userId: string): void {
 	if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
 		addToast('Unable to reconnect. Please refresh.', 'error', 0);
 		return;
