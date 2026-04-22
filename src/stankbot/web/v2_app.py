@@ -32,7 +32,7 @@ from stankbot.web.deps import get_active_guild_id, get_db, require_login
 
 log = logging.getLogger(__name__)
 
-_V2_DIR = Path(os.environ.get("V2_WEB_DIR", str(Path(__file__).parent.parent.parent / "web")))
+_V2_DIR = Path(os.environ.get("V2_WEB_DIR", str(Path(__file__).parent.parent.parent.parent / "web")))
 _BUILD_DIR = _V2_DIR / "build"
 _API_ROUTER = APIRouter(prefix="/v2")
 

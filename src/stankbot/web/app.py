@@ -32,7 +32,7 @@ from stankbot.web.routes import admin, auth, history, player, public
 log = logging.getLogger(__name__)
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
-_WEB_DIR = Path(os.environ.get("V2_WEB_DIR", str(Path(__file__).parent.parent.parent / "web")))
+_WEB_DIR = Path(os.environ.get("V2_WEB_DIR", str(Path(__file__).parent.parent.parent.parent / "web")))
 
 
 def build_app(
