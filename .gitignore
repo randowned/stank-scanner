@@ -28,6 +28,10 @@ uv.lock
 .coverage
 htmlcov/
 
+# Frontend build artifacts (committed source is in git, node_modules/build are not)
+web/node_modules
+web/build
+
 # IDE
 .idea/
 .vscode/

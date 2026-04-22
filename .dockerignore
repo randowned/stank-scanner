@@ -1,0 +1,6 @@
+# Exclude build artifacts and dependencies from being copied
+web/node_modules
+web/build
+
+# Include everything else needed for build
+# (No negation needed since .dockerignore only excludes)

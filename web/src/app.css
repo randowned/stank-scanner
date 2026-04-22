@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	* {
+		box-sizing: border-box;
+	}
+
+	html {
+		scroll-behavior: smooth;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	body {
+		@apply font-sans min-h-screen overflow-x-hidden;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+}
+
+@layer components {
+	.panel {
+		@apply bg-panel border border-border rounded-lg p-4 mb-3;
+	}
+
+	.btn {
+		@apply inline-flex items-center justify-center px-4 py-2 rounded-md font-semibold transition-all duration-150;
+	}
+
+	.btn-primary {
+		@apply bg-accent text-[#1a1425] hover:opacity-90;
+	}
+
+	.btn-secondary {
+		@apply bg-border text-text hover:bg-border/80;
+	}
+
+	.input {
+		@apply w-full bg-bg border border-border rounded-md px-3 py-2 text-text placeholder-muted focus:outline-none focus:border-accent;
+	}
+
+	.label {
+		@apply block text-muted text-sm mb-1;
+	}
+
+	.badge {
+		@apply inline-flex items-center gap-1 px-2 py-1 bg-border rounded text-sm;
+	}
+
+	.metric {
+		@apply text-2xl font-bold text-text;
+	}
+
+	.metric-label {
+		@apply text-xs text-muted uppercase tracking-wide;
+	}
+}
+
+@layer utilities {
+	.scrollbar-thin {
+		scrollbar-width: thin;
+		scrollbar-color: theme('colors.border') transparent;
+	}
+
+	.scrollbar-thin::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+
+	.scrollbar-thin::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.scrollbar-thin::-webkit-scrollbar-thumb {
+		@apply bg-border rounded-full;
+	}
+
+	.safe-area-bottom {
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+
+	.safe-area-top {
+		padding-top: env(safe-area-inset-top);
+	}
+}
