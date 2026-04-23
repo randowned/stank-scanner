@@ -16,7 +16,6 @@ from stankbot.db.models import (
 )
 from stankbot.web.v2_app import (
     ConnectionManager,
-    _is_guild_member_check,
     get_board_state,
     manager,
 )
@@ -213,48 +212,6 @@ class TestGetBoardState:
         result = await get_board_state(session, 123, "Test Server")
         assert result["current"] == 2
         assert result["chain_starter"]["user_id"] == 1
-
-
-class TestGuildMemberCheck:
-    def test_returns_false_when_no_bot(self) -> None:
-        request = MagicMock()
-        request.app.state = {}
-        assert _is_guild_member_check(request, 123, 456) is False
-
-    def test_returns_false_when_bot_is_none(self) -> None:
-        request = MagicMock()
-        request.app.state = {"bot": None}
-        assert _is_guild_member_check(request, 123, 456) is False
-
-    def test_returns_false_when_guild_not_found(self) -> None:
-        request = MagicMock()
-        bot = MagicMock()
-        bot.get_guild.return_value = None
-        request.app.state = {"bot": bot}
-        assert _is_guild_member_check(request, 123, 456) is False
-
-    def test_returns_false_when_member_not_found(self) -> None:
-        request = MagicMock()
-        bot = MagicMock()
-        guild = MagicMock()
-        guild.get_member.return_value = None
-        bot.get_guild.return_value = guild
-        request.app.state = {"bot": bot}
-        assert _is_guild_member_check(request, 123, 456) is False
-
-    def test_returns_true_when_member_found(self) -> None:
-        from unittest.mock import MagicMock
-
-        request = MagicMock(spec=["app"])
-        app_state = MagicMock(spec=["bot"])
-        bot = MagicMock(spec=["get_guild"])
-        guild = MagicMock(spec=["get_member"])
-        member = MagicMock()
-        guild.get_member.return_value = member
-        bot.get_guild.return_value = guild
-        app_state.bot = bot
-        request.app.state = app_state
-        assert _is_guild_member_check(request, 123, 456) is True
 
 
 class TestConnectionManagerCleanup:

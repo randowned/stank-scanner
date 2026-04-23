@@ -10,7 +10,7 @@
 		min?: number;
 		max?: number;
 		step?: number;
-		autocomplete?: AutoFill;
+		autocomplete?: HTMLInputElement['autocomplete'];
 		class?: string;
 		oninput?: (e: Event) => void;
 		onchange?: (e: Event) => void;

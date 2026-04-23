@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { apiFetch, FetchError } from '$lib/api';
 	import { onMount } from 'svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Card from '$lib/components/Card.svelte';
 	import Input from '$lib/components/Input.svelte';
@@ -35,7 +36,7 @@
 				entries = [];
 				exhausted = false;
 			}
-			const params = new URLSearchParams({ limit: '50', offset: String(offset) });
+			const params = new SvelteURLSearchParams({ limit: '50', offset: String(offset) });
 			if (actionFilter.trim()) params.set('action', actionFilter.trim());
 			if (actorFilter.trim()) params.set('actor_id', actorFilter.trim());
 			const res = await apiFetch<{ entries: Entry[] }>(`/v2/api/admin/audit?${params}`);

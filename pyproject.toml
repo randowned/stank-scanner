@@ -1,6 +1,6 @@
 [project]
 name = "stankbot"
-version = "2.9.0"
+version = "2.9.1"
 description = "Server-side Discord Application for the Stank chain game"
 readme = "README.md"
 requires-python = ">=3.12"
