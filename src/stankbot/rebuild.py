@@ -15,7 +15,7 @@ import logging
 
 from stankbot.bot import StankBot
 from stankbot.config import load_config
-from stankbot.logging_setup import setup_logging
+from stankbot.logging import setup_logging
 from stankbot.services import rebuild_service
 
 log = logging.getLogger("stankbot.rebuild")

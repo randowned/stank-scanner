@@ -17,7 +17,7 @@ backend_pid=$!
 sleep 2
 
 # Start frontend
-cd "$repo_root/web"
+cd "$repo_root/src/stankbot/web/frontend"
 npm run dev
 
 # Cleanup on exit

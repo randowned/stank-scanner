@@ -24,7 +24,7 @@ from stankbot.db.models import ChannelBinding, ChannelPurpose, SessionEndReason
 from stankbot.db.repositories import altars as altars_repo
 from stankbot.db.repositories import audit_log as audit_repo
 from stankbot.db.repositories import guilds as guilds_repo
-from stankbot.logging_setup import tail_log
+from stankbot.logging import tail_log
 from stankbot.services import embed_builders
 from stankbot.services.permission_service import PermissionService
 from stankbot.services.session_service import SessionService

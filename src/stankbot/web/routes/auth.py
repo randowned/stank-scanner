@@ -23,7 +23,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from stankbot.web.deps import get_config
+from stankbot.web.tools import get_config, require_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 log = logging.getLogger(__name__)
@@ -207,6 +207,18 @@ async def mock_login_post(
     ]
     request.session["guild"] = int(guild_id)
     return JSONResponse({"success": True})
+
+
+@router.get("")
+async def auth_check(request: Request, user: dict = Depends(require_login)) -> JSONResponse:
+    """Return current user info for SvelteKit authentication."""
+    return JSONResponse(
+        {
+            "id": str(user["id"]),
+            "username": user.get("username", ""),
+            "avatar": user.get("avatar"),
+        }
+    )
 
 
 @router.get("/logout")

@@ -58,23 +58,23 @@ When delegating, brief the agent self-contained: state the goal, name the files/
 
 All changes must be verified before they are considered done. The verification path depends on what you changed.
 
-### Backend changes (services/, cogs/, db/, web/routes/)
+### Backend changes (services/, cogs/, db/, web/)
 
 1. **Unit tests:** `pytest` (or `pytest tests/unit/test_xxx.py` for the subsystem).
 2. **Lint & typecheck:** `ruff check src tests` and `mypy src`. Do not introduce new failures.
-3. **Dev mode smoke test:** Start dev mode (`ENV=dev`), open `http://localhost:5173/v2`, and confirm the feature works end-to-end.
+3. **Dev mode smoke test:** Start dev mode (`ENV=dev`), open `http://localhost:5173`, and confirm the feature works end-to-end.
 4. **E2E coverage:** If the change touches a user-facing dashboard flow and no E2E test covers it, **you must add one**.
 
-### Frontend changes (web/src/)
+### Frontend changes (src/stankbot/web/frontend/src/)
 
-1. **Typecheck & lint:** `cd web && npm run check && npm run lint`. Do not introduce new failures.
+1. **Typecheck & lint:** `cd src/stankbot/web/frontend && npm run check && npm run lint`. Do not introduce new failures.
 2. **Dev mode smoke test:** Start dev mode, verify the UI visually and via network tab.
 3. **E2E coverage:** Same rule as backend — if no E2E test covers the modified flow, **you must add one**.
 
 ### E2E test execution
 
-- **For agent verification during development:** `cd web && npm run test:e2e:dev` (Vite dev server, fastest iteration).
-- **For commit-and-push readiness:** `cd web && npm run test:e2e` (production static build, closest to real deploy).
+- **For agent verification during development:** `cd src/stankbot/web/frontend && npm run test:e2e:dev` (Vite dev server, fastest iteration).
+- **For commit-and-push readiness:** `cd src/stankbot/web/frontend && npm run test:e2e` (production static build, closest to real deploy).
 
 Both require the backend running in `ENV=dev`. Use the one-command startup scripts:
 - Windows: `.\scripts\dev.ps1`
@@ -86,20 +86,20 @@ When verifying in `ENV=dev`, use the mock API to drive state changes without Dis
 
 | Endpoint | Action |
 |----------|--------|
-| `POST /v2/api/mock/stank` | Inject a valid stank |
-| `POST /v2/api/mock/break` | Inject a chain break |
-| `POST /v2/api/mock/reaction` | Inject a reaction bonus |
-| `POST /v2/api/mock/noise` | Inject a non-stank message (breaks chain) |
-| `POST /v2/api/mock/session/start` | Start a new session |
-| `POST /v2/api/mock/session/end` | End current session |
-| `POST /v2/api/mock/random/start` | Start auto-generated events |
-| `POST /v2/api/mock/random/stop` | Stop auto-generated events |
+| `POST /api/mock/stank` | Inject a valid stank |
+| `POST /api/mock/break` | Inject a chain break |
+| `POST /api/mock/reaction` | Inject a reaction bonus |
+| `POST /api/mock/noise` | Inject a non-stank message (breaks chain) |
+| `POST /api/mock/session/start` | Start a new session |
+| `POST /api/mock/session/end` | End current session |
+| `POST /api/mock/random/start` | Start auto-generated events |
+| `POST /api/mock/random/stop` | Stop auto-generated events |
 
 These endpoints are **only mounted when `ENV=dev`**. Never call them in preprod or production.
 
 ### Playwright fixtures
 
-`web/e2e/fixtures.ts` exposes:
+`src/stankbot/web/frontend/e2e/fixtures.ts` exposes:
 
 - `mockLogin(user?)` — authenticate Playwright as a mock user.
 - `injectStank(guildId, userId, displayName)` — trigger a stank and assert WS + DOM updates.
@@ -152,7 +152,7 @@ Members post messages containing the `:Stank:` emoji/sticker in a designated **a
 - **Schema:** [src/stankbot/db/models.py](src/stankbot/db/models.py). Authority for all tables.
 - **Embed rendering:** [src/stankbot/services/board_renderer.py](src/stankbot/services/board_renderer.py) + [template_engine.py](src/stankbot/services/template_engine.py).
 - **Cogs (Discord surface):** [src/stankbot/cogs/](src/stankbot/cogs/).
-- **Dashboard routes:** [src/stankbot/web/routes/](src/stankbot/web/routes/).
+- **Dashboard API:** [src/stankbot/web/v2_app.py](src/stankbot/web/v2_app.py) + [v2_admin.py](src/stankbot/web/v2_admin.py).
 
 ## Reference files
 
@@ -161,6 +161,6 @@ Members post messages containing the `:Stank:` emoji/sticker in a designated **a
 - [deploy/](deploy/) — systemd unit, Docker setup, watchdog fallback.
 - [railway.json](railway.json) — Railway deploy config.
 - [README.md](README.md) — user-facing install & usage. Source of truth is the code; README must not drift.
-- [web/e2e/](web/e2e/) — Playwright E2E tests and fixtures.
+- [src/stankbot/web/frontend/e2e/](src/stankbot/web/frontend/e2e/) — Playwright E2E tests and fixtures.
 - [scripts/dev.ps1](scripts/dev.ps1) / [scripts/dev.sh](scripts/dev.sh) — one-command dev startup.
 - `.env.dev` — dev mode configuration template (mock Discord, mock auth, separate DB).

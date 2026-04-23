@@ -19,21 +19,17 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from starlette.middleware.sessions import SessionMiddleware
 
 from stankbot.bot import StankBot
 from stankbot.config import AppConfig
-from stankbot.web import v2_admin, v2_app
-from stankbot.web.deps import _LoginRedirect, _NotInGuild
-from stankbot.web.routes import admin, auth, history, player, public
+from stankbot.web import ws
+from stankbot.web.routes import admin, api, auth
+from stankbot.web.tools import _LoginRedirect, _NotInGuild
 
 log = logging.getLogger(__name__)
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-_WEB_DIR = Path(os.environ.get("V2_WEB_DIR", str(Path(__file__).parent.parent.parent.parent / "web")))
-
+WEB_DIR = Path(os.environ.get("WEB_DIR", str(Path(__file__).parent / "frontend")))
 
 def build_app(
     config: AppConfig,
@@ -54,30 +50,26 @@ def build_app(
     app.state.config = config
     app.state.engine = engine
     app.state.session_factory = session_factory
-    app.state.templates_dir = _TEMPLATES_DIR
     app.state.bot = bot
     if bot is not None:
         app.state.bot_guilds = bot._bot_guilds
     else:
         app.state.bot_guilds = []
 
-    static_dir = _TEMPLATES_DIR.parent / "static"
-    if static_dir.is_dir():
-        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.include_router(ws.router)
+    app.include_router(api.router)
+    app.include_router(admin.router)
+    app.include_router(auth.router)
 
-    app.include_router(v2_app._API_ROUTER)
-    app.include_router(v2_admin.router)
+    @app.get("/healthz", include_in_schema=False)
+    async def _healthz() -> JSONResponse:
+        return JSONResponse({"status": "ok"})
 
-    v2_build_dir = _WEB_DIR / "build"
-    if v2_build_dir.is_dir():
-        v2_index = v2_build_dir / "index.html"
-        if v2_index.is_file():
-            @app.get("/v2/{path:path}")
-            async def spa_fallback(path: str) -> FileResponse:
-                file_path = v2_build_dir / path
-                if file_path.is_file() and not path.startswith("api/"):
-                    return FileResponse(file_path)
-                return FileResponse(v2_index)
+    if config.env == "dev":
+        from stankbot.web.routes import mock_events
+
+        app.include_router(mock_events.router)
+        log.info("Mock event API mounted at /api/mock")
 
     @app.exception_handler(_LoginRedirect)
     async def _login_redirect_handler(_: Request, exc: _LoginRedirect):
@@ -87,25 +79,15 @@ def build_app(
     async def _not_in_guild_handler(_: Request, exc: _NotInGuild):
         return exc.response
 
-    @app.get("/healthz", include_in_schema=False)
-    async def _healthz() -> JSONResponse:
-        # Liveness probe for Railway/containers. Returning 200 as soon as
-        # the web server is up is sufficient — Discord gateway connection
-        # is async and may not be ready at first hit, but the process is
-        # alive and that's what the platform needs to know to route
-        # traffic to this container.
-        return JSONResponse({"status": "ok"})
-
-    app.include_router(auth.router)
-    app.include_router(public.router)
-    app.include_router(player.router)
-    app.include_router(history.router)
-    app.include_router(admin.router)
-
-    if config.env == "dev":
-        from stankbot.web.routes import mock_events
-
-        app.include_router(mock_events.router)
-        log.info("Mock event API mounted at /v2/api/mock")
+    build_dir = WEB_DIR / "build"
+    if build_dir.is_dir():
+        spa_index = build_dir / "index.html"
+        if spa_index.is_file():
+            @app.get("/{path:path}")
+            async def spa_fallback(path: str) -> FileResponse:
+                file_path = build_dir / path
+                if file_path.is_file():
+                    return FileResponse(file_path)
+                return FileResponse(spa_index)
 
     return app

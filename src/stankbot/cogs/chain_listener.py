@@ -25,7 +25,7 @@ from stankbot.services.announcement_service import broadcast_to_guild
 from stankbot.services.chain_service import ChainOutcome, ChainService, StankInput
 
 try:
-    from stankbot.web.v2_app import (
+    from stankbot.web.ws import (
         broadcast_rank_update,
         notify_achievement,  # noqa: F401
         notify_chain_update,

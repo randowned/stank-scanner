@@ -16,7 +16,7 @@ $backend = Start-Process -FilePath "python" -ArgumentList "-m", "stankbot" -Work
 Start-Sleep -Seconds 2
 
 # Start frontend
-Set-Location "$repoRoot\web"
+Set-Location "$repoRoot\src\stankbot\web\frontend"
 try {
     npm run dev
 } finally {

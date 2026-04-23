@@ -10,7 +10,7 @@ import uvicorn
 
 from stankbot.bot import StankBot
 from stankbot.config import AppConfig, ConfigError, load_config
-from stankbot.logging_setup import configure_logging
+from stankbot.logging import configure_logging
 
 log = logging.getLogger(__name__)
 

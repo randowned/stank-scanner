@@ -5,9 +5,9 @@
 FROM node:22-alpine AS frontend-build
 
 WORKDIR /app
-COPY web/package.json web/package-lock.json* ./
+COPY src/stankbot/web/frontend/package.json src/stankbot/web/frontend/package-lock.json* ./
 RUN npm ci
-COPY web/ ./
+COPY src/stankbot/web/frontend/ ./
 RUN npm run build
 
 
@@ -40,7 +40,7 @@ RUN install -d -o stankbot -g stankbot /data
 
 ENV DATABASE_URL=sqlite+aiosqlite:////data/stankbot.db \
     TEMPLATES_DIR=/data/templates \
-    V2_WEB_DIR=/app/web
+    WEB_DIR=/app/web
 
 EXPOSE 8000
 

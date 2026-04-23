@@ -31,7 +31,7 @@ Sessions roll over on a cron (default 07:00 / 15:00 / 23:00 UTC) with configurab
 - **Event-sourced.** Every SP/PP change is an immutable event row. Player totals, session summaries, and records are derived — `rebuild-from-history` can always reconstruct them.
 - **Multi-altar per guild.** Run a themed event (Halloween sticker, Founders Day) alongside the normal chain with its own scoring overrides and a `custom_event_key` tag on every emitted event.
 - **Achievements / badges** derived from the event log — First Stank, Centurion, Finisher, Chainbreaker, Comeback Kid, Perfect Session, Streaker, Team Player.
-- **Web dashboard** with Discord OAuth — public board with reaction-aware leaderboard (live reorder + delta chips + chain-break overlay), player profiles with 30-day sparklines + achievement gallery, session history, and a five-page admin surface (Dashboard · Templates · Admins · Audit · Settings with embedded session ops). MsgPack-first transport over HTTP + WebSocket. Served at `/v2` (SvelteKit SPA) with the legacy Jinja dashboard still mounted at `/` for now.
+- **Web dashboard** with Discord OAuth — public board with reaction-aware leaderboard (live reorder + delta chips + chain-break overlay), player profiles with 30-day sparklines + achievement gallery, session history, and a five-page admin surface (Dashboard · Templates · Admins · Audit · Settings with embedded session ops). MsgPack-first transport over HTTP + WebSocket. SvelteKit SPA served at `/`.
 
 ## Running it yourself
 
@@ -47,7 +47,7 @@ For frontend work and E2E testing, run in **mock mode** with a fake Discord back
 ./scripts/dev.sh
 ```
 
-This starts the backend (`ENV=dev`, reads `.env.dev`) and the Vite dev server on `http://localhost:5173/v2`. The dashboard auto-logs you in as a mock user.
+This starts the backend (`ENV=dev`, reads `.env.dev`) and the Vite dev server on `http://localhost:5173`. The dashboard auto-logs you in as a mock user.
 
 Requires Python 3.12 and [`uv`](https://github.com/astral-sh/uv):
 

@@ -1,0 +1,272 @@
+"""WebSocket manager and real-time broadcast helpers.
+
+Owns the ``/ws`` WebSocket route and the singleton ``manager`` used by cogs
+and the event bridge to push state updates to connected clients.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
+from datetime import UTC, datetime
+
+import msgpack
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import AsyncSession
+
+log = logging.getLogger(__name__)
+
+router = APIRouter(prefix="")
+
+
+class ConnectionManager:
+    """Manages WebSocket connections keyed by guild_id."""
+
+    def __init__(self) -> None:
+        self.active_connections: dict[int, list[WebSocket]] = defaultdict(list)
+
+    async def connect(self, websocket: WebSocket, guild_id: int) -> None:
+        await websocket.accept()
+        self.active_connections[guild_id].append(websocket)
+        log.info(
+            "WebSocket connected for guild %d (total: %d)",
+            guild_id,
+            len(self.active_connections[guild_id]),
+        )
+
+    def disconnect(self, websocket: WebSocket, guild_id: int) -> None:
+        if websocket in self.active_connections[guild_id]:
+            self.active_connections[guild_id].remove(websocket)
+        log.info(
+            "WebSocket disconnected for guild %d (remaining: %d)",
+            guild_id,
+            len(self.active_connections[guild_id]),
+        )
+
+    async def broadcast(self, guild_id: int, message: bytes) -> None:
+        disconnected = []
+        for websocket in self.active_connections[guild_id]:
+            try:
+                await websocket.send_bytes(message)
+            except Exception:
+                disconnected.append(websocket)
+        for ws in disconnected:
+            self.disconnect(ws, guild_id)
+
+    async def broadcast_json(self, guild_id: int, message: dict) -> None:
+        packed = msgpack.packb(message, use_single_float=True)
+        await self.broadcast(guild_id, packed)
+
+
+manager = ConnectionManager()
+
+
+async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str) -> dict:
+    """Fetch current board state as a dict for WebSocket and HTTP clients."""
+    from stankbot.db.repositories import altars as altars_repo
+    from stankbot.db.repositories import reaction_awards as reaction_awards_repo
+    from stankbot.services.board_service import build_board_state
+    from stankbot.services.session_service import SessionService
+
+    altar = await altars_repo.primary(session, guild_id)
+    if altar is None:
+        return {}
+
+    state = await build_board_state(
+        session,
+        guild_id=guild_id,
+        guild_name=guild_name,
+        altar=altar,
+    )
+
+    session_svc = SessionService(session)
+    session_id = await session_svc.current(guild_id)
+    per_user_reactions = await reaction_awards_repo.count_per_user_for_session(
+        session, guild_id=guild_id, session_id=session_id
+    )
+
+    chain_length = state.current
+
+    def row_to_dict(r):
+        earned = r.earned_sp
+        punishments = r.punishments
+        reacts = per_user_reactions.get(int(r.user_id), 0)
+        return {
+            "user_id": r.user_id,
+            "display_name": r.display_name,
+            "earned_sp": earned,
+            "punishments": punishments,
+            "net": earned - punishments,
+            "reactions_in_session": reacts,
+        }
+
+    return {
+        "guild_name": state.guild_name,
+        "stank_emoji": state.stank_emoji,
+        "altar_sticker_url": state.altar_sticker_url,
+        "current": state.current,
+        "current_unique": state.current_unique,
+        "reactions": state.reactions,
+        "chain_length": chain_length,
+        "record": state.record,
+        "record_unique": state.record_unique,
+        "alltime_record": state.alltime_record,
+        "alltime_record_unique": state.alltime_record_unique,
+        "next_reset_at": state.next_reset_at.isoformat() if state.next_reset_at else None,
+        "rankings": [row_to_dict(r) for r in state.rankings],
+        "chain_starter": row_to_dict(state.chain_starter) if state.chain_starter else None,
+        "chainbreaker": row_to_dict(state.chainbreaker) if state.chainbreaker else None,
+    }
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket) -> None:
+    """WebSocket endpoint for real-time updates.
+
+    Auth is read entirely from the signed session cookie — neither the
+    user ID nor the guild ID is accepted from query parameters, so
+    neither can be tampered with.
+    """
+    app_state = websocket.app.state
+    session_factory = getattr(app_state, "session_factory", None)
+    if session_factory is None:
+        await websocket.close(code=4001, reason="No session factory")
+        return
+
+    config = getattr(app_state, "config", None)
+    is_dev_mock = config is not None and config.env == "dev" and getattr(config, "mock_auth", False)
+
+    session = websocket.session
+    guild_id = session.get("guild") or session.get("active_guild_id")
+    if guild_id is None:
+        guild_id = getattr(config, "default_guild_id", None)
+    if guild_id is None:
+        await websocket.close(code=4003, reason="No guild selected")
+        return
+    guild_id = int(guild_id)
+
+    if not is_dev_mock:
+        user = session.get("user")
+        if user is None:
+            await websocket.close(code=4003, reason="Not authenticated")
+            return
+        guilds = session.get("guilds", [])
+        is_member = any(int(g.get("id", 0)) == guild_id for g in guilds)
+        if not is_member:
+            owner_id = int(getattr(config, "owner_id", 0) or 0)
+            if int(user.get("id", 0)) != owner_id:
+                await websocket.close(code=4003, reason="Not in guild")
+                return
+
+    await manager.connect(websocket, guild_id)
+
+    try:
+        while True:
+            try:
+                data = await websocket.receive_bytes()
+                msg = msgpack.unpackb(data, raw=False)
+                if msg.get("t") == 2:
+                    await websocket.send_bytes(msgpack.packb({"t": 104}))
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                log.error("WebSocket error: %s", e)
+                break
+    finally:
+        manager.disconnect(websocket, guild_id)
+
+
+# ---------------------------------------------------------------------------
+# Broadcast helpers — called from cogs and the mock event bridge
+# ---------------------------------------------------------------------------
+
+
+async def notify_chain_update(
+    guild_id: int, current: int, current_unique: int, starter_user_id: int | None
+) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {
+            "t": 103,
+            "d": {
+                "current": current,
+                "current_unique": current_unique,
+                "starter_user_id": starter_user_id,
+            },
+        },
+    )
+
+
+async def notify_rank_update(guild_id: int, rankings: list) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {
+            "t": 102,
+            "d": {"rankings": rankings, "updated_at": datetime.now(UTC).isoformat()},
+        },
+    )
+
+
+async def broadcast_rank_update(session_factory, guild_id: int, limit: int = 20) -> None:
+    """Build the leaderboard payload and broadcast it.
+
+    Safe to call from cogs / the event bridge — opens its own session to
+    avoid entangling with the caller's transaction.
+    """
+    if not manager.active_connections.get(guild_id):
+        return
+    from stankbot.db.engine import session_scope
+    from stankbot.db.repositories import events as events_repo
+    from stankbot.db.repositories import players as players_repo
+    from stankbot.db.repositories import reaction_awards as reaction_awards_repo
+    from stankbot.services.session_service import SessionService
+
+    async with session_scope(session_factory) as session:
+        session_svc = SessionService(session)
+        session_id = await session_svc.current(guild_id)
+        rows = await events_repo.leaderboard(
+            session, guild_id, session_id=session_id, limit=limit
+        )
+        user_ids = [uid for uid, _, _ in rows]
+        names = (
+            await players_repo.display_names(session, guild_id, user_ids) if user_ids else {}
+        )
+        per_user_reactions = await reaction_awards_repo.count_per_user_for_session(
+            session, guild_id=guild_id, session_id=session_id
+        )
+        payload = [
+            {
+                "user_id": uid,
+                "display_name": names.get(uid, str(uid)),
+                "earned_sp": sp,
+                "punishments": pp,
+                "net": sp - pp,
+                "reactions_in_session": per_user_reactions.get(int(uid), 0),
+            }
+            for uid, sp, pp in rows
+        ]
+    await notify_rank_update(guild_id, payload)
+
+
+async def notify_achievement(guild_id: int, user_id: int, badge: dict) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {"t": 105, "d": {"user_id": user_id, "badge": badge}},
+    )
+
+
+async def notify_session(
+    guild_id: int, session_id: int, action: str, started_at: datetime, ended_at: datetime | None
+) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {
+            "t": 106,
+            "d": {
+                "session_id": session_id,
+                "action": action,
+                "started_at": started_at.isoformat() if started_at else None,
+                "ended_at": ended_at.isoformat() if ended_at else None,
+            },
+        },
+    )

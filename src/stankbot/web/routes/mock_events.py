@@ -14,9 +14,9 @@ from fastapi.responses import JSONResponse
 from stankbot.db.engine import session_scope
 from stankbot.db.models import SessionEndReason
 from stankbot.services.session_service import SessionService
-from stankbot.web.deps import get_config
+from stankbot.web.tools import get_config
 
-router = APIRouter(prefix="/v2/api/mock", tags=["mock"])
+router = APIRouter(prefix="/api/mock", tags=["mock"])
 log = logging.getLogger(__name__)
 
 
@@ -178,6 +178,16 @@ async def mock_random_stop(
     gen = _get_generator(request)
     await gen.stop()
     return JSONResponse({"status": "stopped"})
+
+
+@router.post("/bot-guilds")
+async def mock_set_bot_guilds(
+    request: Request,
+) -> JSONResponse:
+    _dev_only(request)
+    body = await request.json()
+    request.app.state.bot_guilds = body.get("guilds", [])
+    return JSONResponse({"ok": True})
 
 
 @router.get("/state")

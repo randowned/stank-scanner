@@ -190,7 +190,7 @@ class MockEventBridge:
         except RuntimeError:
             return
 
-        from stankbot.web.v2_app import broadcast_rank_update, notify_chain_update
+        from stankbot.web.ws import broadcast_rank_update, notify_chain_update
 
         if result.outcome == ChainOutcome.VALID_STANK:
             asyncio.create_task(

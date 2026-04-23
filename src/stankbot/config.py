@@ -49,11 +49,6 @@ class AppConfig(BaseSettings):
     web_secret_key: SecretStr | None = None
     oauth_client_secret: SecretStr | None = None
     oauth_redirect_uri: str = "http://127.0.0.1:8000/auth/callback"
-    # Which dashboard the bot should link to in embeds / OAuth post-login.
-    # "legacy" → Jinja dashboard at /, /player/, /admin/, /history/.
-    # "v2"     → SvelteKit at /v2/* (still served from the same process).
-    # The v2 frontend itself owns its internal links regardless of this flag.
-    dashboard_frontend: str = "legacy"
 
     # --- Logging ---
     log_level: str = "INFO"
