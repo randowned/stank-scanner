@@ -13,6 +13,8 @@
 	} from '$lib/stores';
 	import type { WsEvent } from '$lib/stores';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { isLoading } from '$lib/stores/loading';
 	import { connect, disconnect } from '$lib/ws';
 	import type { User, GuildInfo } from '$lib/types';
 	import UserMenu from '$lib/components/UserMenu.svelte';
@@ -69,6 +71,10 @@
 	}
 
 	void browser;
+
+	const pathname = $derived($page.url.pathname);
+	const isAdminRoute = $derived(pathname.startsWith(`${base}/admin`) || pathname.startsWith('/admin'));
+	const mainClass = $derived(isAdminRoute ? 'flex-1' : 'flex-1 w-full max-w-3xl mx-auto');
 </script>
 
 <div class="min-h-screen flex flex-col">
@@ -76,6 +82,15 @@
 		<div class="bg-gold text-bg text-xs px-2 py-1 text-center font-bold">
 			DEV MODE — Mock Discord / Mock Auth Active
 		</div>
+	{/if}
+
+	<!-- Global loading bar -->
+	{#if $isLoading}
+		<div
+			class="fixed top-0 left-0 right-0 z-[70] h-0.5 bg-accent animate-pulse pointer-events-none"
+			role="status"
+			aria-label="Loading"
+		></div>
 	{/if}
 
 	<!-- Header (single row) -->
@@ -104,7 +119,7 @@
 	</header>
 
 	<!-- Main Content -->
-	<main class="flex-1">
+	<main class={mainClass}>
 		{@render children()}
 	</main>
 

@@ -14,7 +14,7 @@
 	}
 </script>
 
-<div class="p-4 space-y-4 max-w-3xl mx-auto">
+<div class="p-4 space-y-4">
 	{#if session}
 		<PageHeader title="Session #{session.session_id}" subtitle={fmt(session.started_at)} />
 
@@ -63,7 +63,34 @@
 			</Card>
 		{/if}
 
-		<a href="{base}/sessions" class="btn btn-secondary w-full text-center">← All sessions</a>
+		{#if session.chains && session.chains.length > 0}
+		<Card title="Chains ({session.chains.length})">
+			<ul class="space-y-1">
+				{#each session.chains as c (c.chain_id)}
+					<a
+						href="{base}/chain/{c.chain_id}"
+						class="flex items-center justify-between gap-3 px-2 py-2 rounded-md hover:bg-border/40 text-sm"
+					>
+						<span class="font-mono text-muted shrink-0">#{c.chain_id}</span>
+						<span class="flex-1 min-w-0 truncate">{fmt(c.started_at)}</span>
+						<span class="shrink-0 tabular-nums">
+							{c.length}
+							<span class="text-muted text-xs">/ {c.unique_contributors}</span>
+						</span>
+						<span class="shrink-0 text-xs {c.broken_at ? 'text-danger' : 'text-ok'}">
+							{c.broken_at ? 'broken' : 'open'}
+						</span>
+					</a>
+				{/each}
+			</ul>
+		</Card>
+	{:else}
+		<Card title="Chains">
+			<EmptyState icon="🔗" title="No chains in this session yet" />
+		</Card>
+	{/if}
+
+	<a href="{base}/sessions" class="btn btn-secondary w-full text-center">← All sessions</a>
 	{:else}
 		<EmptyState icon="📜" title="Session not found" />
 	{/if}

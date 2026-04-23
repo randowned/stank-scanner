@@ -709,7 +709,19 @@ async def api_session(
         .where(Chain.guild_id == guild_id, Chain.session_id == session_id)
         .order_by(Chain.id.desc())
     )
-    await session.execute(chains_stmt)
+    chain_rows = list((await session.execute(chains_stmt)).scalars().all())
+    chains_payload = [
+        {
+            "chain_id": c.id,
+            "started_at": c.started_at.isoformat() if c.started_at else None,
+            "broken_at": c.broken_at.isoformat() if c.broken_at else None,
+            "length": c.final_length or 0,
+            "unique_contributors": c.final_unique or 0,
+            "starter_user_id": c.starter_user_id,
+            "broken_by_user_id": c.broken_by_user_id,
+        }
+        for c in chain_rows
+    ]
 
     return JSONResponse(
         {
@@ -720,6 +732,7 @@ async def api_session(
             "chains_broken": summary.chains_broken,
             "top_earner": summary.top_earner,
             "top_breaker": summary.top_breaker,
+            "chains": chains_payload,
         }
     )
 

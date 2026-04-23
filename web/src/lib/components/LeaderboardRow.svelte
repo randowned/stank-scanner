@@ -3,6 +3,7 @@
 	import { untrack } from 'svelte';
 	import type { PlayerRow } from '$lib/types';
 	import RankBadge from './RankBadge.svelte';
+	import Avatar from './Avatar.svelte';
 	import PointsDelta from './PointsDelta.svelte';
 
 	interface Props {
@@ -17,8 +18,6 @@
 	const net = $derived(row.net ?? row.earned_sp - row.punishments);
 	const reactionsInSession = $derived(row.reactions_in_session ?? 0);
 	const hasReactionMeta = $derived(row.reactions_in_session !== undefined);
-	const sp = $derived(row.earned_sp);
-	const pp = $derived(row.punishments);
 
 	const netColor = $derived(net > 0 ? 'text-ok' : net < 0 ? 'text-danger' : 'text-muted');
 
@@ -88,7 +87,11 @@
 		{flash ? 'row-flash' : ''}"
 	data-testid="rank-row"
 >
-	<RankBadge {rank} />
+	<div class="flex items-center gap-3">
+		<RankBadge {rank} />
+		<div class="w-px h-8 bg-border" aria-hidden="true"></div>
+		<Avatar name={row.display_name} userId={String(row.user_id)} size="md" />
+	</div>
 	<div class="min-w-0">
 		<div class="font-medium truncate {isMe ? 'text-accent' : ''}">
 			{row.display_name}
@@ -96,13 +99,9 @@
 				<span class="badge text-accent ml-1">You</span>
 			{/if}
 		</div>
-		<div class="text-xs text-muted truncate">
-			{#if hasReactionMeta}
-				{sp} SP · {pp} PP · {reactionsInSession} reacts
-			{:else}
-				{sp} SP · {pp} PP
-			{/if}
-		</div>
+		{#if hasReactionMeta}
+			<div class="text-xs text-muted truncate">{reactionsInSession} reacts</div>
+		{/if}
 	</div>
 	<div class="relative min-w-[4ch] text-right">
 		<span class="text-2xl font-semibold tabular-nums {netColor}" data-testid="net-score">{net}</span>
