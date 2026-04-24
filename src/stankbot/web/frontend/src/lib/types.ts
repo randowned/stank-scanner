@@ -113,11 +113,16 @@ export interface ChainSummary {
 export interface SessionSummary {
 	session_id: number;
 	started_at: string | null;
-	ended_at: string | null;
-	chains_started: number;
-	chains_broken: number;
-	top_earner: [string, number] | null;
-	top_breaker: [string, number] | null;
+	ended_at?: string | null;
+	active?: boolean;
+	chains_started?: number;
+	chains_broken?: number;
+	unique_stankers?: number;
+	stanks?: number;
+	chains?: number;
+	reactions?: number;
+	top_earner?: [string, number] | null;
+	top_breaker?: [string, number] | null;
 }
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';

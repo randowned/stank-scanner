@@ -458,17 +458,55 @@ async def api_sessions(
 
     from stankbot.db.models import Event, EventType
 
-    stmt = (
+    from sqlalchemy import case, func
+
+    # Fetch the 50 most recent sessions
+    sessions_stmt = (
         select(Event.id, Event.created_at)
         .where(Event.guild_id == guild_id, Event.type == EventType.SESSION_START)
         .order_by(Event.id.desc())
         .limit(50)
     )
-    rows = (await session.execute(stmt)).all()
+    session_rows = (await session.execute(sessions_stmt)).all()
+    session_ids = [int(r[0]) for r in session_rows]
+
+    # Determine which session is still active (no SESSION_END event)
+    ended_stmt = (
+        select(Event.session_id)
+        .where(Event.guild_id == guild_id, Event.type == EventType.SESSION_END, Event.session_id.in_(session_ids))
+    )
+    ended_ids = {int(r[0]) for r in (await session.execute(ended_stmt)).all()}
+
+    # Aggregate stats per session in one query
+    stats_stmt = (
+        select(
+            Event.session_id,
+            func.count(func.distinct(case((Event.type == EventType.SP_BASE, Event.user_id)))).label("unique_stankers"),
+            func.count(case((Event.type == EventType.SP_BASE, 1))).label("stanks"),
+            func.count(func.distinct(case((Event.type == EventType.CHAIN_START, Event.chain_id)))).label("chains"),
+            func.count(case((Event.type == EventType.SP_REACTION, 1))).label("reactions"),
+        )
+        .where(Event.guild_id == guild_id, Event.session_id.in_(session_ids))
+        .group_by(Event.session_id)
+    )
+    stats_map: dict = {}
+    for row in (await session.execute(stats_stmt)).all():
+        stats_map[int(row[0])] = {
+            "unique_stankers": int(row[1] or 0),
+            "stanks": int(row[2] or 0),
+            "chains": int(row[3] or 0),
+            "reactions": int(row[4] or 0),
+        }
+
     return MsgPackResponse(
         [
-            {"session_id": int(r[0]), "started_at": r[1].isoformat() if r[1] else None}
-            for r in rows
+            {
+                "session_id": int(r[0]),
+                "started_at": r[1].isoformat() if r[1] else None,
+                "active": int(r[0]) not in ended_ids,
+                **stats_map.get(int(r[0]), {"unique_stankers": 0, "stanks": 0, "chains": 0, "reactions": 0}),
+            }
+            for r in session_rows
         ],
         request,
     )

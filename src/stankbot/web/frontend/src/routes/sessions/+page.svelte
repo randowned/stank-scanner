@@ -8,7 +8,7 @@
 
 	const sessions = $derived(data.sessions as SessionSummary[]);
 
-	function formatDate(dateStr: string | null): string {
+	function formatDate(dateStr: string | null | undefined): string {
 		if (!dateStr) return '—';
 		return new Date(dateStr).toLocaleString('en-US', {
 			month: 'short',
@@ -29,17 +29,19 @@
 		</div>
 	{:else}
 		<div class="space-y-2">
-			{#each sessions as session}
-				<a href="{base}/session/{session.session_id}" class="panel flex items-center justify-between">
-					<div>
-						<div class="font-medium">Session #{session.session_id}</div>
-						<div class="text-xs text-muted">
-							{formatDate(session.started_at)}
-						</div>
+			{#each sessions as s}
+				<a href="{base}/session/{s.session_id}" class="panel block">
+					<div class="flex items-center justify-between mb-1">
+						<span class="font-medium">Session #{s.session_id}</span>
+						{#if s.active}
+							<span class="text-xs font-semibold text-ok">ACTIVE</span>
+						{:else}
+							<span class="text-xs font-semibold text-muted">ENDED</span>
+						{/if}
 					</div>
-					<div class="text-right text-sm">
-						<div>{session.chains_started} started</div>
-						<div>{session.chains_broken} broken</div>
+					<div class="text-xs text-muted mb-2">{formatDate(s.started_at)}</div>
+					<div class="text-xs text-muted">
+						Stankers: {s.unique_stankers ?? 0} · Stanks: {s.stanks ?? 0} · Chains: {s.chains ?? 0} · Reactions: {s.reactions ?? 0}
 					</div>
 				</a>
 			{/each}

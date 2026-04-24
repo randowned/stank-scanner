@@ -95,8 +95,8 @@
 							{c.length}
 							<span class="text-muted text-xs">/ {c.unique_contributors}</span>
 						</span>
-						<span class="shrink-0 text-xs {c.broken_at ? 'text-danger' : rolledOver ? 'text-accent' : 'text-ok'}">
-							{c.broken_at ? 'broken' : rolledOver ? 'rolled over' : 'open'}
+						<span class="shrink-0 text-xs font-semibold {c.broken_at ? 'text-danger' : rolledOver ? 'text-accent' : 'text-ok'}">
+							{c.broken_at ? 'BROKEN' : rolledOver ? 'ROLLED OVER' : 'OPEN'}
 						</span>
 					</a>
 				{/each}
