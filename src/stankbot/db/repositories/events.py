@@ -185,6 +185,26 @@ async def count_sp_base_per_user_for_session(
     return {int(uid): int(cnt) for uid, cnt in rows}
 
 
+async def count_sp_base_per_user_for_chain(
+    session: AsyncSession,
+    guild_id: int,
+    chain_id: int,
+) -> dict[int, int]:
+    """Return ``{user_id: stank_count}`` for SP_BASE events in the given chain."""
+    stmt = (
+        select(Event.user_id, func.count(Event.id).label("cnt"))
+        .where(
+            Event.guild_id == guild_id,
+            Event.chain_id == chain_id,
+            Event.type == EventType.SP_BASE,
+            Event.user_id.is_not(None),
+        )
+        .group_by(Event.user_id)
+    )
+    rows = (await session.execute(stmt)).all()
+    return {int(uid): int(cnt) for uid, cnt in rows}
+
+
 async def leaderboard(
     session: AsyncSession,
     guild_id: int,

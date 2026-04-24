@@ -85,19 +85,26 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
     session_svc = SessionService(session)
     session_id = await session_svc.current(guild_id)
     live_chain = await chains_repo.current_chain(session, guild_id, altar.id)
-    if live_chain is not None:
-        per_user_reactions = await reaction_awards_repo.count_per_user_for_chain(
-            session, guild_id=guild_id, chain_id=live_chain.id
-        )
-    else:
-        per_user_reactions = await reaction_awards_repo.count_per_user_for_session(
-            session, guild_id=guild_id, session_id=session_id
-        )
 
-    per_user_stanks = (
+    per_user_reactions_chain = (
+        await reaction_awards_repo.count_per_user_for_chain(session, guild_id=guild_id, chain_id=live_chain.id)
+        if live_chain is not None else {}
+    )
+    per_user_reactions_session = (
+        await reaction_awards_repo.count_per_user_for_session(session, guild_id=guild_id, session_id=session_id)
+        if session_id is not None else {}
+    )
+    session_reactions = (
+        await reaction_awards_repo.count_for_session(session, guild_id=guild_id, session_id=session_id)
+        if session_id is not None else 0
+    )
+    per_user_stanks_chain = (
+        await events_repo.count_sp_base_per_user_for_chain(session, guild_id, live_chain.id)
+        if live_chain is not None else {}
+    )
+    per_user_stanks_session = (
         await events_repo.count_sp_base_per_user_for_session(session, guild_id, session_id)
-        if session_id is not None
-        else {}
+        if session_id is not None else {}
     )
 
     chain_length = state.current
@@ -105,8 +112,7 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
     def row_to_dict(r):
         earned = r.earned_sp
         punishments = r.punishments
-        reacts = per_user_reactions.get(int(r.user_id), 0)
-        stanks = per_user_stanks.get(int(r.user_id), 0)
+        uid = int(r.user_id)
         return {
             "user_id": str(r.user_id),
             "display_name": r.display_name,
@@ -114,8 +120,10 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
             "earned_sp": earned,
             "punishments": punishments,
             "net": earned - punishments,
-            "reactions_in_session": reacts,
-            "stanks_in_session": stanks,
+            "reactions_in_chain": per_user_reactions_chain.get(uid, 0),
+            "reactions_in_session": per_user_reactions_session.get(uid, 0),
+            "stanks_in_chain": per_user_stanks_chain.get(uid, 0),
+            "stanks_in_session": per_user_stanks_session.get(uid, 0),
         }
 
     return {
@@ -126,6 +134,7 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
         "current": state.current,
         "current_unique": state.current_unique,
         "reactions": state.reactions,
+        "session_reactions": session_reactions,
         "chain_length": chain_length,
         "record": state.record,
         "record_unique": state.record_unique,
@@ -229,10 +238,12 @@ async def notify_chain_update(
     )
 
 
-async def notify_rank_update(guild_id: int, rankings: list, reactions: int | None = None) -> None:
+async def notify_rank_update(guild_id: int, rankings: list, reactions: int | None = None, session_reactions: int | None = None) -> None:
     payload: dict = {"rankings": rankings, "updated_at": datetime.now(UTC).isoformat()}
     if reactions is not None:
         payload["reactions"] = reactions
+    if session_reactions is not None:
+        payload["session_reactions"] = session_reactions
     await manager.broadcast_json(guild_id, {"t": 102, "d": payload})
 
 
@@ -267,18 +278,21 @@ async def broadcast_rank_update(session_factory, guild_id: int, limit: int = 20)
         )
         altar = await altars_repo.primary(session, guild_id)
         live_chain = await chains_repo.current_chain(session, guild_id, altar.id) if altar else None
-        if live_chain is not None:
-            per_user_reactions = await reaction_awards_repo.count_per_user_for_chain(
-                session, guild_id=guild_id, chain_id=live_chain.id
-            )
-        else:
-            per_user_reactions = await reaction_awards_repo.count_per_user_for_session(
-                session, guild_id=guild_id, session_id=session_id
-            )
-        per_user_stanks = (
+        per_user_reactions_chain = (
+            await reaction_awards_repo.count_per_user_for_chain(session, guild_id=guild_id, chain_id=live_chain.id)
+            if live_chain is not None else {}
+        )
+        per_user_reactions_session = (
+            await reaction_awards_repo.count_per_user_for_session(session, guild_id=guild_id, session_id=session_id)
+            if session_id is not None else {}
+        )
+        per_user_stanks_chain = (
+            await events_repo.count_sp_base_per_user_for_chain(session, guild_id, live_chain.id)
+            if live_chain is not None else {}
+        )
+        per_user_stanks_session = (
             await events_repo.count_sp_base_per_user_for_session(session, guild_id, session_id)
-            if session_id is not None
-            else {}
+            if session_id is not None else {}
         )
         payload = [
             {
@@ -288,17 +302,22 @@ async def broadcast_rank_update(session_factory, guild_id: int, limit: int = 20)
                 "earned_sp": sp,
                 "punishments": pp,
                 "net": sp - pp,
-                "reactions_in_session": per_user_reactions.get(int(uid), 0),
-                "stanks_in_session": per_user_stanks.get(int(uid), 0),
+                "reactions_in_chain": per_user_reactions_chain.get(int(uid), 0),
+                "reactions_in_session": per_user_reactions_session.get(int(uid), 0),
+                "stanks_in_chain": per_user_stanks_chain.get(int(uid), 0),
+                "stanks_in_session": per_user_stanks_session.get(int(uid), 0),
             }
             for uid, sp, pp in rows
         ]
-        total_reactions = (
+        chain_reactions = (
             await reaction_awards_repo.count_for_chain(session, guild_id=guild_id, chain_id=live_chain.id)
-            if live_chain is not None
-            else await reaction_awards_repo.count_for_session(session, guild_id=guild_id, session_id=session_id)
+            if live_chain is not None else 0
         )
-    await notify_rank_update(guild_id, payload, reactions=total_reactions)
+        session_reactions = (
+            await reaction_awards_repo.count_for_session(session, guild_id=guild_id, session_id=session_id)
+            if session_id is not None else 0
+        )
+    await notify_rank_update(guild_id, payload, reactions=chain_reactions, session_reactions=session_reactions)
 
 
 async def notify_achievement(guild_id: int, user_id: int, badge: dict) -> None:

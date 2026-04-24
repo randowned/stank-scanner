@@ -33,6 +33,7 @@ interface RankUpdateMsg {
 	d: {
 		rankings: BoardState['rankings'];
 		reactions?: number;
+		session_reactions?: number;
 		updated_at: string;
 	};
 }
@@ -214,6 +215,7 @@ function handleMessage(msg: ServerMsg): void {
 				if (state) {
 					const patch: Partial<BoardState> = { rankings: msg.d.rankings };
 					if (msg.d.reactions !== undefined) patch.reactions = msg.d.reactions;
+					if (msg.d.session_reactions !== undefined) patch.session_reactions = msg.d.session_reactions;
 					return { ...state, ...patch };
 				}
 				return state;

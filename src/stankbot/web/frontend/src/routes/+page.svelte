@@ -165,23 +165,29 @@
 
 		<!-- Stats Grid -->
 		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-			<div class="text-center" data-testid="tile-reactions">
-				<div class="text-xl font-bold text-accent {flashReactions ? 'row-flash' : ''}">{formatNumber(board?.reactions ?? 0)}</div>
+			<div class="text-center cursor-default" data-testid="tile-reactions"
+				title="Chain reactions / Session reactions">
+				<div class="text-xl font-bold text-accent {flashReactions ? 'row-flash' : ''}">
+					{formatNumber(board?.reactions ?? 0)} / {formatNumber(board?.session_reactions ?? 0)}
+				</div>
 				<div class="text-xs text-muted uppercase">Reactions</div>
 			</div>
-			<div class="text-center" data-testid="tile-current">
+			<div class="text-center cursor-default" data-testid="tile-current"
+				title="Current chain length / Unique stankers in chain">
 				<div class="text-xl font-bold text-accent {flashCurrent ? 'row-flash' : ''}" data-testid="chain-counter">
 					{formatNumber(board?.current ?? 0) + ' / ' + formatNumber(board?.current_unique ?? 0)}
 				</div>
 				<div class="text-xs text-muted uppercase">Current</div>
 			</div>
-			<div class="text-center" data-testid="tile-session">
+			<div class="text-center cursor-default" data-testid="tile-session"
+				title="Session record chain length / Unique stankers in that chain">
 				<div class="text-xl font-bold {flashRecord ? 'row-flash' : ''}">
 					{formatNumber(board?.record ?? 0) + ' / ' + formatNumber(board?.record_unique ?? 0)}
 				</div>
 				<div class="text-xs text-muted uppercase">Session</div>
 			</div>
-			<div class="text-center" data-testid="tile-alltime">
+			<div class="text-center cursor-default" data-testid="tile-alltime"
+				title="All-time record chain length / Unique stankers in that chain">
 				<div class="text-xl font-bold">
 					{formatNumber(board?.alltime_record ?? 0) + ' / ' + formatNumber(board?.alltime_record_unique ?? 0)}
 				</div>

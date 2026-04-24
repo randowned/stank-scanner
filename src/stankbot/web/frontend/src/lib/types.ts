@@ -48,6 +48,7 @@ export interface BoardState {
 	current: number;
 	current_unique: number;
 	reactions: number;
+	session_reactions?: number;
 	chain_length?: number;
 	record: number;
 	record_unique: number;
@@ -66,7 +67,9 @@ export interface PlayerRow {
 	earned_sp: number;
 	punishments: number;
 	net?: number;
+	reactions_in_chain?: number;
 	reactions_in_session?: number;
+	stanks_in_chain?: number;
 	stanks_in_session?: number;
 }
 
