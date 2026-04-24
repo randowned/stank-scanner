@@ -46,5 +46,5 @@
 		</div>
 	{/if}
 
-	<a href={base} class="btn btn-secondary w-full text-center">← Back to Board</a>
+	<a href="{base}/" class="btn btn-secondary w-full text-center">← Back to Board</a>
 </div>
