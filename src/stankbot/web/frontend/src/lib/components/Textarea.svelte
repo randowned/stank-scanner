@@ -10,6 +10,7 @@
 		class?: string;
 		oninput?: (e: Event) => void;
 		onchange?: (e: Event) => void;
+		testId?: string;
 	}
 
 	let {
@@ -22,7 +23,8 @@
 		id,
 		class: klass = '',
 		oninput,
-		onchange
+		onchange,
+		testId
 	}: Props = $props();
 </script>
 
@@ -37,4 +39,5 @@
 	class="input font-mono text-sm {klass}"
 	{oninput}
 	{onchange}
+	data-testid={testId}
 ></textarea>

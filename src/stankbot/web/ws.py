@@ -165,7 +165,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     is_dev_mock = config is not None and config.env == "dev-mock" and getattr(config, "mock_auth", False)
 
     session = websocket.session
-    guild_id = session.get("guild") or session.get("active_guild_id")
+    guild_id = session.get("guild_id") or session.get("guild") or session.get("active_guild_id")
     if guild_id is None:
         guild_id = getattr(config, "default_guild_id", None)
     if guild_id is None:

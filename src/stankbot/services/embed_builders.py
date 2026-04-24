@@ -12,7 +12,6 @@ Keeping stank_emoji resolution here avoids three copies of the same
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import discord
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from stankbot.db.models import Altar, Record, RecordScope
 from stankbot.db.repositories import events as events_repo
 from stankbot.db.repositories import players as players_repo
-from stankbot.services.board_renderer import PlayerRow
 from stankbot.services import template_store
+from stankbot.services.board_renderer import PlayerRow
 from stankbot.services.template_engine import RenderContext, render_embed
 
 
@@ -80,13 +79,14 @@ class RecordBreakVars:
     starter_sp: int
 
 
-def build_record_embed(
+async def build_record_embed(
     *,
     altar: Altar | None,
     guild: discord.Guild | None,
     vars_: RecordBreakVars,
     altar_channel: str = "",
     board_url: str = "",
+    session: AsyncSession,
 ) -> discord.Embed:
     if vars_.alltime_broken:
         title = "\U0001f451 ALL-TIME RECORD! \U0001f451"
@@ -130,7 +130,9 @@ def build_record_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(template_store.load("record_embed"), ctx)
+    guild_id = guild.id if guild is not None else 0
+    tmpl = await template_store.load("record_embed", session, guild_id)
+    return render_embed(tmpl, ctx)
 
 
 @dataclass(slots=True)
@@ -145,13 +147,14 @@ class ChainBreakVars:
     finish_bonus_sp: int
 
 
-def build_chain_break_embed(
+async def build_chain_break_embed(
     *,
     altar: Altar | None,
     guild: discord.Guild | None,
     vars_: ChainBreakVars,
     altar_channel: str = "",
     board_url: str = "",
+    session: AsyncSession,
 ) -> discord.Embed:
     ctx = RenderContext(
         variables={
@@ -173,10 +176,12 @@ def build_chain_break_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(template_store.load("chain_break_embed"), ctx)
+    guild_id = guild.id if guild is not None else 0
+    tmpl = await template_store.load("chain_break_embed", session, guild_id)
+    return render_embed(tmpl, ctx)
 
 
-def build_cooldown_embed(
+async def build_cooldown_embed(
     *,
     target_display_name: str,
     cooldown_remaining: str,
@@ -184,6 +189,8 @@ def build_cooldown_embed(
     altar_channel: str = "",
     altar_channel_id: int = 0,
     board_url: str = "",
+    session: AsyncSession,
+    guild_id: int = 0,
 ) -> discord.Embed:
     ctx = RenderContext(
         variables={
@@ -196,7 +203,8 @@ def build_cooldown_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(template_store.load("cooldown_embed"), ctx)
+    tmpl = await template_store.load("cooldown_embed", session, guild_id)
+    return render_embed(tmpl, ctx)
 
 
 @dataclass(slots=True)
@@ -219,12 +227,14 @@ class NewSessionVars:
     next_reset_in: str
 
 
-def build_new_session_embed(
+async def build_new_session_embed(
     vars_: NewSessionVars,
     *,
     altar_channel: str = "",
     altar_channel_id: int = 0,
     board_url: str = "",
+    session: AsyncSession,
+    guild_id: int = 0,
 ) -> discord.Embed:
     ctx = RenderContext(
         variables={
@@ -250,7 +260,8 @@ def build_new_session_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(template_store.load("new_session_embed"), ctx)
+    tmpl = await template_store.load("new_session_embed", session, guild_id)
+    return render_embed(tmpl, ctx)
 
 
 # --- data-assembly helpers ------------------------------------------------

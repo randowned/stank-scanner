@@ -206,10 +206,9 @@ async def _build_rollover_embed(
     # for the just-ended session that's still valid until the new session
     # writes a fresh baseline. Read it before any rebaseline happens.
     # (We're inside the same transaction as end_session, before commit.)
-    from stankbot.db.repositories import records as records_repo
-
     # primary altar for the guild — TODO multi-altar rollover later.
     from stankbot.db.repositories import altars as altars_repo
+    from stankbot.db.repositories import records as records_repo
 
     altar = await altars_repo.primary(session, guild_id)
     altar_channel = ""
@@ -276,13 +275,15 @@ async def _build_rollover_embed(
         alltime_top_pp=all_pp,
         next_reset_in=humanize_duration((next_reset - now).total_seconds()),
     )
-    return embed_builders.build_new_session_embed(
+    return await embed_builders.build_new_session_embed(
         vars_,
         altar_channel=altar_channel,
         altar_channel_id=altar.channel_id if altar else 0,
         board_url=embed_builders.board_url_for(
             bot.config.oauth_redirect_uri, guild_id
         ),
+        session=session,
+        guild_id=guild_id,
     )
 
 

@@ -12,6 +12,7 @@
 		onclick?: (e: MouseEvent) => void;
 		children?: Snippet;
 		class?: string;
+		testId?: string;
 	}
 
 	let {
@@ -24,7 +25,8 @@
 		fullWidth = false,
 		onclick,
 		children,
-		class: klass = ''
+		class: klass = '',
+		testId
 	}: Props = $props();
 
 	const sizeCls: Record<string, string> = {
@@ -47,12 +49,12 @@
 </script>
 
 {#if href}
-	<a {href} class={cls} role="button" aria-disabled={disabled || loading}>
+	<a {href} class={cls} role="button" aria-disabled={disabled || loading} data-testid={testId}>
 		{#if loading}<span class="animate-spin">⟳</span>{/if}
 		{@render children?.()}
 	</a>
 {:else}
-	<button {type} class={cls} disabled={disabled || loading} {onclick}>
+	<button {type} class={cls} disabled={disabled || loading} {onclick} data-testid={testId}>
 		{#if loading}<span class="animate-spin">⟳</span>{/if}
 		{@render children?.()}
 	</button>

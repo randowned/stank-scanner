@@ -45,9 +45,6 @@ async def run() -> None:
     configure_logging(level=config.log_level, fmt=config.log_format)
     log.info("StankBot starting (env=%s)", config.env)
 
-    from stankbot.services.template_store import seed_all
-    seed_all()
-
     use_mock = config.env == "dev-mock" and config.mock_discord
     if use_mock:
         from stankbot.discord_mock.bot import MockBot

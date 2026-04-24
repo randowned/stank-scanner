@@ -370,76 +370,82 @@ class StankAdmin(commands.GroupCog, name="stank-admin"):
         async with self.bot.db() as session:
             altar = await altars_repo.primary(session, guild.id)
 
-        display_name = interaction.user.display_name
-        board_url = embed_builders.board_url_for(
-            self.bot.config.oauth_redirect_uri, guild.id
-        )
-        altar_channel_id = altar.channel_id if altar else 0
-        value = kind.value
-        if value in ("record", "record-session"):
-            alltime = value == "record"
-            embed = embed_builders.build_record_embed(
-                altar=altar,
-                guild=guild,
-                vars_=embed_builders.RecordBreakVars(
-                    length=42,
-                    unique=7,
-                    alltime_length=100 if not alltime else 42,
-                    alltime_unique=12 if not alltime else 7,
-                    session_broken=True,
-                    alltime_broken=alltime,
-                    starter_name=display_name,
-                    starter_sp=150,
-                ),
-                board_url=board_url,
+            display_name = interaction.user.display_name
+            board_url = embed_builders.board_url_for(
+                self.bot.config.oauth_redirect_uri, guild.id
             )
-        elif value == "chain-break":
-            embed = embed_builders.build_chain_break_embed(
-                altar=altar,
-                guild=guild,
-                vars_=embed_builders.ChainBreakVars(
-                    breaker_name=display_name,
-                    broken_length=42,
-                    broken_unique=7,
-                    pp_awarded=109,
-                    starter_name="@alice",
-                    starter_sp=150,
-                    finish_recipient_name="@bob",
-                    finish_bonus_sp=15,
-                ),
-                board_url=board_url,
-            )
-        elif value == "new-session":
-            embed = embed_builders.build_new_session_embed(
-                embed_builders.NewSessionVars(
-                    new_session_number=13,
-                    ended_session_number=12,
-                    chain_continuity_summary="The chain continues — keep the pressure on.",
-                    session_top_player="@alice",
-                    session_top_sp=412,
-                    session_top_breaker="@bob",
-                    session_top_breaker_pp=47,
-                    prev_session_record=42,
-                    prev_session_record_unique=7,
-                    alltime_record=128,
-                    alltime_record_unique=22,
-                    alltime_top_sp_player="@alice",
-                    alltime_top_sp=1820,
-                    alltime_top_pp_player="@bob",
-                    alltime_top_pp=312,
-                    next_reset_in="7h 59m",
-                ),
-                altar_channel_id=altar_channel_id,
-                board_url=board_url,
-            )
-        else:  # cooldown
-            embed = embed_builders.build_cooldown_embed(
-                target_display_name=display_name,
-                cooldown_remaining="3m 20s",
-                cooldown_total="20m",
-                altar_channel_id=altar_channel_id,
-                board_url=board_url,
-            )
+            altar_channel_id = altar.channel_id if altar else 0
+            value = kind.value
+            if value in ("record", "record-session"):
+                alltime = value == "record"
+                embed = await embed_builders.build_record_embed(
+                    altar=altar,
+                    guild=guild,
+                    vars_=embed_builders.RecordBreakVars(
+                        length=42,
+                        unique=7,
+                        alltime_length=100 if not alltime else 42,
+                        alltime_unique=12 if not alltime else 7,
+                        session_broken=True,
+                        alltime_broken=alltime,
+                        starter_name=display_name,
+                        starter_sp=150,
+                    ),
+                    board_url=board_url,
+                    session=session,
+                )
+            elif value == "chain-break":
+                embed = await embed_builders.build_chain_break_embed(
+                    altar=altar,
+                    guild=guild,
+                    vars_=embed_builders.ChainBreakVars(
+                        breaker_name=display_name,
+                        broken_length=42,
+                        broken_unique=7,
+                        pp_awarded=109,
+                        starter_name="@alice",
+                        starter_sp=150,
+                        finish_recipient_name="@bob",
+                        finish_bonus_sp=15,
+                    ),
+                    board_url=board_url,
+                    session=session,
+                )
+            elif value == "new-session":
+                embed = await embed_builders.build_new_session_embed(
+                    embed_builders.NewSessionVars(
+                        new_session_number=13,
+                        ended_session_number=12,
+                        chain_continuity_summary="The chain continues — keep the pressure on.",
+                        session_top_player="@alice",
+                        session_top_sp=412,
+                        session_top_breaker="@bob",
+                        session_top_breaker_pp=47,
+                        prev_session_record=42,
+                        prev_session_record_unique=7,
+                        alltime_record=128,
+                        alltime_record_unique=22,
+                        alltime_top_sp_player="@alice",
+                        alltime_top_sp=1820,
+                        alltime_top_pp_player="@bob",
+                        alltime_top_pp=312,
+                        next_reset_in="7h 59m",
+                    ),
+                    altar_channel_id=altar_channel_id,
+                    board_url=board_url,
+                    session=session,
+                    guild_id=guild.id,
+                )
+            else:  # cooldown
+                embed = await embed_builders.build_cooldown_embed(
+                    target_display_name=display_name,
+                    cooldown_remaining="3m 20s",
+                    cooldown_total="20m",
+                    altar_channel_id=altar_channel_id,
+                    board_url=board_url,
+                    session=session,
+                    guild_id=guild.id,
+                )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="log", description="Tail recent bot log lines.")

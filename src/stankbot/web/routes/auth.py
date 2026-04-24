@@ -137,7 +137,7 @@ async def callback(
         }
         for g in guilds
     ]
-    request.session["guild"] = config.default_guild_id
+    request.session["guild_id"] = config.default_guild_id
     target = request.session.pop("oauth_next", None) or "/"
     return RedirectResponse(target, status_code=303)
 
@@ -166,7 +166,7 @@ async def mock_login_get(
             "permissions": 0x20,
         }
     ]
-    request.session["guild"] = guild_id
+    request.session["guild_id"] = guild_id
     target = next if next and _is_safe_redirect(next) else "/"
     return RedirectResponse(target, status_code=303)
 
@@ -205,7 +205,7 @@ async def mock_login_post(
         }
         for g in guilds
     ]
-    request.session["guild"] = int(guild_id)
+    request.session["guild_id"] = int(guild_id)
     return JSONResponse({"success": True})
 
 

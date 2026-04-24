@@ -12,6 +12,7 @@
 		id?: string;
 		class?: string;
 		onchange?: (e: Event) => void;
+		testId?: string;
 	}
 
 	let {
@@ -21,11 +22,12 @@
 		name,
 		id,
 		class: klass = '',
-		onchange
+		onchange,
+		testId
 	}: Props = $props();
 </script>
 
-<select bind:value {disabled} {name} {id} class="input {klass}" {onchange}>
+<select bind:value {disabled} {name} {id} class="input {klass}" {onchange} data-testid={testId}>
 	{#each options as opt (opt.value)}
 		<option value={opt.value}>{opt.label}</option>
 	{/each}

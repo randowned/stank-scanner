@@ -69,7 +69,7 @@ async def api_guilds(
 
     user_guilds = request.session.get("guilds", [])
     is_owner = _is_owner(request)
-    active_guild_id = request.session.get("guild") or request.session.get("active_guild_id")
+    active_guild_id = request.session.get("guild_id") or request.session.get("guild") or request.session.get("active_guild_id")
 
     def icon_url(guild_id: int, icon_hash: str | None) -> str | None:
         if not icon_hash:

@@ -259,7 +259,7 @@ class ChainListener(commands.Cog):
         cooldown_total: int,
         cooldown_remaining: int,
     ) -> None:
-        embed = embed_builders.build_cooldown_embed(
+        embed = await embed_builders.build_cooldown_embed(
             target_display_name=message.author.display_name,
             cooldown_remaining=humanize_duration(cooldown_remaining),
             cooldown_total=humanize_duration(cooldown_total),
@@ -268,6 +268,8 @@ class ChainListener(commands.Cog):
             board_url=embed_builders.board_url_for(
                 self.bot.config.oauth_redirect_uri, message.guild.id
             ),
+            session=session,
+            guild_id=message.guild.id,
         )
         try:
             await broadcast_to_guild(
@@ -289,7 +291,7 @@ class ChainListener(commands.Cog):
         finish_name = await embed_builders.display_name_of(
             session, message.guild.id, result.finish_bonus_user_id
         )
-        embed = embed_builders.build_chain_break_embed(
+        embed = await embed_builders.build_chain_break_embed(
             altar=altar,
             guild=message.guild,
             altar_channel=getattr(message.channel, "name", ""),
@@ -306,6 +308,7 @@ class ChainListener(commands.Cog):
                 finish_recipient_name=finish_name,
                 finish_bonus_sp=result.sp_awarded,
             ),
+            session=session,
         )
         try:
             await broadcast_to_guild(
@@ -332,7 +335,7 @@ class ChainListener(commands.Cog):
             guild_id=message.guild.id,
             chain=await _fetch_chain_for_break(session, altar, message.id),
         )
-        embed = embed_builders.build_record_embed(
+        embed = await embed_builders.build_record_embed(
             altar=altar,
             guild=message.guild,
             altar_channel=getattr(message.channel, "name", ""),
@@ -349,6 +352,7 @@ class ChainListener(commands.Cog):
                 starter_name=starter_name,
                 starter_sp=starter_sp,
             ),
+            session=session,
         )
         try:
             await broadcast_to_guild(

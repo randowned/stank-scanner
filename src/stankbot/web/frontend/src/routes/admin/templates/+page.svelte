@@ -151,6 +151,7 @@
 			bind:value={activeKey}
 			options={templateOptions}
 			onchange={(e) => selectKey((e.target as HTMLSelectElement).value)}
+			testId="template-select"
 		/>
 	</div>
 
@@ -161,11 +162,13 @@
 					type="button"
 					class="px-3 py-1.5 text-sm transition-colors {activeTab === 'preview' ? 'bg-accent text-[#1a1425]' : 'text-muted hover:text-text'}"
 					onclick={() => { activeTab = 'preview'; runPreview(); }}
+					data-testid="tab-preview"
 				>Preview</button>
 				<button
 					type="button"
 					class="px-3 py-1.5 text-sm transition-colors {activeTab === 'edit' ? 'bg-accent text-[#1a1425]' : 'text-muted hover:text-text'}"
 					onclick={() => { activeTab = 'edit'; }}
+					data-testid="tab-edit"
 				>Edit</button>
 			</div>
 		</div>
@@ -202,15 +205,15 @@
 				</div>
 			{/if}
 		{:else}
-			<Textarea bind:value={jsonText} rows={22} oninput={schedulePreview} />
+			<Textarea bind:value={jsonText} rows={22} oninput={schedulePreview} testId="template-json" />
 			<div class="mt-3 flex items-center justify-between gap-3">
 				<div class="flex gap-2">
-					<Button variant="secondary" onclick={resetToSaved}>Reset</Button>
-					<Button variant="secondary" onclick={resetToDefault}>Default</Button>
+					<Button variant="secondary" onclick={resetToSaved} testId="template-reset">Reset</Button>
+					<Button variant="secondary" onclick={resetToDefault} testId="template-default">Default</Button>
 				</div>
 				<div class="flex items-center gap-3">
-					{#if saveMsg}<span class="text-sm text-muted">{saveMsg}</span>{/if}
-					<Button onclick={save} loading={saving}>Save</Button>
+					{#if saveMsg}<span class="text-sm text-muted" data-testid="template-save-msg">{saveMsg}</span>{/if}
+					<Button onclick={save} loading={saving} testId="template-save">Save</Button>
 				</div>
 			</div>
 		{/if}

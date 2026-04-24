@@ -68,7 +68,7 @@ async def api_switch_guild(
         if not is_admin:
             raise HTTPException(status_code=403, detail="not allowed to switch to this guild")
 
-    request.session["guild"] = target_gid
+    request.session["guild_id"] = target_gid
     return MsgPackResponse({"success": True, "guild_id": target_gid}, request)
 
 
@@ -570,17 +570,19 @@ async def get_config(
 @router.get("/templates")
 async def list_templates(
     request: Request,
+    session: AsyncSession = Depends(get_db),
+    guild_id: int = Depends(get_active_guild_id),
     _admin: dict = Depends(require_guild_admin),
 ) -> MsgPackResponse:
     from stankbot.services.default_templates import ALL_DEFAULTS
-    from stankbot.services.template_store import list_templates as ls
-    from stankbot.services.template_store import load
+    from stankbot.services.template_store import all_keys, load
 
-    stored = ls() or list(ALL_DEFAULTS.keys())
+    keys = all_keys()
+    templates = {k: await load(k, session, guild_id) for k in keys}
     return MsgPackResponse(
         {
-            "keys": sorted(set(list(ALL_DEFAULTS.keys()) + stored)),
-            "templates": {k: load(k) for k in ALL_DEFAULTS},
+            "keys": keys,
+            "templates": templates,
             "defaults": {k: dict(v) for k, v in ALL_DEFAULTS.items()},
         },
         request,
@@ -591,6 +593,8 @@ async def list_templates(
 async def get_template(
     key: str,
     request: Request,
+    session: AsyncSession = Depends(get_db),
+    guild_id: int = Depends(get_active_guild_id),
     _admin: dict = Depends(require_guild_admin),
 ) -> MsgPackResponse:
     from stankbot.services.default_templates import ALL_DEFAULTS
@@ -598,7 +602,8 @@ async def get_template(
 
     if key not in ALL_DEFAULTS:
         raise HTTPException(status_code=404, detail="unknown template key")
-    return MsgPackResponse({"key": key, "data": load(key)}, request)
+    data = await load(key, session, guild_id)
+    return MsgPackResponse({"key": key, "data": data}, request)
 
 
 class TemplateSavePayload(BaseModel):
@@ -643,9 +648,7 @@ async def save_template(
     except TemplateError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
 
-    save(key, payload.data)
-    from stankbot.services.settings_service import SettingsService
-    await SettingsService(session).set(guild_id, key, payload.data)
+    await save(key, payload.data, session, guild_id)
     await audit_repo.append(
         session,
         guild_id=guild_id,

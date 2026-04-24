@@ -34,9 +34,8 @@ test.describe('Admin templates preview', () => {
 	test('template page loads keys and renders preview', async ({ page }) => {
 		await page.goto('/admin/templates');
 		await expect(page.getByRole('heading', { name: 'Templates' })).toBeVisible();
-		// Tabs are rendered from the template keys list.
-		const tabs = page.getByRole('tablist');
-		await expect(tabs).toBeVisible();
+		// Template select dropdown is rendered.
+		await expect(page.getByTestId('template-select')).toBeVisible();
 		// Preview pane uses our declared testid.
 		await expect(page.getByTestId('template-preview')).toBeVisible({ timeout: 5000 });
 	});
