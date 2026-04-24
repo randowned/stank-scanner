@@ -386,6 +386,8 @@ async def api_chain(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
 ) -> JSONResponse:
+    from stankbot.db.repositories import events as events_repo
+    from stankbot.db.repositories import players as players_repo
     from stankbot.db.repositories import reaction_awards as reaction_awards_repo
     from stankbot.services import history_service
 
@@ -396,6 +398,27 @@ async def api_chain(
     total_reactions = await reaction_awards_repo.count_for_chain(
         session, guild_id=guild_id, chain_id=chain_id
     )
+    per_user_reactions = await reaction_awards_repo.count_per_user_for_chain(
+        session, guild_id=guild_id, chain_id=chain_id
+    )
+    lb_rows = await events_repo.leaderboard_for_chain(session, guild_id, chain_id)
+    user_ids = [uid for uid, _, _ in lb_rows]
+    name_avatar_map = (
+        await players_repo.display_names_and_avatars(session, guild_id, user_ids)
+        if user_ids else {}
+    )
+    leaderboard = [
+        {
+            "user_id": str(uid),
+            "display_name": name_avatar_map.get(uid, (str(uid), None))[0],
+            "discord_avatar": name_avatar_map.get(uid, (str(uid), None))[1],
+            "earned_sp": sp,
+            "punishments": pp,
+            "net": sp - pp,
+            "reactions_in_session": per_user_reactions.get(uid, 0),
+        }
+        for uid, sp, pp in lb_rows
+    ]
 
     return JSONResponse(
         {
@@ -408,6 +431,7 @@ async def api_chain(
             "broken_by_user_id": str(summary.broken_by_user_id) if summary.broken_by_user_id is not None else None,
             "contributors": [[str(uid), count] for uid, count in summary.contributors],
             "total_reactions": total_reactions,
+            "leaderboard": leaderboard,
         }
     )
 

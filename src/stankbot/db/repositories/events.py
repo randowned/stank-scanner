@@ -217,6 +217,30 @@ async def leaderboard(
     return [(int(uid), int(sp or 0), int(pp or 0)) for uid, sp, pp in rows]
 
 
+async def leaderboard_for_chain(
+    session: AsyncSession,
+    guild_id: int,
+    chain_id: int,
+) -> list[tuple[int, int, int]]:
+    """Return ``[(user_id, earned_sp, punishments), ...]`` for a single chain,
+    sorted by net SP descending.
+    """
+    sp_expr = func.sum(
+        case((Event.type.in_([t.value for t in _SP_TYPES]), Event.delta), else_=0)
+    ).label("earned_sp")
+    pp_expr = func.sum(case((Event.type == EventType.PP_BREAK, Event.delta), else_=0)).label(
+        "punishments"
+    )
+    stmt = (
+        select(Event.user_id, sp_expr, pp_expr)
+        .where(Event.guild_id == guild_id, Event.chain_id == chain_id, Event.user_id.is_not(None))
+        .group_by(Event.user_id)
+        .order_by((sp_expr - pp_expr).desc())
+    )
+    rows = (await session.execute(stmt)).all()
+    return [(int(uid), int(sp or 0), int(pp or 0)) for uid, sp, pp in rows]
+
+
 async def top_pp_user(session: AsyncSession, guild_id: int) -> tuple[int, int] | None:
     """All-time PP leader — the "chainbreaker". Returns
     ``(user_id, punishments)`` or ``None`` if no one has any PP yet.

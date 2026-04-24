@@ -106,6 +106,7 @@ export interface ChainSummary {
 	broken_by_user_id: string | null;
 	contributors: [string, number][];
 	total_reactions?: number;
+	leaderboard?: PlayerRow[];
 }
 
 export interface SessionSummary {

@@ -64,7 +64,13 @@
 
 		<div class="panel">
 			<h2 class="text-lg font-semibold mb-3">Leaderboard</h2>
-			{#if chain.contributors.length}
+			{#if chain.leaderboard && chain.leaderboard.length}
+				<div class="space-y-2">
+					{#each chain.leaderboard as row, i}
+						<LeaderboardRow rank={i + 1} {row} chainLength={chain.length} />
+					{/each}
+				</div>
+			{:else if chain.contributors.length}
 				<div class="space-y-2">
 					{#each chain.contributors as [userId, count], i}
 						{@const fakeRow = {
