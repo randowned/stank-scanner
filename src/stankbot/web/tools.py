@@ -165,11 +165,16 @@ def require_guild_member(request: Request) -> dict[str, Any]:
         }
     user = current_user(request)
     if user is None:
-        next_url = str(request.url.path)
-        if request.url.query:
-            next_url += f"?{request.url.query}"
-        raise _LoginRedirect(
-            RedirectResponse(url=f"/auth/login?next={quote(next_url)}", status_code=302)
+        accept = request.headers.get("accept", "")
+        if "text/html" in accept:
+            next_url = str(request.url.path)
+            if request.url.query:
+                next_url += f"?{request.url.query}"
+            raise _LoginRedirect(
+                RedirectResponse(url=f"/auth/login?next={quote(next_url)}", status_code=302)
+            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="login required"
         )
     if _is_owner(request):
         return user

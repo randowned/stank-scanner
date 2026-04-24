@@ -36,7 +36,7 @@ def _is_safe_redirect(url: str) -> bool:
     but resolve to an external host.
     """
     parsed = urlparse(url)
-    return url.startswith("/") and not parsed.scheme and not parsed.netloc
+    return url.startswith("/") and not parsed.scheme and not parsed.netloc and not url.startswith("/api/")
 
 
 _AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize"

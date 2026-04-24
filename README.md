@@ -171,7 +171,7 @@ CLI alternative for rebuild: `python -m stankbot.rebuild --guild-id <id>`.
 
 ## Web dashboard
 
-- `/` — public leaderboard + chain state. Top tiles: **Reactions** (current chain, chain-scoped) · Current · Session · All-time. Leaderboard rows live-reorder on point changes with floating `+N` delta chips and show net SP (`+N SP` / `-N SP`) with reactions and stanks-in-chain subtitle. A chain break paints an overlay with the breaker and SP loss until the next chain starts.
+- `/` — landing page for unauthenticated visitors (Discord login CTA); authenticated users see the full leaderboard + chain state board instead. Top tiles: **Reactions** (current chain, chain-scoped) · Current · Session · All-time. Leaderboard rows live-reorder on point changes with floating `+N` delta chips and show net SP (`+N SP` / `-N SP`) with reactions and stanks-in-chain subtitle. A chain break paints an overlay with the breaker and SP loss until the next chain starts.
 - `/me` → `/player/{user_id}` — your stats, badges, history.
 - `/sessions` → `/history/session/{id}` — session browser + summary.
 - Admin surface (five pages):
@@ -180,5 +180,6 @@ CLI alternative for rebuild: `python -m stankbot.rebuild --guild-id <id>`.
   - `/admin/admins` — admin roles (per-guild) + global admin users.
   - `/admin/audit` — audit trail.
   - `/admin/settings` — two-column page: left lists Altar / Scoring / Behavior / Reset windows / Announcements / Maintenance cards; right sticky rail holds New Session · Reset · Rebuild.
-- Header: single row, `Live updates` badge (green/muted/red dot with tooltip for connection state), user menu with Navigate (Dashboard / Sessions) + My Profile + collapsible Switch Guild showing the active guild's icon + name.
+- Header: single row, `Live updates` badge (gray when logged out, green/muted/red when connected), user menu with Navigate (Dashboard / Sessions) + My Profile + collapsible Switch Guild showing the active guild's icon + name.
+- Auth guard: unauthenticated requests to any non-public route redirect to `/`. All data API endpoints require guild membership (`require_guild_member`).
 
