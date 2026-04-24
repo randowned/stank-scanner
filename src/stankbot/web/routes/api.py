@@ -14,6 +14,7 @@ from stankbot.web.tools import (
     current_user,
     get_active_guild_id,
     get_db,
+    require_guild_member,
     require_login,
 )
 from stankbot.web.transport import MsgPackResponse
@@ -125,6 +126,7 @@ async def api_board(
     request: Request,
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ) -> MsgPackResponse:
     from stankbot.web.tools import guild_name_for
 
@@ -138,6 +140,7 @@ async def api_leaderboard(
     request: Request,
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ) -> MsgPackResponse:
@@ -204,6 +207,7 @@ async def api_player(
     request: Request,
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ):
     from stankbot.db.repositories import players as players_repo
     from stankbot.services import achievements as achievements_svc
@@ -262,6 +266,7 @@ async def api_players_batch(
     ids: str = Query(..., description="Comma-separated user IDs"),
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ) -> JSONResponse:
     from stankbot.db.repositories import players as players_repo
 
@@ -290,6 +295,7 @@ async def api_player_history(
     window: str = Query("30d", description="History window, e.g. 30d, 7d"),
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ) -> JSONResponse:
     from datetime import timedelta
 
@@ -358,6 +364,7 @@ async def api_achievements(
     user_id: str | None = Query(None, description="Optional user to mark earned badges"),
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ) -> JSONResponse:
     from stankbot.services import achievements as achievements_svc
 
@@ -389,6 +396,7 @@ async def api_chain(
     request: Request,
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ) -> JSONResponse:
     from stankbot.db.repositories import events as events_repo
     from stankbot.db.repositories import players as players_repo
@@ -457,6 +465,7 @@ async def api_sessions(
     request: Request,
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ) -> JSONResponse:
     from sqlalchemy import select
 
@@ -522,6 +531,7 @@ async def api_session(
     request: Request,
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
+    _user: dict = Depends(require_guild_member),
 ) -> JSONResponse:
     from sqlalchemy import func, select
 

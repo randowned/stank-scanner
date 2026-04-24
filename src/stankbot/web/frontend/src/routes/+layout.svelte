@@ -40,10 +40,18 @@
 	});
 
 	onMount(() => {
-		connect();
+		if (userData) {
+			connect();
+		}
 		return () => {
 			disconnect();
 		};
+	});
+
+	$effect(() => {
+		if (userData && typeof window !== 'undefined') {
+			connect();
+		}
 	});
 
 	function handleWsEvent(event: WsEvent): void {
@@ -99,7 +107,7 @@
 			</a>
 
 			<div class="flex items-center gap-2 shrink-0">
-				<LiveBadge />
+				<LiveBadge disabled={!$user} />
 				{#if $user}
 					<UserMenu
 						user={$user}
@@ -109,7 +117,17 @@
 						onerror={(msg) => addToast(msg, 'error')}
 					/>
 				{:else}
-					<a href="/auth/login" class="text-sm text-muted hover:text-text">Login</a>
+					<a
+						href="/auth/login"
+						class="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-border/50 transition-colors"
+						aria-label="Login"
+					>
+						<div
+							class="w-6 h-6 rounded-full bg-border text-muted flex items-center justify-center text-xs font-semibold"
+							aria-hidden="true"
+						>?</div>
+						<span class="text-sm text-muted hover:text-text hidden sm:inline">Login</span>
+					</a>
 				{/if}
 			</div>
 		</div>

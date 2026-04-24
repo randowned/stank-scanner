@@ -2,24 +2,34 @@
 	import { connectionStatus } from '$lib/stores';
 	import { page } from '$app/stores';
 
+	interface Props {
+		disabled?: boolean;
+	}
+
+	let { disabled = false }: Props = $props();
+
 	let popoverOpen = $state(false);
 	let rootEl: HTMLDivElement;
 
-	const status = $derived($connectionStatus);
+	const status = $derived(disabled ? 'disconnected' : $connectionStatus);
 	const color = $derived(
-		status === 'connected'
-			? 'bg-ok'
-			: status === 'connecting'
-				? 'bg-muted'
-				: 'bg-danger'
+		disabled
+			? 'bg-border'
+			: status === 'connected'
+				? 'bg-ok'
+				: status === 'connecting'
+					? 'bg-muted'
+					: 'bg-danger'
 	);
-	const pulse = $derived(status === 'connected' ? 'animate-pulse' : '');
+	const pulse = $derived(!disabled && status === 'connected' ? 'animate-pulse' : '');
 	const label = $derived(
-		status === 'connected'
-			? 'Receiving live updates.'
-			: status === 'connecting'
-				? 'Connecting to live updates…'
-				: 'Connection lost — refresh to reconnect.'
+		disabled
+			? 'Sign in to receive live updates.'
+			: status === 'connected'
+				? 'Receiving live updates.'
+				: status === 'connecting'
+					? 'Connecting to live updates…'
+					: 'Connection lost — refresh to reconnect.'
 	);
 
 	function togglePopover(e: MouseEvent) {
@@ -55,7 +65,8 @@
 		title={label}
 		aria-label={label}
 		aria-describedby="live-badge-popover"
-		class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-muted hover:text-text hover:bg-border/40 transition-colors"
+		class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors
+			{disabled ? 'text-muted/50 cursor-default' : 'text-muted hover:text-text hover:bg-border/40'}"
 		data-testid="live-badge"
 		role="status"
 		aria-live="polite"

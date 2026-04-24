@@ -11,9 +11,9 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 
 		const user = authRes.ok ? await authRes.json() : null;
 
-		if (!user && !url.pathname.includes('/auth')) {
-			const next = url.pathname + url.search;
-			throw redirect(303, `/auth/login?next=${encodeURIComponent(next)}`);
+		const isPublicPath = url.pathname.includes('/auth') || url.pathname === '/';
+		if (!user && !isPublicPath) {
+			throw redirect(303, '/');
 		}
 
 		const envData = envRes.ok
@@ -39,8 +39,9 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 	} catch (e) {
 		if (e && typeof e === 'object' && 'status' in e) throw e;
 
-		if (!url.pathname.includes('/auth')) {
-			throw redirect(303, '/auth/login');
+		const isPublicPath = url.pathname.includes('/auth') || url.pathname === '/';
+		if (!isPublicPath) {
+			throw redirect(303, '/');
 		}
 
 		return {

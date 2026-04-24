@@ -25,11 +25,16 @@ test.describe('Auth guard — unauthenticated redirects', () => {
 		expect(res.headers()['location']).toBe('/player/999');
 	});
 
-	test('full redirect chain lands unauthenticated user at login then back', async ({ page }) => {
-		await page.goto('/');
-		await page.context().clearCookies();
-		await page.goto('/');
-		await expect(page.locator('[data-testid="guild-name"]')).toBeVisible({ timeout: 15000 });
+	test('unauthenticated / shows welcome page instead of redirecting', async ({ page }) => {
+		const res = await page.goto('/');
+		expect(res?.status()).toBeLessThan(500);
+		await expect(page.getByText('MAPHRA Discord community')).toBeVisible();
+	});
+
+	test('deep link /sessions redirects unauthenticated user to /', async ({ page }) => {
+		await page.goto('/sessions');
+		await expect(page).toHaveURL(/\/$/);
+		await expect(page.getByText('MAPHRA Discord community')).toBeVisible();
 	});
 });
 
@@ -69,4 +74,13 @@ test.describe('Auth guard — API protection', () => {
 		const res = await page.request.get('/api/admin/settings');
 		expect(res.status()).toBe(401);
 	});
+
+	test('unauthenticated /api/env returns 200 (intentionally public)', async ({ page }) => {
+		const res = await page.request.get('/api/env');
+		expect(res.status()).toBe(200);
+	});
+
+	// Note: data endpoints (/api/board, /api/sessions, /api/player/*, etc.) use
+	// require_guild_member which auto-fabricates a user in dev-mock mode.
+	// Their 401 behavior in production is covered by the dependency's unit logic.
 });

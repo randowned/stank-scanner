@@ -1,8 +1,14 @@
 import { test, expect } from './fixtures';
 
 test.describe('Auth', () => {
-	test('auto-redirects to mock login in dev mode', async ({ page }) => {
+	test('shows welcome page for unauthenticated visitors', async ({ page }) => {
 		await page.goto('/');
+		await expect(page.getByText('MAPHRA Discord community')).toBeVisible();
+		await expect(page.getByText('Continue with Discord')).toBeVisible();
+	});
+
+	test('auto-redirects to mock login in dev mode', async ({ page }) => {
+		await page.goto('/auth/login');
 		// Should land on board (auto-logged in via mock auth redirect)
 		await expect(page.locator('[data-testid="guild-name"]')).toBeVisible();
 	});
