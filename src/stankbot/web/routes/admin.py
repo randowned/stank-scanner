@@ -581,6 +581,7 @@ async def list_templates(
         {
             "keys": sorted(set(list(ALL_DEFAULTS.keys()) + stored)),
             "templates": {k: load(k) for k in ALL_DEFAULTS},
+            "defaults": {k: dict(v) for k, v in ALL_DEFAULTS.items()},
         },
         request,
     )

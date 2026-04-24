@@ -11,6 +11,7 @@
 	interface TemplatesDoc {
 		keys: string[];
 		templates: Record<string, Record<string, unknown>>;
+		defaults: Record<string, Record<string, unknown>>;
 	}
 
 	const TEMPLATE_LABELS: Record<string, string> = {
@@ -89,6 +90,22 @@
 		} catch (err) {
 			previewError = err instanceof FetchError ? err.message : 'Preview failed';
 		}
+	}
+
+	function resetToSaved() {
+		if (!doc) return;
+		const tmpl = doc.templates[activeKey] ?? {};
+		jsonText = JSON.stringify(tmpl, null, 2);
+		saveMsg = null;
+		schedulePreview();
+	}
+
+	function resetToDefault() {
+		if (!doc) return;
+		const tmpl = doc.defaults[activeKey] ?? {};
+		jsonText = JSON.stringify(tmpl, null, 2);
+		saveMsg = null;
+		schedulePreview();
 	}
 
 	async function save() {
@@ -186,9 +203,15 @@
 			{/if}
 		{:else}
 			<Textarea bind:value={jsonText} rows={22} oninput={schedulePreview} />
-			<div class="mt-3 flex items-center justify-end gap-3">
-				{#if saveMsg}<span class="text-sm text-muted">{saveMsg}</span>{/if}
-				<Button onclick={save} loading={saving}>Save</Button>
+			<div class="mt-3 flex items-center justify-between gap-3">
+				<div class="flex gap-2">
+					<Button variant="secondary" onclick={resetToSaved}>Reset</Button>
+					<Button variant="secondary" onclick={resetToDefault}>Default</Button>
+				</div>
+				<div class="flex items-center gap-3">
+					{#if saveMsg}<span class="text-sm text-muted">{saveMsg}</span>{/if}
+					<Button onclick={save} loading={saving}>Save</Button>
+				</div>
 			</div>
 		{/if}
 	</Card>

@@ -1,1 +1,0 @@
-import{r as e}from"../chunks/b21LLXj_.js";import{b as r}from"../chunks/yqlJTryS.js";const o=!1;function t(){throw e(308,`${r}/admin/admins`)}const i=Object.freeze(Object.defineProperty({__proto__:null,load:t,prerender:o},Symbol.toStringTag,{value:"Module"}));export{i as universal};
