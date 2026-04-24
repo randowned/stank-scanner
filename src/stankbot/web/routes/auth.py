@@ -139,7 +139,7 @@ async def callback(
     ]
     request.session["guild_id"] = config.default_guild_id
     target = request.session.pop("oauth_next", None) or "/"
-    return RedirectResponse(target, status_code=303)
+    return RedirectResponse("/", status_code=303)
 
 
 @router.get("/mock-login")
