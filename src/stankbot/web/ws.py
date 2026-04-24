@@ -179,6 +179,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await manager.connect(websocket, guild_id)
 
     try:
+        from stankbot.db.engine import session_scope
+        from stankbot.web.tools import guild_name_for
+
+        async with session_scope(session_factory) as db:
+            guild_name = await guild_name_for(db, guild_id)
+            state = await get_board_state(db, guild_id, guild_name)
+        if state:
+            packed = msgpack.packb({"t": 101, "d": state}, use_single_float=True)
+            await websocket.send_bytes(packed)
+    except Exception as e:
+        log.warning("Failed to send initial state to WS client: %s", e)
+
+    try:
         while True:
             try:
                 data = await websocket.receive_bytes()
