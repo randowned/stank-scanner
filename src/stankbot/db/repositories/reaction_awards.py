@@ -45,10 +45,11 @@ async def try_claim(
 async def count_for_chain(
     session: AsyncSession, *, guild_id: int, chain_id: int
 ) -> int:
-    """Total reaction awards in a single chain."""
+    """Total reaction awards in a single chain, via SP_REACTION events."""
     stmt = select(func.count()).where(
-        ReactionAward.guild_id == guild_id,
-        ReactionAward.chain_id == chain_id,
+        Event.guild_id == guild_id,
+        Event.type == EventType.SP_REACTION,
+        Event.chain_id == chain_id,
     )
     result = await session.scalar(stmt)
     return int(result or 0)
@@ -57,17 +58,18 @@ async def count_for_chain(
 async def count_per_user_for_chain(
     session: AsyncSession, *, guild_id: int, chain_id: int
 ) -> dict[int, int]:
-    """Per-user reaction award counts in a chain, keyed by user_id."""
+    """Per-user reaction award counts in a chain, via SP_REACTION events."""
     stmt = (
-        select(ReactionAward.user_id, func.count())
+        select(Event.user_id, func.count())
         .where(
-            ReactionAward.guild_id == guild_id,
-            ReactionAward.chain_id == chain_id,
+            Event.guild_id == guild_id,
+            Event.type == EventType.SP_REACTION,
+            Event.chain_id == chain_id,
         )
-        .group_by(ReactionAward.user_id)
+        .group_by(Event.user_id)
     )
     result = await session.execute(stmt)
-    return {int(uid): int(n) for uid, n in result.all()}
+    return {int(uid): int(n) for uid, n in result.all() if uid is not None}
 
 
 async def count_for_session(

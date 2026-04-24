@@ -150,7 +150,7 @@
 	}
 </script>
 
-<div class="p-4 space-y-4">
+<div class="p-4 flex flex-col gap-4">
 	<!-- Chain Status Card -->
 	<div class="panel relative">
 		<ChainBreakOverlay />
@@ -199,7 +199,7 @@
 
 	<!-- Quick Links -->
 	{#if board?.chain_starter || board?.chainbreaker}
-		<div class="grid grid-cols-2 gap-3">
+		<div class="grid grid-cols-2 gap-4">
 			{#if board.chain_starter}
 				{@const starter = board.chain_starter}
 				<a href={getPlayerUrl(starter.user_id)} class="panel flex flex-col items-center gap-3">

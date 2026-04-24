@@ -21,7 +21,7 @@
 
 @layer components {
 	.panel {
-		@apply bg-panel border border-border rounded-lg p-4 mb-3;
+		@apply bg-panel border border-border rounded-lg p-4;
 	}
 
 	.btn {
