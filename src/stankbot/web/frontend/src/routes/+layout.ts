@@ -2,19 +2,26 @@ import { redirect } from '@sveltejs/kit';
 import type { LayoutLoad } from './$types';
 import type { GuildInfo } from '$lib/types';
 
-function hasSessionCookie(): boolean {
-	if (typeof document === 'undefined') return true; // SSR: always attempt
-	return document.cookie.split(';').some((c) => c.trim().startsWith('has_session='));
+function syncSessionCookie(user: unknown): void {
+	if (typeof document === 'undefined') return;
+	if (user) {
+		if (!document.cookie.split(';').some((c) => c.trim().startsWith('has_session='))) {
+			document.cookie = 'has_session=1; path=/; SameSite=Lax';
+		}
+	} else {
+		document.cookie = 'has_session=; path=/; max-age=0';
+	}
 }
 
 export const load: LayoutLoad = async ({ fetch, url }) => {
 	try {
 		const [authRes, envRes] = await Promise.all([
-			hasSessionCookie() ? fetch('/auth') : Promise.resolve(new Response('null', { status: 200 })),
+			fetch('/auth'),
 			fetch('/api/env')
 		]);
 
 		const user = authRes.ok ? await authRes.json() : null;
+		syncSessionCookie(user);
 
 		const isPublicPath = url.pathname.includes('/auth') || url.pathname === '/';
 		if (!user && !isPublicPath) {
