@@ -1,9 +1,10 @@
 import { test, expect } from './fixtures';
 
 test.describe('Auth guard — unauthenticated redirects', () => {
-	test('/auth returns 401 when unauthenticated', async ({ page }) => {
+	test('/auth returns 200 null when unauthenticated', async ({ page }) => {
 		const res = await page.request.get('/auth');
-		expect(res.status()).toBe(401);
+		expect(res.status()).toBe(200);
+		expect(await res.json()).toBeNull();
 	});
 
 	test('/auth/login redirects to mock-login with next param for root', async ({ page }) => {

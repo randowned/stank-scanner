@@ -34,6 +34,15 @@
 	});
 
 	$effect(() => {
+		if (!browser) return;
+		if (userData) {
+			document.cookie = 'has_session=1; path=/; SameSite=Lax';
+		} else {
+			document.cookie = 'has_session=; path=/; max-age=0';
+		}
+	});
+
+	$effect(() => {
 		const event = $lastWsEvent;
 		if (!event) return;
 		handleWsEvent(event);
