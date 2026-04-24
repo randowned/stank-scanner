@@ -158,12 +158,27 @@ async def api_leaderboard(
 
         name_avatar_map = await players_repo.display_names_and_avatars(session, guild_id, user_ids)
 
-    per_user_reactions = await reaction_awards_repo.count_per_user_for_session(
-        session, guild_id=guild_id, session_id=session_id
-    )
+    from stankbot.db.repositories import altars as altars_repo
+    from stankbot.db.repositories import chains as chains_repo
+
+    altar = await altars_repo.primary(session, guild_id)
+    live_chain = await chains_repo.current_chain(session, guild_id, altar.id) if altar else None
+    if live_chain is not None:
+        per_user_reactions = await reaction_awards_repo.count_per_user_for_chain(
+            session, guild_id=guild_id, chain_id=live_chain.id
+        )
+    else:
+        per_user_reactions = await reaction_awards_repo.count_per_user_for_session(
+            session, guild_id=guild_id, session_id=session_id
+        )
+
+    per_user_stanks = await events_repo.count_sp_base_per_user_for_session(
+        session, guild_id, session_id
+    ) if session_id is not None else {}
 
     def _row(uid: int, sp: int, pp: int) -> dict:
         reacts = per_user_reactions.get(int(uid), 0)
+        stanks = per_user_stanks.get(int(uid), 0)
         name, avatar = name_avatar_map.get(uid, (str(uid), None))
         return {
             "user_id": str(uid),
@@ -173,6 +188,7 @@ async def api_leaderboard(
             "punishments": pp,
             "net": sp - pp,
             "reactions_in_session": reacts,
+            "stanks_in_session": stanks,
         }
 
     return MsgPackResponse([_row(uid, sp, pp) for uid, sp, pp in rows], request)

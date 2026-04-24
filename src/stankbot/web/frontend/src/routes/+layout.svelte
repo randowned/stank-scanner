@@ -75,7 +75,7 @@
 </script>
 
 <div class="min-h-screen flex flex-col">
-	{#if data.env === 'dev'}
+	{#if data.env === 'dev-mock'}
 		<div class="bg-gold text-bg text-xs px-2 py-1 text-center font-bold">
 			DEV MODE — Mock Discord / Mock Auth Active
 		</div>

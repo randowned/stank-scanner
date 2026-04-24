@@ -80,6 +80,7 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
     )
 
     from stankbot.db.repositories import chains as chains_repo
+    from stankbot.db.repositories import events as events_repo
 
     session_svc = SessionService(session)
     session_id = await session_svc.current(guild_id)
@@ -93,12 +94,19 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
             session, guild_id=guild_id, session_id=session_id
         )
 
+    per_user_stanks = (
+        await events_repo.count_sp_base_per_user_for_session(session, guild_id, session_id)
+        if session_id is not None
+        else {}
+    )
+
     chain_length = state.current
 
     def row_to_dict(r):
         earned = r.earned_sp
         punishments = r.punishments
         reacts = per_user_reactions.get(int(r.user_id), 0)
+        stanks = per_user_stanks.get(int(r.user_id), 0)
         return {
             "user_id": str(r.user_id),
             "display_name": r.display_name,
@@ -107,6 +115,7 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
             "punishments": punishments,
             "net": earned - punishments,
             "reactions_in_session": reacts,
+            "stanks_in_session": stanks,
         }
 
     return {
@@ -255,6 +264,11 @@ async def broadcast_rank_update(session_factory, guild_id: int, limit: int = 20)
             per_user_reactions = await reaction_awards_repo.count_per_user_for_session(
                 session, guild_id=guild_id, session_id=session_id
             )
+        per_user_stanks = (
+            await events_repo.count_sp_base_per_user_for_session(session, guild_id, session_id)
+            if session_id is not None
+            else {}
+        )
         payload = [
             {
                 "user_id": str(uid),
@@ -264,6 +278,7 @@ async def broadcast_rank_update(session_factory, guild_id: int, limit: int = 20)
                 "punishments": pp,
                 "net": sp - pp,
                 "reactions_in_session": per_user_reactions.get(int(uid), 0),
+                "stanks_in_session": per_user_stanks.get(int(uid), 0),
             }
             for uid, sp, pp in rows
         ]

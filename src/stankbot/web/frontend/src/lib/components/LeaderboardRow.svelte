@@ -23,6 +23,9 @@
 
 	const netColor = $derived(net > 0 ? 'text-accent' : net < 0 ? 'text-danger' : 'text-muted');
 	const netLabel = $derived(`${net > 0 ? '+' : ''}${net.toLocaleString()} SP`);
+	const reactionPct = $derived(
+		chainLength > 0 ? Math.round((reactionsInSession / chainLength) * 100) : 0
+	);
 
 	let flash = $state(false);
 	const rowKey = $derived(
@@ -103,7 +106,7 @@
 			{/if}
 		</div>
 		{#if hasReactionMeta}
-			<div class="text-xs text-muted truncate">{reactionsInSession} reactions — {stanksInSession} Stanks{chainLength > 0 ? ` (${stanksInSession}/${chainLength})` : ''}</div>
+			<div class="text-xs text-muted truncate">{reactionsInSession} reactions ({reactionPct}%) · {stanksInSession} Stanks</div>
 		{/if}
 	</div>
 	<div class="relative min-w-[4ch] text-right">
