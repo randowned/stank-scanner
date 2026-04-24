@@ -39,19 +39,13 @@
 		handleWsEvent(event);
 	});
 
-	onMount(() => {
+	$effect(() => {
 		if (userData) {
 			connect();
-		}
-		return () => {
+		} else {
 			disconnect();
-		};
-	});
-
-	$effect(() => {
-		if (userData && typeof window !== 'undefined') {
-			connect();
 		}
+		return () => disconnect();
 	});
 
 	function handleWsEvent(event: WsEvent): void {

@@ -98,7 +98,7 @@ function defaultUrl(): string {
 
 export function connect(url?: string): void {
 	if (!canConnect()) return;
-	if (ws?.readyState === WebSocket.OPEN) return;
+	if (ws?.readyState === WebSocket.OPEN || ws?.readyState === WebSocket.CONNECTING) return;
 
 	connectionStatus.set('connecting');
 
