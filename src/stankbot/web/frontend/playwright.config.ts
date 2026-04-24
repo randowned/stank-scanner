@@ -25,12 +25,14 @@ export default defineConfig({
 			url: 'http://localhost:8000/healthz',
 			reuseExistingServer: !process.env.CI,
 			timeout: 30000,
-			env: { ENV: 'dev', PYTHONPATH: 'src' }
+			env: { ENV: 'dev-mock', PYTHONPATH: 'src' } // dev-mock required for mock-login fixtures
 		},
-		// For e2e:dev project, also start Vite dev server
+		// For e2e:dev project, also start Vite dev server.
+		// Health check uses /@vite/client because the auth guard in +layout.ts
+		// redirects unauthenticated requests on / to /auth/login (303).
 		{
 			command: 'npm run dev',
-			url: 'http://localhost:5173',
+			url: 'http://localhost:5173/@vite/client',
 			reuseExistingServer: !process.env.CI,
 			timeout: 30000
 		}
