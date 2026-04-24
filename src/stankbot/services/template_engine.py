@@ -142,9 +142,11 @@ def render_embed(
     if color := _parse_color(raw_color):
         embed.color = color
     if thumbnail := template.get("thumbnail"):
-        embed.set_thumbnail(url=sub(str(thumbnail), ctx))
+        if resolved := sub(str(thumbnail), ctx):
+            embed.set_thumbnail(url=resolved)
     if image := template.get("image"):
-        embed.set_image(url=sub(str(image), ctx))
+        if resolved := sub(str(image), ctx):
+            embed.set_image(url=resolved)
     if (author := template.get("author")) and isinstance(author, dict):
         name = author.get("name")
         icon = author.get("icon")
