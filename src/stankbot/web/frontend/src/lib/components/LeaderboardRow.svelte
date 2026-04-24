@@ -24,7 +24,7 @@
 	const hasReactionMeta = $derived(row.reactions_in_session !== undefined || row.reactions_in_chain !== undefined);
 
 	const netColor = $derived(net > 0 ? 'text-accent' : net < 0 ? 'text-danger' : 'text-muted');
-	const netLabel = $derived(`${net > 0 ? '+' : ''}${net.toLocaleString()} SP`);
+	const netLabel = $derived(`${net.toLocaleString()}`);
 	const reactionPct = $derived(
 		chainLength > 0 ? Math.round((reactionsInChain / chainLength) * 100) : 0
 	);
@@ -112,7 +112,7 @@
 		{/if}
 	</div>
 	<div class="relative min-w-[4ch] text-right">
-		<span class="text-2xl font-semibold tabular-nums {netColor}" data-testid="net-score">{netLabel}</span>
+		<span class="text-xl font-semibold tabular-nums {netColor}" data-testid="net-score">{netLabel}</span>
 		{#each chips as chip (chip.id)}
 			<PointsDelta
 				delta={chip.delta}
