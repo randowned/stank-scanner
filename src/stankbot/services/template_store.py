@@ -22,6 +22,7 @@ _TEMPLATES_ROOT = Path(os.getenv("TEMPLATES_DIR", "./data/templates"))
 _VALID_TOP_KEYS = frozenset({
     "color",
     "title",
+    "url",
     "description",
     "thumbnail",
     "image",

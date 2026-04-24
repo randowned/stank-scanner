@@ -116,6 +116,7 @@ def render_embed(
 
         {
           "title": str,
+          "url": url-str,
           "description": str,
           "color": "#RRGGBB" | int,
           "thumbnail": url-str,
@@ -134,6 +135,9 @@ def render_embed(
     embed = discord.Embed()
     if title := template.get("title"):
         embed.title = sub(str(title), ctx)
+    if url := template.get("url"):
+        if resolved := sub(str(url), ctx):
+            embed.url = resolved
     if description := template.get("description"):
         embed.description = sub(str(description), ctx)
     raw_color = template.get("color")
