@@ -279,12 +279,30 @@ async def get_roles(
     svc = PermissionService(session)
     role_ids = await svc.list_admin_roles(guild_id)
     global_user_ids = await svc.list_admin_users()
-    names = await player_names_for(session, guild_id, set(global_user_ids))
+
+    bot = getattr(request.app.state, "bot", None)
+    discord_guild = bot.get_guild(guild_id) if bot else None
+
+    role_names: dict[str, str] = {}
+    if discord_guild:
+        for rid in role_ids:
+            role = discord_guild.get_role(rid)
+            if role:
+                role_names[str(rid)] = role.name
+
+    user_names: dict[str, str] = {}
+    if bot:
+        for uid in global_user_ids:
+            user = bot.get_user(uid)
+            if user:
+                user_names[str(uid)] = user.name
+
     return MsgPackResponse(
         {
             "role_ids": [str(r) for r in role_ids],
+            "role_names": role_names,
             "global_user_ids": [str(u) for u in global_user_ids],
-            "names": {str(k): v for k, v in names.items()},
+            "names": user_names,
         },
         request,
     )
@@ -625,6 +643,8 @@ async def save_template(
         raise HTTPException(status_code=400, detail=str(err)) from err
 
     save(key, payload.data)
+    from stankbot.services.settings_service import SettingsService
+    await SettingsService(session).set(guild_id, key, payload.data)
     await audit_repo.append(
         session,
         guild_id=guild_id,

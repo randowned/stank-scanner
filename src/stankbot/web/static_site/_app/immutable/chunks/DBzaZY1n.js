@@ -1,0 +1,1 @@
+import{F as l}from"./t-_7tMcu.js";async function n(a,o){try{return await a()}catch(r){if(o.shouldSwallow&&!o.shouldSwallow(r))throw r;return o.onError?o.onError(r):e(r),o.fallback}}function e(a){a instanceof l?console.warn(`[load] ${a.status} ${a.code}: ${a.message}`):console.warn("[load] unexpected error:",a)}export{n as l};

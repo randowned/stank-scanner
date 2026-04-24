@@ -6,13 +6,30 @@
 	import Button from '$lib/components/Button.svelte';
 	import Select from '$lib/components/Select.svelte';
 	import Textarea from '$lib/components/Textarea.svelte';
-	import Tabs from '$lib/components/Tabs.svelte';
 	import ErrorState from '$lib/components/ErrorState.svelte';
 
 	interface TemplatesDoc {
 		keys: string[];
 		templates: Record<string, Record<string, unknown>>;
 	}
+
+	const TEMPLATE_LABELS: Record<string, string> = {
+		board_embed: 'Board',
+		record_embed: 'Record',
+		chain_break_embed: 'Chain break',
+		new_session_embed: 'New session',
+		cooldown_embed: 'Cooldown',
+		points_embed: 'Points'
+	};
+
+	const KEY_TO_PRESET: Record<string, string> = {
+		board_embed: 'chain_board',
+		record_embed: 'chain_record',
+		chain_break_embed: 'chain_break',
+		new_session_embed: 'session_start',
+		cooldown_embed: 'cooldown',
+		points_embed: 'points'
+	};
 
 	const PRESETS = [
 		{ value: 'chain_board', label: 'Chain board' },
@@ -33,6 +50,7 @@
 	let preset = $state('chain_board');
 	let preview = $state<Record<string, unknown> | null>(null);
 	let previewError = $state<string | null>(null);
+	let activeTab = $state<'edit' | 'preview'>('edit');
 
 	let previewTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -51,6 +69,7 @@
 	function selectKey(k: string) {
 		if (!doc) return;
 		activeKey = k;
+		preset = KEY_TO_PRESET[k] ?? 'chain_board';
 		const tmpl = doc.templates[k] ?? {};
 		jsonText = JSON.stringify(tmpl, null, 2);
 		schedulePreview();
@@ -100,8 +119,8 @@
 		}
 	}
 
-	const tabs = $derived.by(() =>
-		(doc?.keys ?? []).map((k) => ({ value: k, label: k.replace(/_/g, ' ') }))
+	const templateOptions = $derived.by(() =>
+		(doc?.keys ?? []).map((k) => ({ value: k, label: TEMPLATE_LABELS[k] ?? k.replace(/_/g, ' ') }))
 	);
 
 	const previewFields = $derived.by(() => {
@@ -118,28 +137,44 @@
 {#if loadError}
 	<ErrorState message={loadError} onretry={load} />
 {:else if doc}
-	<Tabs {tabs} value={activeKey} onchange={(v) => selectKey(v)} />
+	<div class="mb-4 flex items-center gap-3">
+		<label class="text-sm text-muted shrink-0">Template:</label>
+		<Select
+			value={activeKey}
+			options={templateOptions}
+			onchange={(v) => selectKey(v)}
+		/>
+	</div>
 
-	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-		<Card title="Template JSON">
+	<Card>
+		<div class="flex items-center justify-between mb-4">
+			<div class="flex gap-1 border border-border rounded-md overflow-hidden">
+				<button
+					type="button"
+					class="px-3 py-1.5 text-sm transition-colors {activeTab === 'edit' ? 'bg-accent text-[#1a1425]' : 'text-muted hover:text-text'}"
+					onclick={() => { activeTab = 'edit'; }}
+				>Edit</button>
+				<button
+					type="button"
+					class="px-3 py-1.5 text-sm transition-colors {activeTab === 'preview' ? 'bg-accent text-[#1a1425]' : 'text-muted hover:text-text'}"
+					onclick={() => { activeTab = 'preview'; runPreview(); }}
+				>Preview</button>
+			</div>
+			{#if activeTab === 'preview'}
+				<div class="flex items-center gap-2">
+					<label class="text-sm text-muted">Context:</label>
+					<Select bind:value={preset} options={PRESETS} onchange={() => runPreview()} />
+				</div>
+			{/if}
+		</div>
+
+		{#if activeTab === 'edit'}
 			<Textarea bind:value={jsonText} rows={22} oninput={schedulePreview} />
-			<div class="mt-3 flex items-center gap-2">
-				<Button onclick={save} loading={saving}>Save</Button>
-				<Button variant="secondary" onclick={runPreview}>Preview</Button>
+			<div class="mt-3 flex items-center justify-end gap-3">
 				{#if saveMsg}<span class="text-sm text-muted">{saveMsg}</span>{/if}
+				<Button onclick={save} loading={saving}>Save</Button>
 			</div>
-		</Card>
-
-		<Card title="Preview">
-			<div class="mb-3 flex items-center gap-2">
-				<label class="text-sm text-muted">Context:</label>
-				<Select
-					bind:value={preset}
-					options={PRESETS}
-					onchange={() => runPreview()}
-				/>
-			</div>
-
+		{:else}
 			{#if previewError}
 				<p class="text-sm text-danger">{previewError}</p>
 			{:else if preview}
@@ -170,6 +205,6 @@
 					{/if}
 				</div>
 			{/if}
-		</Card>
-	</div>
+		{/if}
+	</Card>
 {/if}

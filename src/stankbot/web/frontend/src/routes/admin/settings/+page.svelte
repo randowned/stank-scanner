@@ -9,7 +9,6 @@
 	import Toggle from '$lib/components/Toggle.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import ErrorState from '$lib/components/ErrorState.svelte';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	interface SettingsDoc {
@@ -69,14 +68,6 @@
 	// Maintenance
 	let maintenanceEnabled = $state(false);
 	let maintenanceMsg = $state<string | null>(null);
-
-	// Session ops
-	let newSessionOpen = $state(false);
-	let resetOpen = $state(false);
-	let rebuildOpen = $state(false);
-	let resetTyped = $state('');
-	let opsMsg = $state<string | null>(null);
-	let opsBusy = $state(false);
 
 	async function loadSettings() {
 		loadError = null;
@@ -203,46 +194,6 @@
 		}
 	}
 
-	async function runNewSession() {
-		opsBusy = true;
-		opsMsg = null;
-		try {
-			const res = await apiPost<{ new_session_id: number }>('/api/admin/new-session');
-			opsMsg = `Started session ${res.new_session_id}.`;
-		} catch (err) {
-			opsMsg = err instanceof FetchError ? err.message : 'Failed';
-		} finally {
-			opsBusy = false;
-		}
-	}
-
-	async function runReset() {
-		opsBusy = true;
-		opsMsg = null;
-		try {
-			await apiPost('/api/admin/reset', { confirm: 'RESET' });
-			opsMsg = 'Guild state reset.';
-			resetTyped = '';
-		} catch (err) {
-			opsMsg = err instanceof FetchError ? err.message : 'Reset failed';
-		} finally {
-			opsBusy = false;
-		}
-	}
-
-	async function runRebuild() {
-		opsBusy = true;
-		opsMsg = null;
-		try {
-			const res = await apiPost<Record<string, unknown>>('/api/admin/rebuild');
-			opsMsg = `Rebuild complete. ${JSON.stringify(res)}`;
-		} catch (err) {
-			opsMsg = err instanceof FetchError ? err.message : 'Rebuild failed';
-		} finally {
-			opsBusy = false;
-		}
-	}
-
 	onMount(() => {
 		loadSettings();
 		loadAltar();
@@ -261,162 +212,105 @@
 		{/each}
 	</Card>
 {:else}
-	<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-		<div class="space-y-4 min-w-0">
-			<Card title="Altar">
-				{#if !altarLoaded}
-					<p class="text-muted text-sm">Loading…</p>
-				{:else if !altar}
-					<EmptyState
-						icon="🗿"
-						title="No altar configured"
-						message="Pick a channel the bot should watch for stank sticker posts."
-					/>
-				{/if}
-				<FormField label="Channel ID" required hint="Right-click channel in Discord → Copy Channel ID">
-					<Input type="number" bind:value={channelId} placeholder="e.g. 1234567890" />
-				</FormField>
-				<FormField label="Sticker pattern" hint="Substring match, case-insensitive">
-					<Input bind:value={pattern} />
-				</FormField>
-				<FormField
-					label="Reaction emoji"
-					hint="Custom emoji like <:stank:12345> or a unicode emoji. Leave blank to skip reactions."
-				>
-					<Input bind:value={emoji} placeholder="<:stank:1234567890>" />
-				</FormField>
-				<div class="flex gap-2 mt-2">
-					<Button onclick={saveAltar} loading={altarSaving}>{altar ? 'Update' : 'Create'}</Button>
-					{#if altar}
-						<Button variant="danger" onclick={removeAltar}>Remove</Button>
-					{/if}
-				</div>
-				{#if altarMsg}<p class="text-sm text-muted mt-3">{altarMsg}</p>{/if}
-			</Card>
-
-			<Card title="Scoring">
-				{#each INT_KEYS as k (k)}
-					{#if doc.labels[k]}
-						<FormField label={doc.labels[k].title} hint={doc.labels[k].help}>
-							<Input type="number" bind:value={ints[k]} />
-						</FormField>
-					{/if}
-				{/each}
-			</Card>
-
-			<Card title="Behavior">
-				{#each BEHAVIOR_BOOL_KEYS as k (k)}
-					{#if doc.labels[k]}
-						<FormField label={doc.labels[k].title} hint={doc.labels[k].help}>
-							<Toggle bind:checked={bools[k]} label={doc.labels[k].title} />
-						</FormField>
-					{/if}
-				{/each}
-			</Card>
-
-			<Card title="Reset windows">
-				{#each LIST_KEYS as k (k)}
-					{#if doc.labels[k]}
-						<FormField label={doc.labels[k].title} hint="{doc.labels[k].help} (comma-separated)">
-							<Input bind:value={lists[k]} placeholder="0, 6, 12, 18" />
-						</FormField>
-					{/if}
-				{/each}
-			</Card>
-
-			<Card title="Announcements">
-				{#if annError}<p class="text-sm text-danger mb-2">{annError}</p>{/if}
-				<ul class="mb-4 space-y-1">
-					{#each channelIds as id (id)}
-						<li class="flex items-center justify-between text-sm">
-							<span class="font-mono">{id}</span>
-							<button class="text-danger text-sm" onclick={() => removeAnnouncement(id)}>Remove</button>
-						</li>
-					{:else}
-						<li class="text-muted text-sm">No announcement channels configured.</li>
-					{/each}
-				</ul>
-				<FormField label="Add channel ID">
-					<Input bind:value={newChannel} type="number" placeholder="Discord channel ID" />
-				</FormField>
-				<Button onclick={addAnnouncement}>Add</Button>
-			</Card>
-
-			<Card title="Maintenance">
-				<Toggle
-					bind:checked={maintenanceEnabled}
-					label="Maintenance mode"
-					onchange={toggleMaintenance}
+	<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+		<Card title="Altar">
+			{#if !altarLoaded}
+				<p class="text-muted text-sm">Loading…</p>
+			{:else if !altar}
+				<EmptyState
+					icon="🗿"
+					title="No altar configured"
+					message="Pick a channel the bot should watch for stank sticker posts."
 				/>
-				{#if maintenanceMsg}<p class="text-sm text-muted mt-3">{maintenanceMsg}</p>{/if}
-				<p class="text-sm text-muted mt-4">
-					When enabled the bot skips scoring, chain detection, and record updates — messages are
-					still read (so the gateway stays healthy) but no state is mutated. Useful during
-					migrations.
-				</p>
-			</Card>
-
-			<div class="flex items-center gap-3">
-				<Button onclick={saveSettings} loading={saving}>Save settings</Button>
-				{#if saveMsg}<span class="text-sm text-muted">{saveMsg}</span>{/if}
+			{/if}
+			<FormField label="Channel ID" required hint="Right-click channel in Discord → Copy Channel ID">
+				<Input type="number" bind:value={channelId} placeholder="e.g. 1234567890" />
+			</FormField>
+			<FormField label="Sticker pattern" hint="Substring match, case-insensitive">
+				<Input bind:value={pattern} />
+			</FormField>
+			<FormField
+				label="Reaction emoji"
+				hint="Custom emoji like <:stank:12345> or a unicode emoji. Leave blank to skip reactions."
+			>
+				<Input bind:value={emoji} placeholder="<:stank:1234567890>" />
+			</FormField>
+			<div class="flex justify-end gap-2 mt-2">
+				{#if altar}
+					<Button variant="danger" onclick={removeAltar}>Remove</Button>
+				{/if}
+				<Button onclick={saveAltar} loading={altarSaving}>{altar ? 'Update' : 'Create'}</Button>
 			</div>
-		</div>
+			{#if altarMsg}<p class="text-sm text-muted mt-3">{altarMsg}</p>{/if}
+		</Card>
 
-		<aside class="lg:sticky lg:top-4 h-fit space-y-4">
-			<Card title="Session operations">
-				<div class="space-y-3">
-					<div>
-						<Button onclick={() => (newSessionOpen = true)} fullWidth>Start new session</Button>
-						<p class="text-xs text-muted mt-1">Ends the current session; starts a fresh one.</p>
-					</div>
-					<div>
-						<Button variant="danger" onclick={() => (rebuildOpen = true)} fullWidth>Rebuild</Button>
-						<p class="text-xs text-muted mt-1">
-							Replay the event log to recompute totals and records.
-						</p>
-					</div>
-					<div>
-						<label for="reset-typed" class="text-xs text-muted block mb-1">
-							Type RESET to enable
-						</label>
-						<Input id="reset-typed" bind:value={resetTyped} placeholder="RESET" />
-						<Button
-							variant="danger"
-							disabled={resetTyped !== 'RESET' || opsBusy}
-							onclick={() => (resetOpen = true)}
-							fullWidth
-						>
-							Reset everything
-						</Button>
-						<p class="text-xs text-muted mt-1">Deletes all events, chains, and totals. Irreversible.</p>
-					</div>
-				</div>
-				{#if opsMsg}<p class="text-sm text-muted mt-3 break-all">{opsMsg}</p>{/if}
-			</Card>
-		</aside>
+		<Card title="Scoring">
+			{#each INT_KEYS as k (k)}
+				{#if doc.labels[k]}
+					<FormField label={doc.labels[k].title} hint={doc.labels[k].help}>
+						<Input type="number" bind:value={ints[k]} />
+					</FormField>
+				{/if}
+			{/each}
+		</Card>
+
+		<Card title="Behavior">
+			{#each BEHAVIOR_BOOL_KEYS as k (k)}
+				{#if doc.labels[k]}
+					<FormField label={doc.labels[k].title} hint={doc.labels[k].help}>
+						<Toggle bind:checked={bools[k]} label={doc.labels[k].title} />
+					</FormField>
+				{/if}
+			{/each}
+		</Card>
+
+		<Card title="Reset windows">
+			{#each LIST_KEYS as k (k)}
+				{#if doc.labels[k]}
+					<FormField label={doc.labels[k].title} hint="{doc.labels[k].help} (comma-separated)">
+						<Input bind:value={lists[k]} placeholder="0, 6, 12, 18" />
+					</FormField>
+				{/if}
+			{/each}
+		</Card>
+
+		<Card title="Announcements">
+			{#if annError}<p class="text-sm text-danger mb-2">{annError}</p>{/if}
+			<ul class="mb-4 space-y-1">
+				{#each channelIds as id (id)}
+					<li class="flex items-center justify-between text-sm">
+						<span class="font-mono">{id}</span>
+						<button class="text-danger text-sm" onclick={() => removeAnnouncement(id)}>Remove</button>
+					</li>
+				{:else}
+					<li class="text-muted text-sm">No announcement channels configured.</li>
+				{/each}
+			</ul>
+			<FormField label="Add channel ID">
+				<Input bind:value={newChannel} type="number" placeholder="Discord channel ID" />
+			</FormField>
+			<div class="flex justify-end mt-2">
+				<Button onclick={addAnnouncement}>Add</Button>
+			</div>
+		</Card>
+
+		<Card title="Maintenance">
+			<Toggle
+				bind:checked={maintenanceEnabled}
+				label="Maintenance mode"
+				onchange={toggleMaintenance}
+			/>
+			{#if maintenanceMsg}<p class="text-sm text-muted mt-3">{maintenanceMsg}</p>{/if}
+			<p class="text-sm text-muted mt-4">
+				When enabled the bot skips scoring, chain detection, and record updates — messages are
+				still read (so the gateway stays healthy) but no state is mutated. Useful during
+				migrations.
+			</p>
+		</Card>
 	</div>
 
-	<ConfirmDialog
-		bind:open={newSessionOpen}
-		title="End current session?"
-		body="This ends the current session immediately and starts a new one."
-		confirmLabel="Start new session"
-		onconfirm={runNewSession}
-	/>
-	<ConfirmDialog
-		bind:open={resetOpen}
-		title="Irreversible: reset guild state?"
-		body="Deletes events, chains, cooldowns, records, achievements, and totals. Not undoable."
-		confirmLabel="Reset"
-		danger
-		onconfirm={runReset}
-	/>
-	<ConfirmDialog
-		bind:open={rebuildOpen}
-		title="Rebuild state?"
-		body="Re-derives chains, totals, and records from the event log. May take a while on large guilds."
-		confirmLabel="Rebuild"
-		danger
-		onconfirm={runRebuild}
-	/>
+	<div class="flex items-center justify-end gap-3 mt-4">
+		{#if saveMsg}<span class="text-sm text-muted">{saveMsg}</span>{/if}
+		<Button onclick={saveSettings} loading={saving}>Save settings</Button>
+	</div>
 {/if}

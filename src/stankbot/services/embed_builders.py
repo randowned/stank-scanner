@@ -21,12 +21,7 @@ from stankbot.db.models import Altar, Record, RecordScope
 from stankbot.db.repositories import events as events_repo
 from stankbot.db.repositories import players as players_repo
 from stankbot.services.board_renderer import PlayerRow
-from stankbot.services.default_templates import (
-    CHAIN_BREAK_EMBED,
-    COOLDOWN_EMBED,
-    NEW_SESSION_EMBED,
-    RECORD_EMBED,
-)
+from stankbot.services import template_store
 from stankbot.services.template_engine import RenderContext, render_embed
 
 
@@ -135,7 +130,7 @@ def build_record_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(RECORD_EMBED, ctx)
+    return render_embed(template_store.load("record_embed"), ctx)
 
 
 @dataclass(slots=True)
@@ -178,7 +173,7 @@ def build_chain_break_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(CHAIN_BREAK_EMBED, ctx)
+    return render_embed(template_store.load("chain_break_embed"), ctx)
 
 
 def build_cooldown_embed(
@@ -201,7 +196,7 @@ def build_cooldown_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(COOLDOWN_EMBED, ctx)
+    return render_embed(template_store.load("cooldown_embed"), ctx)
 
 
 @dataclass(slots=True)
@@ -255,7 +250,7 @@ def build_new_session_embed(
             "board_url": board_url,
         }
     )
-    return render_embed(NEW_SESSION_EMBED, ctx)
+    return render_embed(template_store.load("new_session_embed"), ctx)
 
 
 # --- data-assembly helpers ------------------------------------------------

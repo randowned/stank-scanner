@@ -9,6 +9,7 @@
 
 	interface RolesDoc {
 		role_ids: string[];
+		role_names: Record<string, string>;
 		global_user_ids: string[];
 		names: Record<string, string>;
 	}
@@ -28,6 +29,7 @@
 
 	async function addRole() {
 		if (!newRole.trim()) return;
+		error = null;
 		try {
 			await apiPost('/api/admin/roles/add', { role_id: Number(newRole) });
 			newRole = '';
@@ -38,6 +40,7 @@
 	}
 
 	async function removeRole(role: string) {
+		error = null;
 		try {
 			await apiPost('/api/admin/roles/remove', { role_id: Number(role) });
 			await load();
@@ -48,6 +51,7 @@
 
 	async function addUser() {
 		if (!newUser.trim()) return;
+		error = null;
 		try {
 			await apiPost('/api/admin/roles/users/add', { user_id: Number(newUser) });
 			newUser = '';
@@ -58,6 +62,7 @@
 	}
 
 	async function removeUser(uid: string) {
+		error = null;
 		try {
 			await apiPost('/api/admin/roles/users/remove', { user_id: Number(uid) });
 			await load();
@@ -79,7 +84,14 @@
 			<ul class="mb-4 space-y-1">
 				{#each doc.role_ids as r (r)}
 					<li class="flex items-center justify-between text-sm">
-						<span class="font-mono">{r}</span>
+						<span>
+							{#if doc.role_names[r]}
+								<span class="font-medium">{doc.role_names[r]}</span>
+								<span class="text-muted font-mono ml-1">#{r}</span>
+							{:else}
+								<span class="font-mono">{r}</span>
+							{/if}
+						</span>
 						<button class="text-danger text-sm" onclick={() => removeRole(r)}>Remove</button>
 					</li>
 				{:else}
@@ -90,7 +102,9 @@
 		<FormField label="Add role ID">
 			<Input bind:value={newRole} type="number" placeholder="Discord role ID" />
 		</FormField>
-		<Button onclick={addRole}>Add</Button>
+		<div class="flex justify-end mt-2">
+			<Button onclick={addRole}>Add</Button>
+		</div>
 	</Card>
 
 	<Card title="Global admin users">
@@ -99,7 +113,12 @@
 				{#each doc.global_user_ids as u (u)}
 					<li class="flex items-center justify-between text-sm">
 						<span>
-							{doc.names[u] ? `${doc.names[u]} [#${u}]` : `#${u}`}
+							{#if doc.names[u]}
+								<span class="font-medium">{doc.names[u]}</span>
+								<span class="text-muted font-mono ml-1">#{u}</span>
+							{:else}
+								<span class="font-mono">{u}</span>
+							{/if}
 						</span>
 						<button class="text-danger text-sm" onclick={() => removeUser(u)}>Remove</button>
 					</li>
@@ -111,6 +130,8 @@
 		<FormField label="Add user ID">
 			<Input bind:value={newUser} type="number" placeholder="Discord user ID" />
 		</FormField>
-		<Button onclick={addUser}>Add</Button>
+		<div class="flex justify-end mt-2">
+			<Button onclick={addUser}>Add</Button>
+		</div>
 	</Card>
 </div>
