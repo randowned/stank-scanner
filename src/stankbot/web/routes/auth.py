@@ -19,9 +19,10 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 
 from stankbot.web.tools import get_config
+from stankbot.web.transport import MsgPackResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 log = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ async def mock_login_get(
 async def mock_login_post(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     """Programmatic mock login for Playwright and testing.
 
     Accepts a JSON body to override the default dev user.
@@ -155,11 +156,11 @@ async def mock_login_post(
     request.session["guild_id"] = int(guild_id)
     request.session["is_global_admin"] = bool(is_global_admin)
     request.session["is_guild_admin"] = bool(is_guild_admin)
-    return JSONResponse({"success": True})
+    return MsgPackResponse({"success": True}, request)
 
 
 @router.get("")
-async def auth_check(request: Request) -> JSONResponse:
+async def auth_check(request: Request) -> MsgPackResponse:
     """Return current user info + admin status, or null if not authenticated."""
     from stankbot.services.permission_service import PermissionService
     from stankbot.web.tools import (
@@ -169,7 +170,7 @@ async def auth_check(request: Request) -> JSONResponse:
 
     user = current_user(request)
     if user is None:
-        return JSONResponse(None)
+        return MsgPackResponse(None, request)
 
     config = request.app.state.config
     guild_id = get_active_guild_id(request)
@@ -197,7 +198,7 @@ async def auth_check(request: Request) -> JSONResponse:
         is_global_admin = request.session.get("is_global_admin", True)
         is_guild_admin = request.session.get("is_guild_admin", True)
 
-    return JSONResponse(
+    return MsgPackResponse(
         {
             "user": {
                 "id": str(user["id"]),
@@ -208,7 +209,8 @@ async def auth_check(request: Request) -> JSONResponse:
             "guild_name": guild_name,
             "is_admin": is_global_admin or is_guild_admin,
             "is_global_admin": is_global_admin,
-        }
+        },
+        request,
     )
 
 

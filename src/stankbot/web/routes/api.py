@@ -6,7 +6,6 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.web.tools import (
@@ -23,15 +22,15 @@ log = logging.getLogger(__name__)
 
 
 @router.get("/ping")
-async def ping() -> JSONResponse:
-    return JSONResponse({"status": "ok"})
+async def ping(request: Request) -> MsgPackResponse:
+    return MsgPackResponse({"status": "ok"}, request)
 
 
 @router.get("/api/guilds")
 async def api_guilds(
     request: Request,
     user: dict = Depends(require_global_admin),
-) -> JSONResponse:
+) -> MsgPackResponse:
     """Return bot guilds for global admins (guild switcher)."""
     from stankbot.web.tools import _is_owner, get_active_guild_id
 
@@ -58,7 +57,7 @@ async def api_guilds(
         })
 
     results.sort(key=lambda g: (not g["is_active"], g["name"].lower()))
-    return JSONResponse(results)
+    return MsgPackResponse(results, request)
 
 
 @router.get("/api/board")
@@ -160,7 +159,7 @@ async def api_player(
 
     player = await players_repo.get(session, guild_id, uid)
     if player is None:
-        return JSONResponse({"error": "Player not found"}, status_code=404)
+        return MsgPackResponse({"error": "Player not found"}, request, status_code=404)
 
     summary = await history_service.user_summary(session, guild_id, uid)
     badge_keys = await achievements_svc.badges_for(session, guild_id, uid)
@@ -207,7 +206,7 @@ async def api_players_batch(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict = Depends(require_guild_member),
-) -> JSONResponse:
+) -> MsgPackResponse:
     from stankbot.db.repositories import players as players_repo
 
     user_ids: list[int] = []
@@ -223,8 +222,9 @@ async def api_players_batch(
             break
 
     names = await players_repo.display_names(session, guild_id, user_ids)
-    return JSONResponse(
-        [{"user_id": str(uid), "display_name": names.get(uid, str(uid))} for uid in user_ids]
+    return MsgPackResponse(
+        [{"user_id": str(uid), "display_name": names.get(uid, str(uid))} for uid in user_ids],
+        request,
     )
 
 
@@ -236,7 +236,7 @@ async def api_player_history(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict = Depends(require_guild_member),
-) -> JSONResponse:
+) -> MsgPackResponse:
     from datetime import timedelta
 
     from sqlalchemy import case, func, select
@@ -295,7 +295,7 @@ async def api_player_history(
         rows = []
 
     series = [{"day": str(r[0]), "sp": int(r[1] or 0), "pp": int(r[2] or 0)} for r in rows]
-    return JSONResponse({"user_id": str(uid), "window_days": days, "series": series})
+    return MsgPackResponse({"user_id": str(uid), "window_days": days, "series": series}, request)
 
 
 @router.get("/api/achievements")
@@ -305,7 +305,7 @@ async def api_achievements(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict = Depends(require_guild_member),
-) -> JSONResponse:
+) -> MsgPackResponse:
     from stankbot.services import achievements as achievements_svc
 
     unlocked: set[str] = set()
@@ -326,7 +326,7 @@ async def api_achievements(
         }
         for row in achievements_svc.catalog_rows()
     ]
-    return JSONResponse({"achievements": catalog})
+    return MsgPackResponse({"achievements": catalog}, request)
 
 
 
@@ -337,7 +337,7 @@ async def api_chain(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict = Depends(require_guild_member),
-) -> JSONResponse:
+) -> MsgPackResponse:
     from stankbot.db.repositories import events as events_repo
     from stankbot.db.repositories import players as players_repo
     from stankbot.db.repositories import reaction_awards as reaction_awards_repo
@@ -346,7 +346,7 @@ async def api_chain(
 
     summary = await history_service.chain_summary(session, guild_id, chain_id)
     if summary is None:
-        return JSONResponse({"error": "Chain not found"}, status_code=404)
+        return MsgPackResponse({"error": "Chain not found"}, request, status_code=404)
 
     # If the chain is still open but its originating session has since ended,
     # point the back-link at the current active session instead.
@@ -381,7 +381,7 @@ async def api_chain(
         for uid, sp, pp in lb_rows
     ]
 
-    return JSONResponse(
+    return MsgPackResponse(
         {
             "chain_id": summary.chain_id,
             "session_id": effective_session_id,
@@ -395,7 +395,8 @@ async def api_chain(
             "contributors": [[str(uid), count] for uid, count in summary.contributors],
             "total_reactions": total_reactions,
             "leaderboard": leaderboard,
-        }
+        },
+        request,
     )
 
 
@@ -405,7 +406,7 @@ async def api_sessions(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict = Depends(require_guild_member),
-) -> JSONResponse:
+) -> MsgPackResponse:
     from sqlalchemy import case, func, select
 
     from stankbot.db.models import Event, EventType
@@ -469,7 +470,7 @@ async def api_session(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict = Depends(require_guild_member),
-) -> JSONResponse:
+) -> MsgPackResponse:
     from sqlalchemy import func, select
 
     from stankbot.db.models import Chain, Event, EventType
@@ -478,7 +479,7 @@ async def api_session(
 
     summary = await history_service.session_summary(session, guild_id, session_id)
     if summary is None:
-        return JSONResponse({"error": "Session not found"}, status_code=404)
+        return MsgPackResponse({"error": "Session not found"}, request, status_code=404)
 
     # Include chains started in this session OR chains that have events in this
     # session (cross-session-boundary chains that survived a reset).
@@ -545,7 +546,7 @@ async def api_session(
         name_ids.append(int(summary.top_breaker[0]))
     name_map = await players_repo.display_names(session, guild_id, name_ids) if name_ids else {}
 
-    return JSONResponse(
+    return MsgPackResponse(
         {
             "session_id": summary.session_id,
             "started_at": summary.started_at.isoformat() if summary.started_at else None,
@@ -558,5 +559,6 @@ async def api_session(
             "total_reactions": total_reactions,
             "names": {str(uid): name for uid, name in name_map.items()},
             "chains": chains_payload,
-        }
+        },
+        request,
     )

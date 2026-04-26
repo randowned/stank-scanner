@@ -9,12 +9,12 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
 
 from stankbot.db.engine import session_scope
 from stankbot.db.models import SessionEndReason
 from stankbot.services.session_service import SessionService
 from stankbot.web.tools import get_config
+from stankbot.web.transport import MsgPackResponse
 
 router = APIRouter(prefix="/api/mock", tags=["mock"])
 log = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def _get_generator(request: Request):
 async def mock_stank(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     guild_id = body.get("guild_id", config.mock_default_guild_id or config.default_guild_id)
@@ -68,14 +68,14 @@ async def mock_stank(
     bridge = _get_bridge(request)
     await bridge.ensure_guild(guild_id)
     result = await bridge.inject_stank(guild_id, user_id, display_name)
-    return JSONResponse(result)
+    return MsgPackResponse(result, request)
 
 
 @router.post("/break")
 async def mock_break(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     guild_id = body.get("guild_id", config.mock_default_guild_id or config.default_guild_id)
@@ -85,14 +85,14 @@ async def mock_break(
     bridge = _get_bridge(request)
     await bridge.ensure_guild(guild_id)
     result = await bridge.inject_break(guild_id, user_id, display_name)
-    return JSONResponse(result)
+    return MsgPackResponse(result, request)
 
 
 @router.post("/reaction")
 async def mock_reaction(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     guild_id = body.get("guild_id", config.mock_default_guild_id or config.default_guild_id)
@@ -103,14 +103,14 @@ async def mock_reaction(
     bridge = _get_bridge(request)
     await bridge.ensure_guild(guild_id)
     result = await bridge.inject_reaction(guild_id, message_id, user_id, sticker_id)
-    return JSONResponse(result)
+    return MsgPackResponse(result, request)
 
 
 @router.post("/noise")
 async def mock_noise(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     guild_id = body.get("guild_id", config.mock_default_guild_id or config.default_guild_id)
@@ -120,14 +120,14 @@ async def mock_noise(
     bridge = _get_bridge(request)
     await bridge.ensure_guild(guild_id)
     result = await bridge.inject_noise(guild_id, user_id, display_name)
-    return JSONResponse(result)
+    return MsgPackResponse(result, request)
 
 
 @router.post("/session/start")
 async def mock_session_start(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     guild_id = body.get("guild_id", config.mock_default_guild_id or config.default_guild_id)
@@ -135,14 +135,14 @@ async def mock_session_start(
     async with session_scope(request.app.state.session_factory) as session:
         svc = SessionService(session)
         session_id = await svc.start(guild_id)
-    return JSONResponse({"session_id": session_id})
+    return MsgPackResponse({"session_id": session_id}, request)
 
 
 @router.post("/session/end")
 async def mock_session_end(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     guild_id = body.get("guild_id", config.mock_default_guild_id or config.default_guild_id)
@@ -150,14 +150,14 @@ async def mock_session_end(
     async with session_scope(request.app.state.session_factory) as session:
         svc = SessionService(session)
         ended_id, new_id = await svc.end_session(guild_id, reason=SessionEndReason.MANUAL)
-    return JSONResponse({"ended_session_id": ended_id, "new_session_id": new_id})
+    return MsgPackResponse({"ended_session_id": ended_id, "new_session_id": new_id}, request)
 
 
 @router.post("/random/start")
 async def mock_random_start(
     request: Request,
     config=Depends(get_config),
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     interval = body.get("interval", config.mock_auto_events_interval)
@@ -167,38 +167,38 @@ async def mock_random_start(
     gen.guild_id = guild_id
     gen.interval = interval
     await gen.start()
-    return JSONResponse({"status": "started", "interval": interval, "guild_id": guild_id})
+    return MsgPackResponse({"status": "started", "interval": interval, "guild_id": guild_id}, request)
 
 
 @router.post("/random/stop")
 async def mock_random_stop(
     request: Request,
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     gen = _get_generator(request)
     await gen.stop()
-    return JSONResponse({"status": "stopped"})
+    return MsgPackResponse({"status": "stopped"}, request)
 
 
 @router.post("/bot-guilds")
 async def mock_set_bot_guilds(
     request: Request,
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     body = await request.json()
     request.app.state.bot_guilds = body.get("guilds", [])
-    return JSONResponse({"ok": True})
+    return MsgPackResponse({"ok": True}, request)
 
 
 @router.get("/state")
 async def mock_state(
     request: Request,
-) -> JSONResponse:
+) -> MsgPackResponse:
     _dev_only(request)
     gen = getattr(request.app.state, "_mock_event_generator", None)
     running = gen is not None and gen._task is not None and not gen._task.done()
-    return JSONResponse({
+    return MsgPackResponse({
         "running": running,
         "interval": getattr(gen, "interval", None) if gen else None,
         "guild_id": getattr(gen, "guild_id", None) if gen else None,
-    })
+    }, request)

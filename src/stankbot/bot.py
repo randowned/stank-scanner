@@ -120,18 +120,19 @@ class StankBot(commands.Bot):
                 self._bot_guilds = []
             else:
                 guilds_data: list[dict[str, object]] = resp.json()
-                self._bot_guilds = [
+                self._bot_guilds.clear()
+                self._bot_guilds.extend(
                     {
                         "id": int(g["id"]),
                         "name": str(g.get("name", "")),
                         "icon": g.get("icon"),
                     }
                     for g in guilds_data
-                ]
+                )
                 log.info("Loaded %d bot guilds", len(self._bot_guilds))
         except Exception:
             log.exception("error loading bot guilds")
-            self._bot_guilds = []
+            self._bot_guilds.clear()
         finally:
             self._guilds_loaded.set()
 

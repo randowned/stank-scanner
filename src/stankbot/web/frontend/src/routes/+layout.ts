@@ -13,7 +13,7 @@ interface AuthResponse {
 // Module-level cache — lives for the lifetime of the SPA tab.
 // Only refetched on full page load (login, logout, guild switch).
 let authCache: AuthResponse | null = null;
-let guildsCache: GuildInfo[] = [];
+let guildsCache: GuildInfo[] | null = null;
 
 export const load: LayoutLoad = async ({ fetch, url }) => {
 	try {
@@ -23,7 +23,7 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 				authCache = await authRes.json();
 			} else {
 				authCache = null;
-				guildsCache = [];
+				guildsCache = null;
 			}
 		}
 
@@ -34,11 +34,12 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 			throw redirect(303, '/');
 		}
 
-		if (auth?.is_global_admin && !guildsCache.length) {
+		if (auth?.is_global_admin && guildsCache === null) {
 			const guildsRes = await fetch('/api/guilds');
 			if (guildsRes.ok) {
-				const guilds = await guildsRes.json();
-				if (guilds.length) guildsCache = guilds;
+				guildsCache = await guildsRes.json();
+			} else {
+				guildsCache = [];
 			}
 		}
 
@@ -48,7 +49,7 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 			guild_name: auth?.guild_name ?? null,
 			is_admin: auth?.is_admin ?? false,
 			is_global_admin: auth?.is_global_admin ?? false,
-			guilds: guildsCache
+			guilds: guildsCache ?? []
 		};
 	} catch (e) {
 		if (e && typeof e === 'object' && 'status' in e) throw e;
