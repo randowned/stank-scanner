@@ -9,7 +9,8 @@
 		toasts,
 		removeToast,
 		addToast,
-		lastWsEvent
+		lastWsEvent,
+		adminSidebarOpen
 	} from '$lib/stores';
 	import type { WsEvent } from '$lib/stores';
 	import { page } from '$app/stores';
@@ -103,10 +104,22 @@
 	<!-- Header (single row) -->
 	<header class="sticky top-0 z-40 bg-panel border-b border-border">
 		<div class="flex items-center justify-between px-4 py-3 gap-3">
-			<a href="{base}/" class="flex items-center gap-2 shrink-0">
-				<img src="/stank.gif" alt="Stank" class="w-6 h-6" />
-				<span class="font-semibold text-text">StankBot</span>
-			</a>
+			<div class="flex items-center gap-2 shrink-0">
+				{#if isAdminRoute}
+					<button
+						type="button"
+						class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-text hover:bg-border/50 transition-colors"
+						onclick={() => adminSidebarOpen.update(v => !v)}
+						aria-label="Toggle admin menu"
+					>
+						<span class="text-lg">☰</span>
+					</button>
+				{/if}
+				<a href="{base}/" class="flex items-center gap-2 shrink-0">
+					<img src="/stank.gif" alt="Stank" class="w-6 h-6" />
+					<span class="font-semibold text-text">StankBot</span>
+				</a>
+			</div>
 
 			<div class="flex items-center gap-2 shrink-0">
 				<LiveBadge disabled={!$user} />

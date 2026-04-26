@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
+	import { adminSidebarOpen } from '$lib/stores';
 	import type { Snippet } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -17,35 +18,46 @@
 
 	let sidebarOpen = $state(false);
 	const currentPath = $derived($page.url.pathname);
+
+	$effect(() => {
+		adminSidebarOpen.subscribe((v) => {
+			sidebarOpen = v;
+		});
+	});
+
+	function toggleSidebar() {
+		adminSidebarOpen.update((v) => !v);
+	}
 </script>
 
-<div class="flex min-h-[calc(100vh-120px)]">
+{#if sidebarOpen}
 	<button
 		type="button"
-		class="md:hidden fixed bottom-4 right-4 z-30 bg-accent text-[#1a1425] rounded-full w-12 h-12 shadow-lg flex items-center justify-center text-xl"
-		onclick={() => (sidebarOpen = !sidebarOpen)}
-		aria-label="Toggle admin menu"
-	>{sidebarOpen ? '×' : '☰'}</button>
+		class="md:hidden fixed inset-0 z-20 bg-black/60"
+		onclick={() => adminSidebarOpen.set(false)}
+		aria-label="Close menu"
+	></button>
+{/if}
 
-	{#if sidebarOpen}
-		<div
-			class="md:hidden fixed inset-0 z-20 bg-black/60"
-			onclick={() => (sidebarOpen = false)}
-			onkeydown={(e) => e.key === 'Escape' && (sidebarOpen = false)}
-			role="presentation"
-		></div>
-	{/if}
-
+<div class="flex min-h-[calc(100vh-57px)]">
 	<aside
-		class="bg-panel border-r border-border p-3 w-56 shrink-0 fixed md:static top-[57px] md:top-0 bottom-0 left-0 z-20 overflow-y-auto transition-transform
+		class="bg-panel border-r border-border p-3 w-56 shrink-0 fixed md:static top-[57px] md:top-0 bottom-0 left-0 z-30 overflow-y-auto transition-transform
 			{sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}"
 	>
+		<button
+			type="button"
+			class="md:hidden absolute top-1 right-1 w-8 h-8 -m-1 flex items-center justify-center rounded-md text-muted hover:text-text hover:bg-border/50 transition-colors"
+			onclick={() => adminSidebarOpen.set(false)}
+			aria-label="Close menu"
+		>
+			<span class="text-xl leading-none">×</span>
+		</button>
 		<div class="text-xs uppercase tracking-wide text-muted mb-2 px-2">Admin</div>
 		<nav class="flex flex-col gap-1">
 			{#each sections as s (s.href)}
 				<a
 					href={s.href}
-					onclick={() => (sidebarOpen = false)}
+					onclick={() => adminSidebarOpen.set(false)}
 					class="flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors
 						{currentPath === s.href ? 'bg-accent text-[#1a1425]' : 'text-muted hover:text-text hover:bg-border/40'}"
 				>
