@@ -197,6 +197,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             guild_name = await guild_name_for(db, guild_id)
             state = await get_board_state(db, guild_id, guild_name)
         if state:
+            state["version"] = getattr(app_state, "app_version", "0.0.0")
             packed = msgpack.packb({"t": 101, "d": state}, use_single_float=True)
             await websocket.send_bytes(packed)
     except Exception as e:
@@ -207,8 +208,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             try:
                 data = await websocket.receive_bytes()
                 msg = msgpack.unpackb(data, raw=False)
-                if msg.get("t") == 2:
+                msg_type = msg.get("t")
+                if msg_type == 2:
                     await websocket.send_bytes(msgpack.packb({"t": 104}))
+                elif msg_type == 3:
+                    client_version = msg.get("d", {}).get("version", "")
+                    server_version = getattr(app_state, "app_version", "0.0.0")
+                    if client_version != server_version:
+                        await websocket.send_bytes(
+                            msgpack.packb(
+                                {"t": 108, "d": {"server_version": server_version, "client_version": client_version}},
+                                use_single_float=True,
+                            )
+                        )
             except WebSocketDisconnect:
                 break
             except Exception as e:

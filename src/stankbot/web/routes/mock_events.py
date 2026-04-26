@@ -202,3 +202,15 @@ async def mock_state(
         "interval": getattr(gen, "interval", None) if gen else None,
         "guild_id": getattr(gen, "guild_id", None) if gen else None,
     }, request)
+
+
+@router.post("/version")
+async def mock_set_version(
+    request: Request,
+) -> MsgPackResponse:
+    """Override the server version for testing version mismatch notifications."""
+    _dev_only(request)
+    body = await request.json()
+    version = body.get("version", "0.0.0")
+    request.app.state.app_version = version
+    return MsgPackResponse({"version": version}, request)

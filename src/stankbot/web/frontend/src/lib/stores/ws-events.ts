@@ -15,7 +15,8 @@ export type WsEvent =
 	| { kind: 'reconnect-failed' }
 	| { kind: 'error'; code: string; message: string }
 	| { kind: 'achievement'; userId: string; badge: Badge }
-	| { kind: 'session'; action: 'start' | 'end'; sessionId: number };
+	| { kind: 'session'; action: 'start' | 'end'; sessionId: number }
+	| { kind: 'update-available'; serverVersion: string; clientVersion: string };
 
 /** Latest event; subscribers react on change. `null` between events. */
 export const lastWsEvent: Writable<WsEvent | null> = writable(null);

@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import secrets
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -47,6 +48,11 @@ def build_app(
     )
     app.add_middleware(SessionMiddleware, secret_key=secret, same_site="lax")
 
+    try:
+        app.state.app_version = pkg_version("stankbot")
+    except Exception:
+        app.state.app_version = "0.0.0"
+
     app.state.config = config
     app.state.engine = engine
     app.state.session_factory = session_factory
@@ -64,6 +70,10 @@ def build_app(
     @app.get("/healthz", include_in_schema=False)
     async def _healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})
+
+    @app.get("/api/version", include_in_schema=False)
+    async def _version() -> JSONResponse:
+        return JSONResponse({"version": app.state.app_version})
 
     if config.env == "dev-mock":
         from stankbot.web.routes import mock_events

@@ -26,6 +26,8 @@
 	const guildList = $derived((data.guilds as GuildInfo[] | undefined) ?? []);
 	const isAdmin = $derived(Boolean(data.is_admin));
 
+	let updateToast = $state<{ serverVersion: string; clientVersion: string } | null>(null);
+
 	$effect(() => {
 		user.set(userData);
 		guildId.set(guildIdData);
@@ -66,12 +68,19 @@
 					'info'
 				);
 				break;
+			case 'update-available':
+				updateToast = { serverVersion: event.serverVersion, clientVersion: event.clientVersion };
+				break;
 			case 'connected':
 			case 'reconnect-failed':
 			case 'disconnected':
 				// LiveBadge surfaces transport state — no toast.
 				break;
 		}
+	}
+
+	function reloadPage(): void {
+		window.location.reload();
 	}
 
 	void browser;
@@ -151,6 +160,26 @@
 					</div>
 				</div>
 			{/each}
+		</div>
+	{/if}
+
+	<!-- Update available toast (persistent, bottom-center) -->
+	{#if updateToast}
+		<div
+			class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[61] pointer-events-auto"
+			data-testid="update-toast"
+			role="alert"
+		>
+			<div class="flex items-center gap-3 px-5 py-3 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg">
+				<span>A new version is available.</span>
+				<button
+					onclick={reloadPage}
+					class="px-3 py-1 rounded-md bg-bg/20 hover:bg-bg/30 font-semibold text-sm transition-colors"
+					data-testid="update-reload-btn"
+				>
+					Reload
+				</button>
+			</div>
 		</div>
 	{/if}
 </div>

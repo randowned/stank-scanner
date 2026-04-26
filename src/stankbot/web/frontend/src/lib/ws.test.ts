@@ -6,10 +6,12 @@ describe('WebSocket Client', () => {
 		it('should have correct client message types', () => {
 			const MsgType = {
 				SUBSCRIBE: 1,
-				PING: 2
+				PING: 2,
+				VERSION_RESPONSE: 3
 			};
 			expect(MsgType.SUBSCRIBE).toBe(1);
 			expect(MsgType.PING).toBe(2);
+			expect(MsgType.VERSION_RESPONSE).toBe(3);
 		});
 
 		it('should have correct server message types', () => {
@@ -20,7 +22,8 @@ describe('WebSocket Client', () => {
 				PONG: 104,
 				ACHIEVEMENT: 105,
 				SESSION: 106,
-				ERROR: 107
+				ERROR: 107,
+				VERSION_MISMATCH: 108
 			};
 			expect(MsgType.STATE).toBe(101);
 			expect(MsgType.RANK_UPDATE).toBe(102);
@@ -29,6 +32,7 @@ describe('WebSocket Client', () => {
 			expect(MsgType.ACHIEVEMENT).toBe(105);
 			expect(MsgType.SESSION).toBe(106);
 			expect(MsgType.ERROR).toBe(107);
+			expect(MsgType.VERSION_MISMATCH).toBe(108);
 		});
 	});
 

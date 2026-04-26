@@ -7,8 +7,11 @@ import { get } from 'svelte/store';
 
 const packr = new Packr({ useRecords: false });
 
+const VERSION_KEY = 'stankbot:version';
+
 export enum MsgType {
 	PING = 2,
+	VERSION_RESPONSE = 3,
 
 	STATE = 101,
 	RANK_UPDATE = 102,
@@ -16,16 +19,22 @@ export enum MsgType {
 	PONG = 104,
 	ACHIEVEMENT = 105,
 	SESSION = 106,
-	ERROR = 107
+	ERROR = 107,
+	VERSION_MISMATCH = 108
 }
 
 interface PingMsg {
 	t: typeof MsgType.PING;
 }
 
+interface VersionResponseMsg {
+	t: typeof MsgType.VERSION_RESPONSE;
+	d: { version: string };
+}
+
 interface StateMsg {
 	t: typeof MsgType.STATE;
-	d: BoardState;
+	d: BoardState & { version?: string };
 }
 
 interface RankUpdateMsg {
@@ -77,15 +86,31 @@ interface ErrorMsg {
 	};
 }
 
-type ServerMsg = StateMsg | RankUpdateMsg | ChainUpdateMsg | PongMsg | AchievementMsg | SessionMsg | ErrorMsg;
+interface VersionMismatchMsg {
+	t: typeof MsgType.VERSION_MISMATCH;
+	d: {
+		server_version: string;
+		client_version: string;
+	};
+}
+
+type ServerMsg =
+	| StateMsg
+	| RankUpdateMsg
+	| ChainUpdateMsg
+	| PongMsg
+	| AchievementMsg
+	| SessionMsg
+	| ErrorMsg
+	| VersionMismatchMsg;
 
 let ws: WebSocket | null = null;
 let pingInterval: ReturnType<typeof setInterval> | null = null;
 let lastPingTime = 0;
 let reconnectAttempts = 0;
 let intentionalClose = false;
-const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 1000;
+const MAX_BACKOFF = 30000;
 
 export function canConnect(): boolean {
 	return typeof WebSocket !== 'undefined' && typeof window !== 'undefined';
@@ -95,6 +120,22 @@ function defaultUrl(): string {
 	const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 	const host = window.location.host;
 	return `${protocol}//${host}${base}/ws`;
+}
+
+export function getStoredVersion(): string {
+	try {
+		return localStorage.getItem(VERSION_KEY) ?? '';
+	} catch {
+		return '';
+	}
+}
+
+export function setStoredVersion(version: string): void {
+	try {
+		if (version) localStorage.setItem(VERSION_KEY, version);
+	} catch {
+		// localStorage unavailable — ignore
+	}
 }
 
 export function connect(url?: string): void {
@@ -166,14 +207,14 @@ export function disconnect(): void {
 	connectionStatus.set('disconnected');
 }
 
-function _sendPacked(msg: PingMsg): void {
+function _sendPacked(msg: PingMsg | VersionResponseMsg): void {
 	if (ws?.readyState !== WebSocket.OPEN) {
 		return;
 	}
 	const packed = packr.pack(msg) as Uint8Array;
 	const buf = packed.buffer.slice(
 		packed.byteOffset,
-		packed.byteOffset + packed.byteLength,
+		packed.byteOffset + packed.byteLength
 	) as ArrayBuffer;
 	ws.send(buf);
 }
@@ -194,13 +235,8 @@ function stopPingLoop(): void {
 }
 
 function attemptReconnect(): void {
-	if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-		emitWsEvent({ kind: 'reconnect-failed' });
-		return;
-	}
-
 	reconnectAttempts++;
-	const delay = RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1);
+	const delay = Math.min(RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), MAX_BACKOFF);
 
 	setTimeout(() => {
 		const currentStatus = get(connectionStatus);
@@ -212,9 +248,15 @@ function attemptReconnect(): void {
 
 function handleMessage(msg: ServerMsg): void {
 	switch (msg.t) {
-		case MsgType.STATE:
+		case MsgType.STATE: {
 			boardState.set(msg.d);
+			const serverVersion = msg.d.version;
+			if (serverVersion) {
+				const clientVersion = getStoredVersion();
+				_sendPacked({ t: MsgType.VERSION_RESPONSE, d: { version: clientVersion } });
+			}
 			break;
+		}
 
 		case MsgType.RANK_UPDATE:
 			boardState.update((state) => {
@@ -255,6 +297,15 @@ function handleMessage(msg: ServerMsg): void {
 
 		case MsgType.ERROR:
 			emitWsEvent({ kind: 'error', code: msg.d.code, message: msg.d.message });
+			break;
+
+		case MsgType.VERSION_MISMATCH:
+			setStoredVersion(msg.d.server_version);
+			emitWsEvent({
+				kind: 'update-available',
+				serverVersion: msg.d.server_version,
+				clientVersion: msg.d.client_version
+			});
 			break;
 	}
 }
