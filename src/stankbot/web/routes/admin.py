@@ -420,6 +420,56 @@ async def get_audit(
 
 
 # ---------------------------------------------------------------------------
+# Game events log (paginated)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/events")
+async def get_events(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    guild_id: int = Depends(get_active_guild_id),
+    _admin: dict = Depends(require_guild_admin),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    q: str | None = Query(None),
+) -> MsgPackResponse:
+    from stankbot.db.models import Event
+    from stankbot.web.tools import player_names_for
+
+    stmt = select(Event).where(Event.guild_id == guild_id)
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            Event.type.ilike(pattern)
+            | Event.reason.ilike(pattern)
+        )
+    stmt = stmt.order_by(Event.id.desc()).offset(offset).limit(limit)
+    entries = list((await session.execute(stmt)).scalars().all())
+
+    user_ids = {e.user_id for e in entries if e.user_id is not None}
+    names = await player_names_for(session, guild_id, user_ids)
+
+    def to_dict(e: Event) -> dict[str, Any]:
+        return {
+            "id": e.id,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "type": e.type,
+            "user_id": str(e.user_id) if e.user_id is not None else None,
+            "user_name": names.get(e.user_id) if e.user_id is not None else None,
+            "delta": e.delta,
+            "reason": e.reason,
+            "chain_id": e.chain_id,
+            "message_id": str(e.message_id) if e.message_id is not None else None,
+        }
+
+    return MsgPackResponse(
+        {"entries": [to_dict(e) for e in entries], "limit": limit, "offset": offset},
+        request,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Announcements
 # ---------------------------------------------------------------------------
 

@@ -12,6 +12,7 @@
 		{ href: `${base}/admin/templates`, label: 'Templates', icon: '📝' },
 		{ href: `${base}/admin/admins`, label: 'Admins', icon: '👥' },
 		{ href: `${base}/admin/audit`, label: 'Audit log', icon: '📋' },
+		{ href: `${base}/admin/events`, label: 'Events', icon: '📜' },
 		{ href: `${base}/admin/sessions`, label: 'Sessions', icon: '🔄' },
 		{ href: `${base}/admin/settings`, label: 'Settings', icon: '⚙️' }
 	];

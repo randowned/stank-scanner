@@ -93,7 +93,6 @@ class ChainListener(commands.Cog):
         async with self.bot.db() as session:
             altar = await altars_repo.for_guild(session, message.guild.id)
             if altar is None:
-                log.info("on_message: no altar configured guild=%d", message.guild.id)
                 return
             if altar.channel_id != message.channel.id:
                 return
@@ -122,14 +121,6 @@ class ChainListener(commands.Cog):
             result = await chain_svc.process(stank_input, config)
 
             if result.outcome == ChainOutcome.VALID_STANK:
-                log.info(
-                    "valid stank guild=%d altar=%d user=%d length=%d maintenance=%s",
-                    message.guild.id,
-                    altar.id,
-                    message.author.id,
-                    result.chain_length,
-                    maintenance,
-                )
                 if not maintenance:
                     await self._auto_react(message, altar)
                 if _V2_NOTIFICATIONS_AVAILABLE and not maintenance:
@@ -154,15 +145,6 @@ class ChainListener(commands.Cog):
                 return
 
             if result.outcome == ChainOutcome.CHAIN_BREAK:
-                log.info(
-                    "chain broken guild=%d altar=%d breaker=%d length=%d pp=%d maintenance=%s",
-                    message.guild.id,
-                    altar.id,
-                    message.author.id,
-                    result.broken_length,
-                    result.pp_awarded,
-                    maintenance,
-                )
                 if not maintenance:
                     await self._post_chain_break(session, message, altar, result)
                     if result.record_broken or result.alltime_record_broken:
