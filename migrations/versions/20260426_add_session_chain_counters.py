@@ -1,7 +1,7 @@
 """Add session counters to player_totals and create player_chain_totals table.
 
 Revision ID: add_session_chain_counters
-Revises: b1a2c3d4e5f6
+Revises: c0d3f4e5a6b7
 Create Date: 2026-04-26 12:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision = "add_session_chain_counters"
-down_revision = "b1a2c3d4e5f6"
+down_revision = "c0d3f4e5a6b7"
 branch_labels = None
 depends_on = None
 
