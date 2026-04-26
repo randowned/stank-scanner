@@ -59,7 +59,7 @@ def _is_stank_message(message: discord.Message, altar: Altar) -> bool:
     pattern = (altar.sticker_name_pattern or "").lower()
     if not pattern:
         return False
-    return any(pattern in (s.name or "").lower() for s in message.stickers)
+    return any(pattern == (s.name or "").lower() for s in message.stickers)
 
 
 def _is_altar_reaction(emoji: discord.PartialEmoji, altar: Altar) -> bool:

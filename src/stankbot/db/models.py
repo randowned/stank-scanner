@@ -182,7 +182,7 @@ class Altar(Base):
     # Optional exact-sticker snowflake (kept for thumbnail rendering only).
     # Matching happens by name.
     sticker_id: Mapped[int | None] = mapped_column(BigInteger)
-    # Substring matched (case-insensitive) against incoming sticker names.
+    # Exact-match (case-insensitive) against incoming sticker names.
     sticker_name_pattern: Mapped[str] = mapped_column(
         String(120), nullable=False, default="stank", server_default="stank"
     )

@@ -774,8 +774,8 @@ class StankAdmin(commands.GroupCog, name="stank-admin"):
     @app_commands.describe(
         channel="Altar channel",
         sticker_name=(
-            "Substring matched against sticker names (case-insensitive). "
-            "E.g. 'stank' matches any sticker whose name contains 'stank'."
+            "Exact sticker name to match (case-insensitive). "
+            "E.g. 'stank' matches only a sticker named 'stank'."
         ),
         reaction_emoji=(
             "Emoji the bot reacts with + awards a bonus for. Also used "
