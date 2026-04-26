@@ -85,15 +85,21 @@ async def append(
     try:
         from stankbot.web.ws import broadcast_game_event, has_active_connections
         if has_active_connections(guild_id):
+            _user_name: str | None = None
+            if user_id is not None:
+                from stankbot.db.models import Player
+                player = await session.get(Player, (guild_id, user_id))
+                _user_name = player.display_name if player else None
             asyncio.create_task(
                 broadcast_game_event(
                     guild_id,
                     event_id=event.id,
                     event_type=event.type,
                     user_id=user_id,
-                    user_name=None,
+                    user_name=_user_name,
                     delta=event.delta,
                     reason=event.reason,
+                    created_at=event.created_at.isoformat() if event.created_at else None,
                 )
             )
     except Exception:

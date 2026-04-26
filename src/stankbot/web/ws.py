@@ -352,7 +352,8 @@ def has_active_connections(guild_id: int) -> bool:
 
 
 async def broadcast_game_event(guild_id: int, event_id: int, event_type: str, user_id: int | None,
-                                user_name: str | None, delta: int, reason: str | None) -> None:
+                                user_name: str | None, delta: int, reason: str | None,
+                                created_at: str | None = None) -> None:
     """Broadcast a single game event to all WS clients for the guild."""
     entry: dict = {
         "id": event_id,
@@ -361,6 +362,7 @@ async def broadcast_game_event(guild_id: int, event_id: int, event_type: str, us
         "user_name": user_name,
         "delta": delta,
         "reason": reason,
+        "created_at": created_at,
     }
     await manager.broadcast_json(guild_id, {"t": MSG_TYPE_GAME_EVENT, "d": entry})
 

@@ -76,6 +76,7 @@ export interface GameEventData {
 	user_name: string | null;
 	delta: number;
 	reason: string | null;
+	created_at: string | null;
 }
 
 interface GameEventMsg {

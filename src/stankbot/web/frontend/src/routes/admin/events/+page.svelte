@@ -124,7 +124,7 @@
 			if (!matchesFilter(event)) return;
 			const entry: Entry = {
 				id: event.id,
-				created_at: null,
+				created_at: event.created_at,
 				type: event.type,
 				user_id: event.user_id,
 				user_name: event.user_name,
