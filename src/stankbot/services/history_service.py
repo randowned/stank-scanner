@@ -35,6 +35,12 @@ class UserSummary:
 
 
 @dataclass(slots=True)
+class UserSummaryBoth:
+    session: UserSummary
+    alltime: UserSummary
+
+
+@dataclass(slots=True)
 class ChainSummary:
     chain_id: int
     guild_id: int
@@ -70,8 +76,8 @@ async def user_summary(
     sp, pp = await events_repo.sp_pp_totals(
         session, guild_id, user_id, session_id=session_id
     )
-    started = await events_repo.chains_started(session, guild_id, user_id)
-    broken = await events_repo.chains_broken(session, guild_id, user_id)
+    started = await events_repo.chains_started(session, guild_id, user_id, session_id=session_id)
+    broken = await events_repo.chains_broken(session, guild_id, user_id, session_id=session_id)
     last = await events_repo.last_stank_at(session, guild_id, user_id)
     player = await players_repo.get(session, guild_id, user_id)
     name = player.display_name if player else str(user_id)
@@ -84,6 +90,30 @@ async def user_summary(
         chains_broken=broken,
         last_stank_at=last,
     )
+
+
+async def user_summary_both(
+    session: AsyncSession,
+    guild_id: int,
+    user_id: int,
+    current_session_id: int | None,
+) -> UserSummaryBoth:
+    alltime = await user_summary(session, guild_id, user_id, session_id=None)
+    if current_session_id is not None:
+        session_summary = await user_summary(
+            session, guild_id, user_id, session_id=current_session_id
+        )
+    else:
+        session_summary = UserSummary(
+            user_id=user_id,
+            display_name=alltime.display_name,
+            earned_sp=0,
+            punishments=0,
+            chains_started=0,
+            chains_broken=0,
+            last_stank_at=None,
+        )
+    return UserSummaryBoth(session=session_summary, alltime=alltime)
 
 
 async def chain_summary(

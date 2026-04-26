@@ -11,7 +11,7 @@ export interface MockUser {
 	is_guild_admin?: boolean;
 }
 
-const defaultUser: MockUser = {
+export const defaultUser: MockUser = {
 	user_id: 111111111,
 	username: 'E2E Tester',
 	avatar: null,

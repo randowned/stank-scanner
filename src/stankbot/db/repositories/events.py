@@ -410,21 +410,31 @@ async def user_rank(
     )
 
 
-async def chains_started(session: AsyncSession, guild_id: int, user_id: int) -> int:
-    stmt = select(func.count(Event.id)).where(
+async def chains_started(
+    session: AsyncSession, guild_id: int, user_id: int, *, session_id: int | None = None
+) -> int:
+    where = [
         Event.guild_id == guild_id,
         Event.user_id == user_id,
         Event.type == EventType.CHAIN_START,
-    )
+    ]
+    if session_id is not None:
+        where.append(Event.session_id == session_id)
+    stmt = select(func.count(Event.id)).where(*where)
     return int((await session.execute(stmt)).scalar_one() or 0)
 
 
-async def chains_broken(session: AsyncSession, guild_id: int, user_id: int) -> int:
-    stmt = select(func.count(Event.id)).where(
+async def chains_broken(
+    session: AsyncSession, guild_id: int, user_id: int, *, session_id: int | None = None
+) -> int:
+    where = [
         Event.guild_id == guild_id,
         Event.user_id == user_id,
         Event.type == EventType.CHAIN_BREAK,
-    )
+    ]
+    if session_id is not None:
+        where.append(Event.session_id == session_id)
+    stmt = select(func.count(Event.id)).where(*where)
     return int((await session.execute(stmt)).scalar_one() or 0)
 
 

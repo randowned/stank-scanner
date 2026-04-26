@@ -56,42 +56,42 @@
 		<PageHeader title="📈 {profile.display_name}" subtitle="Player #{targetId}" />
 
 		<!-- Session Stats -->
-		<div class="panel">
+		<div class="panel" data-testid="session-stats">
 			<h2 class="text-lg font-semibold mb-3">Session</h2>
 			<div class="grid grid-cols-3 gap-3">
 				<div>
-					<div class="text-xl font-bold text-accent">{formatNumber(profile.session.earned_sp)}</div>
+					<div class="text-xl font-bold text-accent" data-testid="session-sp">{formatNumber(profile.session.earned_sp)}</div>
 					<div class="text-xs text-muted uppercase">SP</div>
 				</div>
 				<div>
-					<div class="text-xl font-bold text-danger">{formatNumber(profile.session.punishments)}</div>
+					<div class="text-xl font-bold text-danger" data-testid="session-pp">{formatNumber(profile.session.punishments)}</div>
 					<div class="text-xs text-muted uppercase">PP</div>
 				</div>
 				<div>
-					<div class="text-xl font-bold {profile.session.net >= 0 ? 'text-ok' : 'text-danger'}">{formatNumber(profile.session.net)}</div>
+					<div class="text-xl font-bold {profile.session.net >= 0 ? 'text-ok' : 'text-danger'}" data-testid="session-net">{formatNumber(profile.session.net)}</div>
 					<div class="text-xs text-muted uppercase">Net</div>
 				</div>
 			</div>
 		</div>
 
 		<!-- All-time Stats -->
-		<div class="panel">
+		<div class="panel" data-testid="alltime-stats">
 			<h2 class="text-lg font-semibold mb-3">All-time</h2>
 			<div class="grid grid-cols-2 gap-3 mb-3">
 				<div>
-					<div class="text-xl font-bold text-accent">{formatNumber(profile.alltime.earned_sp)}</div>
+					<div class="text-xl font-bold text-accent" data-testid="alltime-sp">{formatNumber(profile.alltime.earned_sp)}</div>
 					<div class="text-xs text-muted uppercase">SP</div>
 				</div>
 				<div>
-					<div class="text-xl font-bold text-danger">{formatNumber(profile.alltime.punishments)}</div>
+					<div class="text-xl font-bold text-danger" data-testid="alltime-pp">{formatNumber(profile.alltime.punishments)}</div>
 					<div class="text-xs text-muted uppercase">PP</div>
 				</div>
 				<div>
-					<div class="text-xl font-bold">{profile.alltime.chains_started}</div>
+					<div class="text-xl font-bold" data-testid="alltime-started">{profile.alltime.chains_started}</div>
 					<div class="text-xs text-muted uppercase">Started</div>
 				</div>
 				<div>
-					<div class="text-xl font-bold">{profile.alltime.chains_broken}</div>
+					<div class="text-xl font-bold" data-testid="alltime-broken">{profile.alltime.chains_broken}</div>
 					<div class="text-xs text-muted uppercase">Broken</div>
 				</div>
 			</div>

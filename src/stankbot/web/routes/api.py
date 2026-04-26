@@ -179,6 +179,7 @@ async def api_player(
     from stankbot.db.repositories import players as players_repo
     from stankbot.services import achievements as achievements_svc
     from stankbot.services import history_service
+    from stankbot.services.session_service import SessionService
 
     try:
         uid = int(user_id)
@@ -189,7 +190,12 @@ async def api_player(
     if player is None:
         return MsgPackResponse({"error": "Player not found"}, request, status_code=404)
 
-    summary = await history_service.user_summary(session, guild_id, uid)
+    session_svc = SessionService(session)
+    current_session_id = await session_svc.current(guild_id)
+    both = await history_service.user_summary_both(
+        session, guild_id, uid, current_session_id
+    )
+
     badge_keys = await achievements_svc.badges_for(session, guild_id, uid)
     badge_set = set(badge_keys)
     badges = []
@@ -206,7 +212,6 @@ async def api_player(
                 }
             )
 
-    # Full achievement catalog with unlock status
     achievement_catalog = [
         {
             "key": row["key"],
@@ -223,19 +228,19 @@ async def api_player(
             "user_id": str(uid),
             "display_name": player.display_name or str(uid),
             "session": {
-                "earned_sp": summary.earned_sp,
-                "punishments": summary.punishments,
-                "net": summary.earned_sp - summary.punishments,
+                "earned_sp": both.session.earned_sp,
+                "punishments": both.session.punishments,
+                "net": both.session.earned_sp - both.session.punishments,
             },
             "alltime": {
-                "earned_sp": summary.earned_sp,
-                "punishments": summary.punishments,
-                "chains_started": summary.chains_started,
-                "chains_broken": summary.chains_broken,
+                "earned_sp": both.alltime.earned_sp,
+                "punishments": both.alltime.punishments,
+                "chains_started": both.alltime.chains_started,
+                "chains_broken": both.alltime.chains_broken,
             },
             "badges": badges,
             "achievements": achievement_catalog,
-            "last_stank_at": summary.last_stank_at.isoformat() if summary.last_stank_at else None,
+            "last_stank_at": both.alltime.last_stank_at.isoformat() if both.alltime.last_stank_at else None,
         },
         request,
     )
