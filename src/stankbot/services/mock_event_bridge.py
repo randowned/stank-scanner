@@ -89,7 +89,7 @@ class MockEventBridge:
             settings = SettingsService(session)
             scoring = await settings.effective_scoring(guild_id, altar)
             session_svc = SessionService(session)
-            await session_svc.ensure_started(guild_id, when=datetime.now(UTC))
+            await session_svc.ensure_started(guild_id, when=datetime.now(tz=UTC))
 
             stank_input = StankInput(
                 guild_id=guild_id,
@@ -98,7 +98,7 @@ class MockEventBridge:
                 author_id=user_id,
                 author_display_name=display_name,
                 is_stank=True,
-                created_at=datetime.now(UTC),
+                created_at=datetime.now(tz=UTC),
             )
             chain_svc = ChainService(session, session_id_provider=session_svc)
             result = await chain_svc.process(stank_input, scoring)
@@ -134,7 +134,7 @@ class MockEventBridge:
                 author_id=user_id,
                 author_display_name=display_name,
                 is_stank=False,
-                created_at=datetime.now(UTC),
+                created_at=datetime.now(tz=UTC),
             )
             chain_svc = ChainService(session, session_id_provider=session_svc)
             result = await chain_svc.process(stank_input, scoring)

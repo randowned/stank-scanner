@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import type { ChainSummary } from '$lib/types';
+	import { formatDateTime } from '$lib/datetime';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LeaderboardRow from '$lib/components/LeaderboardRow.svelte';
@@ -9,17 +10,6 @@
 
 	const chain = $derived(data.chain as ChainSummary | null);
 	const names = $derived((data.names as Record<string, string> | undefined) ?? {});
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return 'alive';
-		return new Date(dateStr).toLocaleString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit',
-			timeZone: 'UTC'
-		});
-	}
 </script>
 
 <div class="p-4 space-y-4">
@@ -54,11 +44,11 @@
 				{/if}
 				<div>
 					<div class="text-sm text-muted">Started</div>
-					<div class="text-sm">{formatDate(chain.started_at)}</div>
+					<div class="text-sm">{formatDateTime(chain.started_at)}</div>
 				</div>
 				<div>
 					<div class="text-sm text-muted">Ended</div>
-					<div class="text-sm">{formatDate(chain.broken_at)}</div>
+					<div class="text-sm">{formatDateTime(chain.broken_at, 'alive')}</div>
 				</div>
 			</div>
 		</div>

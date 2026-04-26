@@ -122,25 +122,15 @@
 		return () => observer.disconnect();
 	});
 
+	import { formatResetTime } from '$lib/datetime';
+
 	function formatNumber(n: number): string {
 		if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
 		if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
 		return n.toString();
 	}
 
-	function formatNextReset(dateStr: string | null): string {
-		if (!dateStr) return '—';
-		const date = new Date(dateStr);
-		return (
-			date.toLocaleString('en-US', {
-				month: 'short',
-				day: 'numeric',
-				hour: 'numeric',
-				minute: '2-digit',
-				timeZone: 'UTC'
-			}) + ' UTC'
-		);
-	}
+	
 
 	function getPlayerRank(rankings: PlayerRow[], userId: string): number | null {
 		for (let i = 0; i < rankings.length; i++) {
@@ -263,7 +253,7 @@
 		<div class="mt-3 pt-3 border-t border-border">
 			<div class="text-xs text-muted">
 				Next reset:
-				<span class="text-text">{formatNextReset(board?.next_reset_at ?? null)}</span>
+				<span class="text-text">{formatResetTime(board?.next_reset_at ?? null)}</span>
 			</div>
 		</div>
 	</div>

@@ -34,21 +34,12 @@
 	const ppSeries = $derived(history.map((p) => p.pp));
 	const netSeries = $derived(history.map((p) => p.sp - p.pp));
 
+	import { formatDateTime } from '$lib/datetime';
+
 	function formatNumber(n: number): string {
 		if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
 		if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
 		return n.toString();
-	}
-
-	function formatDate(dateStr: string | null): string {
-		if (!dateStr) return '—';
-		return new Date(dateStr).toLocaleString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit',
-			timeZone: 'UTC'
-		}) + ' UTC';
 	}
 </script>
 
@@ -107,7 +98,7 @@
 
 			{#if profile.last_stank_at}
 				<div class="text-xs text-muted pt-3 border-t border-border">
-					Last stank: {formatDate(profile.last_stank_at)}
+					Last stank: {formatDateTime(profile.last_stank_at)}
 				</div>
 			{/if}
 		</div>

@@ -2,29 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from stankbot.db.engine import coerce_naive_datetime
 from stankbot.db.models import Cooldown
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    # SQLite's ``DateTime(timezone=True)`` round-trips as a naive datetime;
-    # coerce to UTC-aware so downstream arithmetic works regardless of backend.
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value
 
 
 async def get_last_stank(
     session: AsyncSession, *, guild_id: int, altar_id: int, user_id: int
 ) -> datetime | None:
     row = await session.get(Cooldown, (guild_id, altar_id, user_id))
-    return _as_utc(row.last_valid_stank_at) if row else None
+    return coerce_naive_datetime(row.last_valid_stank_at) if row else None
 
 
 async def set_last_stank(

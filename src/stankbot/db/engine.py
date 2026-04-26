@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -9,6 +10,19 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+
+def coerce_naive_datetime(value: datetime | None) -> datetime | None:
+    """Coerce naive datetime to UTC-aware.
+
+    SQLite's ``DateTime(timezone=True)`` round-trips as a naive datetime.
+    This ensures all datetime values are timezone-aware regardless of DB backend.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
 
 
 def build_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { apiFetch, FetchError } from '$lib/api';
+	import { formatDateTime } from '$lib/datetime';
 	import { onMount } from 'svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -48,11 +49,6 @@
 		} finally {
 			loading = false;
 		}
-	}
-
-	function fmtTime(s: string | null) {
-		if (!s) return '';
-		return new Date(s).toLocaleString();
 	}
 
 	type PayloadRow =
@@ -117,7 +113,7 @@
 			<tbody>
 				{#each entries as e (e.id)}
 					<tr class="border-b border-border/60 align-top">
-						<td class="py-2 pr-2 whitespace-nowrap">{fmtTime(e.created_at)}</td>
+						<td class="py-2 pr-2 whitespace-nowrap">{formatDateTime(e.created_at, '')}</td>
 						<td class="py-2 pr-2">{e.actor_name ?? e.actor_id ?? '—'}</td>
 						<td class="py-2 pr-2 font-mono">{e.action}</td>
 						<td class="py-2 text-xs break-all">

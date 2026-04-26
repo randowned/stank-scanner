@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { base } from '$app/paths';
+	import { formatDateTime } from '$lib/datetime';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Card from '$lib/components/Card.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -9,11 +10,6 @@
 	const session = $derived(data.session);
 	const names = $derived((data.names as Record<string, string>) ?? {});
 
-	function fmt(s: string | null): string {
-		if (!s) return '—';
-		return new Date(s).toLocaleString();
-	}
-
 	function playerName(userId: string): string {
 		return names[userId] ?? `#${userId}`;
 	}
@@ -21,17 +17,17 @@
 
 <div class="p-4 space-y-4">
 	{#if session}
-		<PageHeader title="Session #{session.session_id}" subtitle={fmt(session.started_at)} />
+		<PageHeader title="Session #{session.session_id}" subtitle={formatDateTime(session.started_at)} />
 
 		<Card title="Summary">
 			<dl class="grid grid-cols-2 gap-4 text-sm">
 				<div>
 					<dt class="text-muted uppercase text-xs">Started</dt>
-					<dd>{fmt(session.started_at)}</dd>
+					<dd>{formatDateTime(session.started_at)}</dd>
 				</div>
 				<div>
 					<dt class="text-muted uppercase text-xs">Ended</dt>
-					<dd>{fmt(session.ended_at)}</dd>
+					<dd>{formatDateTime(session.ended_at)}</dd>
 				</div>
 				<div>
 					<dt class="text-muted uppercase text-xs">Chains started</dt>
@@ -90,7 +86,7 @@
 						class="flex items-center justify-between gap-3 px-2 py-2 rounded-md hover:bg-border/40 text-sm"
 					>
 						<span class="font-mono text-muted shrink-0">#{c.chain_id}</span>
-						<span class="flex-1 min-w-0 truncate">{fmt(c.started_at)}</span>
+						<span class="flex-1 min-w-0 truncate">{formatDateTime(c.started_at)}</span>
 						<span class="shrink-0 tabular-nums">
 							{c.length}
 							<span class="text-muted text-xs">/ {c.unique_contributors}</span>

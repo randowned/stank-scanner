@@ -1,23 +1,13 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import type { SessionSummary } from '$lib/types';
+	import { formatDateTime } from '$lib/datetime';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	let { data } = $props();
 
 	const sessions = $derived(data.sessions as SessionSummary[]);
-
-	function formatDate(dateStr: string | null | undefined): string {
-		if (!dateStr) return '—';
-		return new Date(dateStr).toLocaleString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit',
-			timeZone: 'UTC'
-		});
-	}
 </script>
 
 <div class="p-4 space-y-4">
@@ -39,7 +29,7 @@
 							<span class="text-xs font-semibold text-muted">ENDED</span>
 						{/if}
 					</div>
-					<div class="text-xs text-muted mb-2">{formatDate(s.started_at)}</div>
+					<div class="text-xs text-muted mb-2">{formatDateTime(s.started_at)}</div>
 					<div class="text-xs text-muted">
 						Stankers: {s.unique_stankers ?? 0} · Stanks: {s.stanks ?? 0} · Chains: {s.chains ?? 0} · Reactions: {s.reactions ?? 0}
 					</div>
