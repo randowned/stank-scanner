@@ -851,3 +851,28 @@ async def rebuild(
             "reactions_awarded": report.reactions_awarded,
         },
     )
+
+# ---------------------------------------------------------------------------
+# player_totals cache rebuild (DB-only -- fast, no Discord API calls)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/rebuild-from-db")
+async def rebuild_from_db(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    guild_id: int = Depends(get_active_guild_id),
+    user: dict = Depends(require_guild_admin),
+) -> MsgPackResponse:
+    from stankbot.db.repositories import player_totals as pt_repo
+
+    count = await pt_repo.rebuild(session, guild_id)
+    await audit_repo.append(
+        session,
+        guild_id=guild_id,
+        actor_id=int(user["id"]),
+        action="rebuild_from_db",
+        payload={"rows": count},
+    )
+    log.info("Admin %s rebuilt player_totals for guild %d: %d rows", user["id"], guild_id, count)
+    return _ok(request, {"rows": count})

@@ -16,7 +16,6 @@ from stankbot.db.models import EventType, Guild, PlayerTotal
 from stankbot.db.repositories import events as events_repo
 from stankbot.db.repositories import player_totals as pt_repo
 
-
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
@@ -208,29 +207,14 @@ async def test_get_rank_respects_session_scoping(session: Any) -> None:
 async def test_startup_warm_rebuilds_when_cache_empty_but_events_exist(session: Any) -> None:
     """Simulate the startup warm logic: cache is empty, events exist, rebuild
     populates the cache and leaderboard works."""
-    from sqlalchemy import func, select
-
-    from stankbot.db.models import PlayerTotal
+    from sqlalchemy import delete, func, select
 
     await _ensure_guild(session)
     await _event(session, user_id=100, type=EventType.SP_BASE, delta=10)
     await _event(session, user_id=200, type=EventType.SP_BASE, delta=30)
     await session.flush()
 
-    # Verify cache is empty (events_repo.append wrote to it, but we're testing
-    # the scenario where it's empty — so we bypassed write-through above by
-    # calling events_repo.append directly... but wait, our append now writes to
-    # player_totals. Let me verify that the write-through did run.
-
-    # Actually, events_repo.append() now writes to player_totals. So after
-    # calling _event (which uses events_repo.append), the cache is already
-    # populated. This simulates the NORMAL path. Let me instead test the rebuild
-    # by deleting the cache rows first.
-    from stankbot.db.models import PlayerTotal
-
-    # Delete all cache rows to simulate stale cache
-    from sqlalchemy import delete
-
+    # Delete all cache rows to simulate stale cache (write-through already ran)
     await session.execute(delete(PlayerTotal).where(PlayerTotal.guild_id == 1))
     await session.flush()
 
@@ -257,8 +241,6 @@ async def test_startup_warm_skips_when_cache_populated(session: Any) -> None:
     """If cache already has rows, the warm should skip rebuilding."""
     from sqlalchemy import func, select
 
-    from stankbot.db.models import PlayerTotal
-
     await _ensure_guild(session)
     await _event(session, user_id=100, type=EventType.SP_BASE, delta=10)
     await session.flush()
@@ -277,8 +259,6 @@ async def test_startup_warm_skips_when_cache_populated(session: Any) -> None:
 async def test_startup_warm_empty_guild_without_events(session: Any) -> None:
     """No guild → no rebuild needed."""
     from sqlalchemy import func, select
-
-    from stankbot.db.models import PlayerTotal
 
     await _ensure_guild(session)
     # No events at all

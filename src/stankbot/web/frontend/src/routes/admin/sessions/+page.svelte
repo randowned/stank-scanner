@@ -9,6 +9,7 @@
 	let newSessionOpen = $state(false);
 	let resetOpen = $state(false);
 	let rebuildOpen = $state(false);
+	let rebuildDbOpen = $state(false);
 	let resetTyped = $state('');
 	let opsMsg = $state<string | null>(null);
 	let opsBusy = $state(false);
@@ -45,7 +46,20 @@
 		opsMsg = null;
 		try {
 			const res = await apiPost<Record<string, unknown>>('/api/admin/rebuild');
-			opsMsg = `Rebuild complete. ${JSON.stringify(res)}`;
+			opsMsg = `Rebuild from Discord complete. ${JSON.stringify(res)}`;
+		} catch (err) {
+			opsMsg = err instanceof FetchError ? err.message : 'Rebuild failed';
+		} finally {
+			opsBusy = false;
+		}
+	}
+
+	async function runRebuildFromDb() {
+		opsBusy = true;
+		opsMsg = null;
+		try {
+			const res = await apiPost<{ rows: number }>('/api/admin/rebuild-from-db');
+			opsMsg = `Rebuilt ${res.rows} score rows from database.`;
 		} catch (err) {
 			opsMsg = err instanceof FetchError ? err.message : 'Rebuild failed';
 		} finally {
@@ -64,12 +78,21 @@
 		</div>
 	</Card>
 
-	<Card title="Rebuild state">
+	<Card title="Rebuild from Discord chat history">
 		<p class="text-sm text-muted mb-3">
-			Replay the event log to recompute totals, chains, and records. May take a while on large guilds.
+			Scan Discord channel messages to rebuild the full event log, chains, and records. Slow — depends on Discord API rate limits.
 		</p>
 		<div class="flex justify-end">
-			<Button variant="danger" onclick={() => (rebuildOpen = true)} loading={opsBusy}>Rebuild</Button>
+			<Button variant="danger" onclick={() => (rebuildOpen = true)} loading={opsBusy}>Rebuild from Discord</Button>
+		</div>
+	</Card>
+
+	<Card title="Rebuild scores from database">
+		<p class="text-sm text-muted mb-3">
+			Recalculate all player SP/PP totals from the event log. Fast — runs entirely in the database. Safe during gameplay.
+		</p>
+		<div class="flex justify-end">
+			<Button onclick={() => (rebuildDbOpen = true)} loading={opsBusy}>Rebuild scores</Button>
 		</div>
 	</Card>
 
@@ -112,9 +135,16 @@
 />
 <ConfirmDialog
 	bind:open={rebuildOpen}
-	title="Rebuild state?"
-	body="Re-derives chains, totals, and records from the event log. May take a while on large guilds."
-	confirmLabel="Rebuild"
+	title="Rebuild from Discord?"
+	body="Scan Discord channel history to rebuild the event log. May take a while on large guilds."
+	confirmLabel="Rebuild from Discord"
 	danger
 	onconfirm={runRebuild}
+/>
+<ConfirmDialog
+	bind:open={rebuildDbOpen}
+	title="Rebuild scores from database?"
+	body="Recalculates all player scores from the event log. Runs entirely in the database."
+	confirmLabel="Rebuild scores"
+	onconfirm={runRebuildFromDb}
 />

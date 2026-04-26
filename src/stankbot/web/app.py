@@ -67,33 +67,6 @@ def build_app(
     app.include_router(admin.router)
     app.include_router(auth.router)
 
-    @app.on_event("startup")
-    async def _warm_player_totals() -> None:
-        """Rebuild player_totals cache from events on first boot.
-
-        The cache is maintained write-through going forward, but on a fresh
-        deploy the table may be empty while events exist. A one-time scan at
-        startup avoids a costly lazy rebuild on the first leaderboard query.
-        """
-        from sqlalchemy import func, select
-
-        from stankbot.db.models import Guild, PlayerTotal
-        from stankbot.db.repositories import player_totals as pt_repo
-
-        async with session_factory() as s:
-            guild_ids = list(
-                (await s.execute(select(Guild.id))).scalars().all()
-            )
-            for gid in guild_ids:
-                cached = await s.execute(
-                    select(func.count()).where(PlayerTotal.guild_id == gid)
-                )
-                if cached.scalar_one() == 0:
-                    count = await pt_repo.rebuild(s, gid)
-                    if count:
-                        log.info("Warmed player_totals for guild %d: %d rows", gid, count)
-            await s.commit()
-
     @app.get("/healthz", include_in_schema=False)
     async def _healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})
