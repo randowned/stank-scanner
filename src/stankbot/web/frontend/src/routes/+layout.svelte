@@ -108,7 +108,7 @@
 				{#if isAdminRoute}
 					<button
 						type="button"
-						class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-text hover:bg-border/50 transition-colors"
+						class="flex items-center justify-center w-8 h-8 rounded-md text-muted hover:text-text hover:bg-border/50 transition-colors lg:hidden"
 						onclick={() => adminSidebarOpen.update(v => !v)}
 						aria-label="Toggle admin menu"
 					>
