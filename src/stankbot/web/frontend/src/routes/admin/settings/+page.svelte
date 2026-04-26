@@ -84,7 +84,7 @@
 
 	async function toggleMaintenance(val: boolean) {
 		try {
-			await apiPost('/api/admin/maintenance', { enabled: val });
+			await apiPost('/api/admin/settings', { maintenance_mode: val });
 			maintenanceMsg = val ? 'Maintenance mode ON' : 'Maintenance mode OFF';
 		} catch (err) {
 			maintenanceMsg = err instanceof FetchError ? err.message : 'Failed';

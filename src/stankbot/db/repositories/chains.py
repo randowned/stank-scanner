@@ -92,15 +92,12 @@ async def append_message(
 async def chain_length_and_unique(
     session: AsyncSession, chain_id: int
 ) -> tuple[int, int]:
-    length_stmt = select(func.count(ChainMessage.message_id)).where(
-        ChainMessage.chain_id == chain_id
-    )
-    unique_stmt = select(func.count(func.distinct(ChainMessage.user_id))).where(
-        ChainMessage.chain_id == chain_id
-    )
-    length = int((await session.execute(length_stmt)).scalar_one() or 0)
-    unique = int((await session.execute(unique_stmt)).scalar_one() or 0)
-    return length, unique
+    stmt = select(
+        func.count(ChainMessage.message_id),
+        func.count(func.distinct(ChainMessage.user_id)),
+    ).where(ChainMessage.chain_id == chain_id)
+    length, unique = (await session.execute(stmt)).one()
+    return int(length or 0), int(unique or 0)
 
 
 async def messages_in_chain(

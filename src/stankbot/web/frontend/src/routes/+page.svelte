@@ -91,12 +91,14 @@
 		if (loadingMore || !hasMore || !board) return;
 		loadingMore = true;
 		try {
-			const more = await apiFetch<PlayerRow[]>(`/api/leaderboard?offset=${loadOffset}&limit=${PAGE_SIZE}`);
-			if (more.length < PAGE_SIZE) {
+			const res = await apiFetch<{ rankings: PlayerRow[]; has_more: boolean }>(
+				`/api/board?offset=${loadOffset}&limit=${PAGE_SIZE}`
+			);
+			if (res.rankings.length < PAGE_SIZE || !res.has_more) {
 				hasMore = false;
 			}
-			extraRankings = [...extraRankings, ...more];
-			loadOffset += more.length;
+			extraRankings = [...extraRankings, ...res.rankings];
+			loadOffset += res.rankings.length;
 		} catch {
 			hasMore = false;
 		} finally {

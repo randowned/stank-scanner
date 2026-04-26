@@ -194,12 +194,12 @@ async def _streaker(
     session_ids = await events_repo.session_event_ids(session, guild_id)
     if len(session_ids) < 3:
         return False
+    sp_session_set = set(
+        await events_repo.session_ids_where_user_has_sp(session, guild_id, user_id)
+    )
     run = 0
     for sid in session_ids:
-        sp, _pp = await events_repo.sp_pp_totals(
-            session, guild_id, user_id, session_id=sid
-        )
-        if sp > 0:
+        if sid in sp_session_set:
             run += 1
             if run >= 3:
                 return True

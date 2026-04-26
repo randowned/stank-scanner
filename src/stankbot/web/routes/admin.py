@@ -504,45 +504,6 @@ async def announcements_remove(
 
 
 # ---------------------------------------------------------------------------
-# Maintenance
-# ---------------------------------------------------------------------------
-
-
-@router.get("/maintenance")
-async def get_maintenance(
-    request: Request,
-    session: AsyncSession = Depends(get_db),
-    guild_id: int = Depends(get_active_guild_id),
-    _admin: dict = Depends(require_guild_admin),
-) -> MsgPackResponse:
-    values = await SettingsService(session).all_for_guild(guild_id)
-    return MsgPackResponse({"enabled": bool(values.get(Keys.MAINTENANCE_MODE, False))}, request)
-
-
-class MaintenancePayload(BaseModel):
-    enabled: bool
-
-
-@router.post("/maintenance")
-async def set_maintenance(
-    request: Request,
-    payload: MaintenancePayload = msgpack_body(MaintenancePayload),
-    session: AsyncSession = Depends(get_db),
-    guild_id: int = Depends(get_active_guild_id),
-    user: dict = Depends(require_guild_admin),
-) -> MsgPackResponse:
-    await SettingsService(session).set(guild_id, Keys.MAINTENANCE_MODE, payload.enabled)
-    await audit_repo.append(
-        session,
-        guild_id=guild_id,
-        actor_id=int(user["id"]),
-        action="maintenance_mode",
-        payload={"enabled": payload.enabled, "via": "web"},
-    )
-    return _ok(request, {"enabled": payload.enabled})
-
-
-# ---------------------------------------------------------------------------
 # Config snapshot (read-only)
 # ---------------------------------------------------------------------------
 

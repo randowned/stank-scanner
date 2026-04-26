@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Event, EventType
@@ -55,6 +55,31 @@ async def append(
         event.created_at = created_at
     session.add(event)
     await session.flush()
+
+    # Write-through to player_totals cache (same transaction).
+    if event.delta != 0 and event.user_id is not None:
+        from stankbot.db.repositories import player_totals as pt_repo
+
+        sp_delta = event.delta if str(event.type) in {t.value for t in _SP_TYPES} else 0
+        pp_delta = event.delta if str(event.type) == EventType.PP_BREAK else 0
+        await pt_repo.upsert(
+            session,
+            guild_id=event.guild_id,
+            user_id=event.user_id,
+            session_id=0,  # all-time
+            sp_delta=sp_delta,
+            pp_delta=pp_delta,
+        )
+        if event.session_id is not None:
+            await pt_repo.upsert(
+                session,
+                guild_id=event.guild_id,
+                user_id=event.user_id,
+                session_id=event.session_id,
+                sp_delta=sp_delta,
+                pp_delta=pp_delta,
+            )
+
     return event
 
 
@@ -83,6 +108,28 @@ async def session_event_ids(session: AsyncSession, guild_id: int) -> list[int]:
     return list((await session.execute(stmt)).scalars().all())
 
 
+async def session_ids_where_user_has_sp(
+    session: AsyncSession, guild_id: int, user_id: int
+) -> list[int]:
+    """Return session_ids where ``user_id`` has at least one SP event,
+    ordered by session_id ASC. Used by ``_streaker`` for efficient
+    consecutive-session checks.
+    """
+    stmt = (
+        select(Event.session_id)
+        .where(
+            Event.guild_id == guild_id,
+            Event.user_id == user_id,
+            Event.type.in_([t.value for t in _SP_TYPES]),
+            Event.session_id.is_not(None),
+        )
+        .group_by(Event.session_id)
+        .having(func.sum(Event.delta) > 0)
+        .order_by(Event.session_id.asc())
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
 async def count_session_starts(session: AsyncSession, guild_id: int, *, up_to_id: int) -> int:
     """Return how many SESSION_START events exist for the guild with id <= up_to_id.
 
@@ -106,28 +153,40 @@ async def sp_pp_totals(
     """Return ``(earned_sp, punishments)`` for one user.
 
     If ``session_id`` is given, only events within that session are summed.
+    Tries the ``player_totals`` cache first; falls back to an event-level
+    aggregation if the cache row is missing.
     """
-    sp_types = {
-        EventType.SP_BASE,
-        EventType.SP_POSITION_BONUS,
-        EventType.SP_STARTER_BONUS,
-        EventType.SP_FINISH_BONUS,
-        EventType.SP_REACTION,
-        EventType.SP_TEAM_PLAYER,
-    }
+    from stankbot.db.repositories import player_totals as pt_repo
+
+    sid = session_id or 0
+    cached = await pt_repo.get(session, guild_id, user_id, sid)
+    if cached is not None:
+        return cached.earned_sp, cached.punishments
+
+    # Cache miss — derive from events (e.g. after migration).
     where = [Event.guild_id == guild_id, Event.user_id == user_id]
     if session_id is not None:
         where.append(Event.session_id == session_id)
 
-    sp_stmt = select(func.coalesce(func.sum(Event.delta), 0)).where(
-        and_(*where, Event.type.in_([t.value for t in sp_types]))
-    )
-    pp_stmt = select(func.coalesce(func.sum(Event.delta), 0)).where(
-        and_(*where, Event.type == EventType.PP_BREAK)
-    )
-    sp = int((await session.execute(sp_stmt)).scalar_one() or 0)
-    pp = int((await session.execute(pp_stmt)).scalar_one() or 0)
-    return sp, pp
+    stmt = select(
+        func.coalesce(
+            func.sum(
+                case(
+                    (Event.type.in_([t.value for t in _SP_TYPES]), Event.delta),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("sp"),
+        func.coalesce(
+            func.sum(
+                case((Event.type == EventType.PP_BREAK, Event.delta), else_=0)
+            ),
+            0,
+        ).label("pp"),
+    ).where(*where)
+    row = (await session.execute(stmt)).one()
+    return int(row.sp), int(row.pp)
 
 
 async def events_in_session(
@@ -214,22 +273,19 @@ async def leaderboard(
     offset: int = 0,
 ) -> list[tuple[int, int, int]]:
     """Return ``[(user_id, earned_sp, punishments), ...]`` sorted by net SP
-    descending. If ``session_id`` is given, sums only within that session.
+    descending. Uses ``player_totals`` cache.
     """
-    sp_expr = func.sum(
-        case((Event.type.in_([t.value for t in _SP_TYPES]), Event.delta), else_=0)
-    ).label("earned_sp")
-    pp_expr = func.sum(case((Event.type == EventType.PP_BREAK, Event.delta), else_=0)).label(
-        "punishments"
-    )
-    where = [Event.guild_id == guild_id, Event.user_id.is_not(None)]
-    if session_id is not None:
-        where.append(Event.session_id == session_id)
+    from stankbot.db.models import PlayerTotal
+
+    sid = session_id or 0
     stmt = (
-        select(Event.user_id, sp_expr, pp_expr)
-        .where(*where)
-        .group_by(Event.user_id)
-        .order_by((sp_expr - pp_expr).desc())
+        select(
+            PlayerTotal.user_id,
+            PlayerTotal.earned_sp.label("earned_sp"),
+            PlayerTotal.punishments.label("punishments"),
+        )
+        .where(PlayerTotal.guild_id == guild_id, PlayerTotal.session_id == sid)
+        .order_by((PlayerTotal.earned_sp - PlayerTotal.punishments).desc())
         .offset(offset)
         .limit(limit)
     )
@@ -290,12 +346,15 @@ async def user_rank(
     *,
     session_id: int | None = None,
 ) -> int | None:
-    """1-indexed rank by net SP, or ``None`` if the user has no events."""
-    board = await leaderboard(session, guild_id, session_id=session_id, limit=10000)
-    for i, (uid, _sp, _pp) in enumerate(board, start=1):
-        if uid == user_id:
-            return i
-    return None
+    """1-indexed rank by net SP, or ``None`` if the user has no events.
+
+    Uses ``player_totals`` cache — O(1) lookup instead of scanning events.
+    """
+    from stankbot.db.repositories import player_totals as pt_repo
+
+    return await pt_repo.get_rank(
+        session, guild_id, user_id, session_id=session_id or 0
+    )
 
 
 async def chains_started(session: AsyncSession, guild_id: int, user_id: int) -> int:

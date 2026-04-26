@@ -265,7 +265,10 @@ class Chain(Base):
 
 class ChainMessage(Base):
     __tablename__ = "chain_messages"
-    __table_args__ = (Index("ix_chain_messages_chain", "chain_id", "position"),)
+    __table_args__ = (
+        Index("ix_chain_messages_chain", "chain_id", "position"),
+        Index("ix_chain_messages_user_chain", "user_id", "chain_id"),
+    )
 
     chain_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("chains.id", ondelete="CASCADE"), nullable=False

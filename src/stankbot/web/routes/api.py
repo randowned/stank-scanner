@@ -66,25 +66,25 @@ async def api_board(
     session: AsyncSession = Depends(get_db),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict = Depends(require_guild_member),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
 ) -> MsgPackResponse:
+    """Return board state with optional paginated rankings.
+
+    ``offset=0``: full state (guild, chain, record, session, rankings).
+    ``offset>0``: only ``rankings`` + ``has_more`` (lighter query).
+    """
     from stankbot.web.tools import guild_name_for
 
     guild_name = await guild_name_for(session, guild_id)
     state = await get_board_state(session, guild_id, guild_name)
-    return MsgPackResponse(state, request)
 
+    if offset == 0:
+        return MsgPackResponse(state, request)
 
-@router.get("/api/leaderboard")
-async def api_leaderboard(
-    request: Request,
-    session: AsyncSession = Depends(get_db),
-    guild_id: int = Depends(get_active_guild_id),
-    _user: dict = Depends(require_guild_member),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-) -> MsgPackResponse:
+    # Paginated rankings only — fetch next page from player_totals.
     from stankbot.db.repositories import events as events_repo
-    from stankbot.db.repositories import reaction_awards as reaction_awards_repo
+    from stankbot.db.repositories import players as players_repo
     from stankbot.services.session_service import SessionService
 
     session_svc = SessionService(session)
@@ -96,48 +96,24 @@ async def api_leaderboard(
     user_ids = [uid for uid, _, _ in rows]
     name_avatar_map: dict = {}
     if user_ids:
-        from stankbot.db.repositories import players as players_repo
-
         name_avatar_map = await players_repo.display_names_and_avatars(session, guild_id, user_ids)
 
-    from stankbot.db.repositories import altars as altars_repo
-    from stankbot.db.repositories import chains as chains_repo
-
-    altar = await altars_repo.primary(session, guild_id)
-    live_chain = await chains_repo.current_chain(session, guild_id, altar.id) if altar else None
-    per_user_reactions_chain = (
-        await reaction_awards_repo.count_per_user_for_chain(session, guild_id=guild_id, chain_id=live_chain.id)
-        if live_chain is not None else {}
-    )
-    per_user_reactions_session = (
-        await reaction_awards_repo.count_per_user_for_session(session, guild_id=guild_id, session_id=session_id)
-        if session_id is not None else {}
-    )
-    per_user_stanks_chain = (
-        await events_repo.count_sp_base_per_user_for_chain(session, guild_id, live_chain.id)
-        if live_chain is not None else {}
-    )
-    per_user_stanks_session = (
-        await events_repo.count_sp_base_per_user_for_session(session, guild_id, session_id)
-        if session_id is not None else {}
-    )
-
-    def _row(uid: int, sp: int, pp: int) -> dict:
+    rankings = []
+    for uid, sp, pp in rows:
         name, avatar = name_avatar_map.get(uid, (str(uid), None))
-        return {
+        rankings.append({
             "user_id": str(uid),
             "display_name": name,
             "discord_avatar": avatar,
             "earned_sp": sp,
             "punishments": pp,
             "net": sp - pp,
-            "reactions_in_chain": per_user_reactions_chain.get(int(uid), 0),
-            "reactions_in_session": per_user_reactions_session.get(int(uid), 0),
-            "stanks_in_chain": per_user_stanks_chain.get(int(uid), 0),
-            "stanks_in_session": per_user_stanks_session.get(int(uid), 0),
-        }
+        })
 
-    return MsgPackResponse([_row(uid, sp, pp) for uid, sp, pp in rows], request)
+    return MsgPackResponse(
+        {"rankings": rankings, "has_more": len(rankings) >= limit},
+        request,
+    )
 
 
 @router.get("/api/player/{user_id}")
@@ -163,6 +139,7 @@ async def api_player(
 
     summary = await history_service.user_summary(session, guild_id, uid)
     badge_keys = await achievements_svc.badges_for(session, guild_id, uid)
+    badge_set = set(badge_keys)
     badges = []
     for key in badge_keys:
         defn = achievements_svc.definition(key)
@@ -176,6 +153,18 @@ async def api_player(
                     "unlocked_at": datetime.now(UTC).isoformat(),
                 }
             )
+
+    # Full achievement catalog with unlock status
+    achievement_catalog = [
+        {
+            "key": row["key"],
+            "name": row["name"],
+            "description": row["description"],
+            "icon": row["icon"],
+            "unlocked": row["key"] in badge_set,
+        }
+        for row in achievements_svc.catalog_rows()
+    ]
 
     return MsgPackResponse(
         {
@@ -193,6 +182,7 @@ async def api_player(
                 "chains_broken": summary.chains_broken,
             },
             "badges": badges,
+            "achievements": achievement_catalog,
             "last_stank_at": summary.last_stank_at.isoformat() if summary.last_stank_at else None,
         },
         request,
@@ -395,6 +385,10 @@ async def api_chain(
             "contributors": [[str(uid), count] for uid, count in summary.contributors],
             "total_reactions": total_reactions,
             "leaderboard": leaderboard,
+            "names": {
+                str(uid): name_avatar_map.get(uid, (str(uid), None))[0]
+                for uid in user_ids
+            },
         },
         request,
     )

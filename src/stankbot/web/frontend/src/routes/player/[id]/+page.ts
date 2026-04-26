@@ -23,15 +23,15 @@ interface AchievementEntry {
 	unlocked: boolean;
 }
 
-interface AchievementsResponse {
-	achievements: AchievementEntry[];
+interface ExtendedPlayerProfile extends PlayerProfile {
+	achievements?: AchievementEntry[];
 }
 
 export const load: PageLoad = async ({ params, fetch }) => {
 	const userId = params.id;
-	const [profile, history, achievements] = await Promise.all([
-		loadWithFallback<PlayerProfile | null>(
-			() => apiFetch<PlayerProfile>(`/api/player/${userId}`, { fetch }),
+	const [profile, history] = await Promise.all([
+		loadWithFallback<ExtendedPlayerProfile | null>(
+			() => apiFetch<ExtendedPlayerProfile>(`/api/player/${userId}`, { fetch }),
 			{ fallback: null }
 		),
 		loadWithFallback<HistoryPoint[]>(
@@ -43,17 +43,7 @@ export const load: PageLoad = async ({ params, fetch }) => {
 				return res.series;
 			},
 			{ fallback: [] }
-		),
-		loadWithFallback<AchievementEntry[]>(
-			async () => {
-				const res = await apiFetch<AchievementsResponse>(
-					`/api/achievements?user_id=${userId}`,
-					{ fetch }
-				);
-				return res.achievements;
-			},
-			{ fallback: [] }
 		)
 	]);
-	return { profile, history, achievements };
+	return { profile, history, achievements: profile?.achievements ?? [] };
 };

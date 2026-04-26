@@ -10,9 +10,6 @@ from stankbot.db.engine import coerce_naive_datetime
 from stankbot.db.models import Cooldown
 from stankbot.db.repositories import cooldowns
 
-from stankbot.db.engine import coerce_naive_datetime
-from stankbot.db.models import Cooldown
-
 
 class TestCoerceNaiveDatetime:
     def test_none_returns_none(self) -> None:
