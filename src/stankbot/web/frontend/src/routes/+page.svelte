@@ -326,7 +326,7 @@
 				{/each}
 			</div>
 			{#if hasMore || loadingMore}
-				<div bind:this={sentinelEl} class="flex justify-center py-4">
+				<div bind:this={sentinelEl} class="flex justify-center py-4" data-testid="pagination-sentinel">
 					{#if loadingMore}
 						<div class="animate-pulse text-muted text-sm">Loading more...</div>
 					{/if}

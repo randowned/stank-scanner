@@ -400,6 +400,34 @@ class PlayerTotal(Base):
     # session_id=0 means "all-time" aggregate; non-zero is the session_start event id
     earned_sp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     punishments: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stanks_in_session: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reactions_in_session: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Player Chain Totals
+# ---------------------------------------------------------------------------
+
+
+class PlayerChainTotal(Base):
+    """Per-chain, per-user stank/reaction counts.
+
+    Regenerable: COUNT(SP_BASE), COUNT(SP_REACTION) FROM events
+    GROUP BY guild_id, user_id, chain_id.
+    """
+
+    __tablename__ = "player_chain_totals"
+
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("guilds.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    chain_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stanks_in_chain: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reactions_in_chain: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

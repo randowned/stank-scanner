@@ -914,15 +914,24 @@ async def rebuild_from_db(
     guild_id: int = Depends(get_active_guild_id),
     user: dict = Depends(require_guild_admin),
 ) -> MsgPackResponse:
+    from stankbot.db.repositories import player_chain_totals as pct_repo
     from stankbot.db.repositories import player_totals as pt_repo
 
-    count = await pt_repo.rebuild(session, guild_id)
+    pt_count = await pt_repo.rebuild(session, guild_id)
+    pct_count = await pct_repo.rebuild(session, guild_id)
+    total = pt_count + pct_count
     await audit_repo.append(
         session,
         guild_id=guild_id,
         actor_id=int(user["id"]),
         action="rebuild_from_db",
-        payload={"rows": count},
+        payload={"player_totals": pt_count, "player_chain_totals": pct_count},
     )
-    log.info("Admin %s rebuilt player_totals for guild %d: %d rows", user["id"], guild_id, count)
-    return _ok(request, {"rows": count})
+    log.info(
+        "Admin %s rebuilt totals for guild %d: %d pt + %d pct rows",
+        user["id"],
+        guild_id,
+        pt_count,
+        pct_count,
+    )
+    return _ok(request, {"rows": total})

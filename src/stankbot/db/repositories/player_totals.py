@@ -30,8 +30,10 @@ async def upsert(
     session_id: int = 0,
     sp_delta: int = 0,
     pp_delta: int = 0,
+    stanks_in_session_delta: int = 0,
+    reactions_in_session_delta: int = 0,
 ) -> None:
-    """Add ``sp_delta`` / ``pp_delta`` to the cache row (idempotent).
+    """Add ``sp_delta`` / ``pp_delta`` / counters to the cache row (idempotent).
 
     Uses SQLite-compatible INSERT … ON CONFLICT UPSERT via
     session.merge, which is portable across SQLAlchemy dialects.
@@ -45,12 +47,16 @@ async def upsert(
             session_id=session_id,
             earned_sp=max(sp_delta, 0),
             punishments=max(pp_delta, 0),
+            stanks_in_session=max(stanks_in_session_delta, 0),
+            reactions_in_session=max(reactions_in_session_delta, 0),
             updated_at=now,
         )
         session.add(row)
     else:
         row.earned_sp += sp_delta
         row.punishments += pp_delta
+        row.stanks_in_session += stanks_in_session_delta
+        row.reactions_in_session += reactions_in_session_delta
         row.updated_at = now
     await session.flush()
 
@@ -159,6 +165,14 @@ async def rebuild(session: AsyncSession, guild_id: int) -> int:
                 ),
                 0,
             ).label("pp"),
+            func.coalesce(
+                func.sum(case((Event.type == EventType.SP_BASE, 1), else_=0)),
+                0,
+            ).label("stanks"),
+            func.coalesce(
+                func.sum(case((Event.type == EventType.SP_REACTION, 1), else_=0)),
+                0,
+            ).label("reactions"),
         )
         .where(
             Event.guild_id == guild_id,
@@ -168,7 +182,7 @@ async def rebuild(session: AsyncSession, guild_id: int) -> int:
         .group_by(Event.guild_id, Event.user_id, Event.session_id)
     )
     rows2 = (await session.execute(stmt2)).all()
-    for gid, uid, sid, sp, pp in rows2:
+    for gid, uid, sid, sp, pp, stanks, reacts in rows2:
         session.add(
             PlayerTotal(
                 guild_id=int(gid),
@@ -176,6 +190,8 @@ async def rebuild(session: AsyncSession, guild_id: int) -> int:
                 session_id=int(sid),
                 earned_sp=int(sp or 0),
                 punishments=int(pp or 0),
+                stanks_in_session=int(stanks or 0),
+                reactions_in_session=int(reacts or 0),
                 updated_at=now,
             )
         )

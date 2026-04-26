@@ -69,7 +69,11 @@ manager = ConnectionManager()
 
 async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str) -> dict:
     """Fetch current board state as a dict for WebSocket and HTTP clients."""
+    from sqlalchemy import select
+
     from stankbot.db.repositories import altars as altars_repo
+    from stankbot.db.repositories import player_chain_totals as pct_repo
+    from stankbot.db.repositories import player_totals as pt_repo
     from stankbot.db.repositories import reaction_awards as reaction_awards_repo
     from stankbot.services.board_service import build_board_state
     from stankbot.services.session_service import SessionService
@@ -86,31 +90,41 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
     )
 
     from stankbot.db.repositories import chains as chains_repo
-    from stankbot.db.repositories import events as events_repo
 
     session_svc = SessionService(session)
     session_id = await session_svc.current(guild_id)
     live_chain = await chains_repo.current_chain(session, guild_id, altar.id)
 
-    per_user_reactions_chain = (
-        await reaction_awards_repo.count_per_user_for_chain(session, guild_id=guild_id, chain_id=live_chain.id)
-        if live_chain is not None else {}
-    )
-    per_user_reactions_session = (
-        await reaction_awards_repo.count_per_user_for_session(session, guild_id=guild_id, session_id=session_id)
-        if session_id is not None else {}
-    )
+    # Session-level per-user counters from player_totals
+    per_user_reactions_session: dict = {}
+    per_user_stanks_session: dict = {}
+    if session_id is not None:
+        stmt = (
+            select(pt_repo.PlayerTotal)
+            .where(
+                pt_repo.PlayerTotal.guild_id == guild_id,
+                pt_repo.PlayerTotal.session_id == session_id,
+            )
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+        for r in rows:
+            uid = int(r.user_id)
+            per_user_reactions_session[uid] = r.reactions_in_session
+            per_user_stanks_session[uid] = r.stanks_in_session
+
+    # Chain-level per-user counters from player_chain_totals
+    per_user_reactions_chain: dict = {}
+    per_user_stanks_chain: dict = {}
+    if live_chain is not None:
+        chain_totals = await pct_repo.get_for_chain(session, guild_id, live_chain.id)
+        for uid, r in chain_totals.items():
+            per_user_reactions_chain[uid] = r.reactions_in_chain
+            per_user_stanks_chain[uid] = r.stanks_in_chain
+
+    # Total session reactions for the tile (fallback to events table if needed)
     session_reactions = (
         await reaction_awards_repo.count_for_session(session, guild_id=guild_id, session_id=session_id)
         if session_id is not None else 0
-    )
-    per_user_stanks_chain = (
-        await events_repo.count_sp_base_per_user_for_chain(session, guild_id, live_chain.id)
-        if live_chain is not None else {}
-    )
-    per_user_stanks_session = (
-        await events_repo.count_sp_base_per_user_for_session(session, guild_id, session_id)
-        if session_id is not None else {}
     )
 
     chain_length = state.current

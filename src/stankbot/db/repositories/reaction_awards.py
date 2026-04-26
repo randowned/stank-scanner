@@ -56,7 +56,7 @@ async def count_for_chain(
 
 
 async def count_per_user_for_chain(
-    session: AsyncSession, *, guild_id: int, chain_id: int
+    session: AsyncSession, *, guild_id: int, chain_id: int, user_ids: list[int] | None = None
 ) -> dict[int, int]:
     """Per-user reaction award counts in a chain, via SP_REACTION events."""
     stmt = (
@@ -66,8 +66,10 @@ async def count_per_user_for_chain(
             Event.type == EventType.SP_REACTION,
             Event.chain_id == chain_id,
         )
-        .group_by(Event.user_id)
     )
+    if user_ids:
+        stmt = stmt.where(Event.user_id.in_(user_ids))
+    stmt = stmt.group_by(Event.user_id)
     result = await session.execute(stmt)
     return {int(uid): int(n) for uid, n in result.all() if uid is not None}
 
@@ -86,7 +88,7 @@ async def count_for_session(
 
 
 async def count_per_user_for_session(
-    session: AsyncSession, *, guild_id: int, session_id: int | None
+    session: AsyncSession, *, guild_id: int, session_id: int | None, user_ids: list[int] | None = None
 ) -> dict[int, int]:
     """Per-user reaction-award counts in a session, keyed by user_id."""
     stmt = (
@@ -96,7 +98,9 @@ async def count_per_user_for_session(
             Event.type == EventType.SP_REACTION,
             Event.session_id == session_id,
         )
-        .group_by(Event.user_id)
     )
+    if user_ids:
+        stmt = stmt.where(Event.user_id.in_(user_ids))
+    stmt = stmt.group_by(Event.user_id)
     result = await session.execute(stmt)
     return {int(uid): int(n) for uid, n in result.all() if uid is not None}

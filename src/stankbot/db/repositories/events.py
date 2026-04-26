@@ -63,6 +63,9 @@ async def append(
 
         sp_delta = event.delta if str(event.type) in {t.value for t in _SP_TYPES} else 0
         pp_delta = event.delta if str(event.type) == EventType.PP_BREAK else 0
+        stanks_delta = 1 if str(event.type) == EventType.SP_BASE else 0
+        reactions_delta = 1 if str(event.type) == EventType.SP_REACTION else 0
+
         await pt_repo.upsert(
             session,
             guild_id=event.guild_id,
@@ -79,6 +82,25 @@ async def append(
                 session_id=event.session_id,
                 sp_delta=sp_delta,
                 pp_delta=pp_delta,
+                stanks_in_session_delta=stanks_delta,
+                reactions_in_session_delta=reactions_delta,
+            )
+
+    # Write-through to player_chain_totals cache.
+    if event.user_id is not None and event.chain_id is not None:
+        from stankbot.db.repositories import player_chain_totals as pct_repo
+
+        stanks_delta = 1 if str(event.type) == EventType.SP_BASE else 0
+        reactions_delta = 1 if str(event.type) == EventType.SP_REACTION else 0
+
+        if stanks_delta or reactions_delta:
+            await pct_repo.upsert(
+                session,
+                guild_id=event.guild_id,
+                user_id=event.user_id,
+                chain_id=event.chain_id,
+                stanks_delta=stanks_delta,
+                reactions_delta=reactions_delta,
             )
 
     # Broadcast live event via WebSocket (fire-and-forget, gated by active connections).
@@ -253,6 +275,7 @@ async def count_sp_base_per_user_for_session(
     session: AsyncSession,
     guild_id: int,
     session_id: int,
+    user_ids: list[int] | None = None,
 ) -> dict[int, int]:
     """Return ``{user_id: stank_count}`` for SP_BASE events in the given session."""
     stmt = (
@@ -263,8 +286,10 @@ async def count_sp_base_per_user_for_session(
             Event.type == EventType.SP_BASE,
             Event.user_id.is_not(None),
         )
-        .group_by(Event.user_id)
     )
+    if user_ids:
+        stmt = stmt.where(Event.user_id.in_(user_ids))
+    stmt = stmt.group_by(Event.user_id)
     rows = (await session.execute(stmt)).all()
     return {int(uid): int(cnt) for uid, cnt in rows}
 
@@ -273,6 +298,7 @@ async def count_sp_base_per_user_for_chain(
     session: AsyncSession,
     guild_id: int,
     chain_id: int,
+    user_ids: list[int] | None = None,
 ) -> dict[int, int]:
     """Return ``{user_id: stank_count}`` for SP_BASE events in the given chain."""
     stmt = (
@@ -283,8 +309,10 @@ async def count_sp_base_per_user_for_chain(
             Event.type == EventType.SP_BASE,
             Event.user_id.is_not(None),
         )
-        .group_by(Event.user_id)
     )
+    if user_ids:
+        stmt = stmt.where(Event.user_id.in_(user_ids))
+    stmt = stmt.group_by(Event.user_id)
     rows = (await session.execute(stmt)).all()
     return {int(uid): int(cnt) for uid, cnt in rows}
 

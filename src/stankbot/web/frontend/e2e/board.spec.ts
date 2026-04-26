@@ -128,6 +128,62 @@ test.describe('Board', () => {
 		await expect(reactionsTile).toHaveText(/^1 \/ /, { timeout: 5000 });
 	});
 
+	test('pagination loads rows with stanks/reactions counters', async ({
+		page,
+		injectStank,
+		injectReaction
+	}) => {
+		const GUILD = 123456789;
+
+		// Create more than PAGE_SIZE (20) users to trigger pagination
+		for (let i = 0; i < 25; i++) {
+			await injectStank(GUILD, 8000 + i, `PaginatedUser${i}`);
+		}
+
+		// Wait for some rows to appear
+		await expect(page.locator('[data-testid="rank-row"]').first()).toBeVisible({ timeout: 5000 });
+
+		// Scroll down to trigger loadMore
+		const sentinel = page.locator('[data-testid="pagination-sentinel"]');
+		if (sentinel) {
+			await sentinel.scrollIntoViewIfNeeded();
+			await page.waitForTimeout(1000);
+		}
+
+		// Verify some rows show counters (stanks/reacted format)
+		const rowsWithCounters = page.locator('[data-testid="rank-row"]').filter({ hasText: /Stanks/ });
+		const count = await rowsWithCounters.count();
+		expect(count).toBeGreaterThan(0);
+	});
+
+	test('session and chain counters display in row subtitle', async ({
+		page,
+		injectStank,
+		injectReaction
+	}) => {
+		const GUILD = 123456789;
+		const STANKER = 9001;
+		const REACTOR = 9002;
+
+		// Plant a stank
+		const stank = await injectStank(GUILD, STANKER, 'CounterUser');
+		const messageId = stank.message_id;
+
+		// Wait for chain to be active
+		await expect(page.locator('[data-testid="chain-counter"]')).toHaveText(/^1 /, { timeout: 5000 });
+
+		// Add reaction
+		await injectReaction(GUILD, messageId, REACTOR);
+
+		// Find the reactor's row and verify counters format
+		const reactorRow = page.locator(`[data-testid="rank-row"][href$="/player/${REACTOR}"]`);
+		await expect(reactorRow).toBeVisible({ timeout: 5000 });
+		const subtitle = reactorRow.locator('.text-xs.text-muted');
+
+		// Should show "X / Y reacts · A / B Stanks" format
+		await expect(subtitle).toMatch(/\d+ \/ \d+ reacts · \d+ \/ \d+ Stanks/);
+	});
+
 	test('random events update the board', async ({ page, startRandomEvents, stopRandomEvents }) => {
 		await startRandomEvents(1);
 

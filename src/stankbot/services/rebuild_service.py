@@ -31,6 +31,7 @@ from stankbot.db.models import (
     Cooldown,
     Event,
     PlayerBadge,
+    PlayerChainTotal,
     PlayerTotal,
     ReactionAward,
     Record,
@@ -79,6 +80,7 @@ async def wipe_guild_state(session: AsyncSession, guild_id: int) -> None:
         Record,
         PlayerTotal,
         PlayerBadge,
+        PlayerChainTotal,
     ):
         await session.execute(
             delete(model).where(model.guild_id == guild_id)  # type: ignore[attr-defined]

@@ -268,3 +268,89 @@ async def test_startup_warm_empty_guild_without_events(session: Any) -> None:
     assert cached.scalar_one() == 0
     count = await pt_repo.rebuild(session, 1)
     assert count == 0  # nothing to rebuild
+
+
+# ── session counters (stanks_in_session, reactions_in_session) ─────────────
+
+
+async def test_upsert_with_session_counters(session: Any) -> None:
+    await pt_repo.upsert(
+        session,
+        guild_id=1,
+        user_id=100,
+        session_id=5,
+        sp_delta=10,
+        stanks_in_session_delta=2,
+        reactions_in_session_delta=1,
+    )
+    row = await pt_repo.get(session, 1, 100, session_id=5)
+    assert row.earned_sp == 10
+    assert row.stanks_in_session == 2
+    assert row.reactions_in_session == 1
+
+
+async def test_upsert_accumulates_session_counters(session: Any) -> None:
+    await pt_repo.upsert(
+        session,
+        guild_id=1,
+        user_id=100,
+        session_id=5,
+        sp_delta=10,
+        stanks_in_session_delta=2,
+    )
+    await pt_repo.upsert(
+        session,
+        guild_id=1,
+        user_id=100,
+        session_id=5,
+        stanks_in_session_delta=3,
+        reactions_in_session_delta=1,
+    )
+    row = await pt_repo.get(session, 1, 100, session_id=5)
+    assert row.stanks_in_session == 5
+    assert row.reactions_in_session == 1
+
+
+async def test_rebuild_populates_session_counters(session: Any) -> None:
+    await _ensure_guild(session)
+    sid1 = (await events_repo.append(session, guild_id=1, type=EventType.SESSION_START)).id
+
+    # SP_BASE awards 10, SP_REACTION awards 1
+    await _event(session, user_id=100, type=EventType.SP_BASE, delta=10, session_id=sid1)
+    await _event(session, user_id=100, type=EventType.SP_BASE, delta=5, session_id=sid1)
+    await _event(session, user_id=100, type=EventType.SP_REACTION, delta=1, session_id=sid1)
+    await _event(session, user_id=200, type=EventType.SP_BASE, delta=30, session_id=sid1)
+    await session.flush()
+
+    count = await pt_repo.rebuild(session, 1)
+    assert count >= 2  # at least all-time + session rows
+
+    row = await pt_repo.get(session, 1, 100, session_id=sid1)
+    assert row.stanks_in_session == 2
+    assert row.reactions_in_session == 1
+    assert row.earned_sp == 16  # 10 + 5 + 1 (SP_REACTION also adds to earned_sp)
+
+    row2 = await pt_repo.get(session, 1, 200, session_id=sid1)
+    assert row2.stanks_in_session == 1
+    assert row2.reactions_in_session == 0
+
+
+async def test_rebuild_session_counters_separate_sessions(session: Any) -> None:
+    await _ensure_guild(session)
+    sid1 = (await events_repo.append(session, guild_id=1, type=EventType.SESSION_START)).id
+    sid2 = (await events_repo.append(session, guild_id=1, type=EventType.SESSION_START)).id
+
+    await _event(session, user_id=100, type=EventType.SP_BASE, delta=10, session_id=sid1)
+    await _event(session, user_id=100, type=EventType.SP_BASE, delta=5, session_id=sid2)
+    await _event(session, user_id=100, type=EventType.SP_REACTION, delta=1, session_id=sid1)
+    await session.flush()
+
+    await pt_repo.rebuild(session, 1)
+
+    row1 = await pt_repo.get(session, 1, 100, session_id=sid1)
+    row2 = await pt_repo.get(session, 1, 100, session_id=sid2)
+
+    assert row1.stanks_in_session == 1
+    assert row1.reactions_in_session == 1
+    assert row2.stanks_in_session == 1
+    assert row2.reactions_in_session == 0

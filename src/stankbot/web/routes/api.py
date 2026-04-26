@@ -82,32 +82,83 @@ async def api_board(
     if offset == 0:
         return MsgPackResponse(state, request)
 
-    # Paginated rankings only — fetch next page from player_totals.
-    from stankbot.db.repositories import events as events_repo
+    # Paginated rankings only — fetch from player_totals cache directly.
+    from sqlalchemy import select
+
+    from stankbot.db.models import PlayerChainTotal, PlayerTotal
+    from stankbot.db.repositories import chains as chains_repo
     from stankbot.db.repositories import players as players_repo
     from stankbot.services.session_service import SessionService
 
+    altar = await altars_repo.primary(session, guild_id)
+    if altar is None:
+        return MsgPackResponse({"rankings": [], "has_more": False}, request)
+
     session_svc = SessionService(session)
     session_id = await session_svc.current(guild_id)
-    rows = await events_repo.leaderboard(
-        session, guild_id, session_id=session_id, limit=limit, offset=offset
-    )
 
-    user_ids = [uid for uid, _, _ in rows]
+    # Fetch rankings from player_totals cache
+    stmt = (
+        select(PlayerTotal)
+        .where(
+            PlayerTotal.guild_id == guild_id,
+            PlayerTotal.session_id == session_id,
+        )
+        .order_by((PlayerTotal.earned_sp - PlayerTotal.punishments).desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+
+    user_ids = [r.user_id for r in rows]
     name_avatar_map: dict = {}
+    per_user_reactions_session: dict = {}
+    per_user_stanks_session: dict = {}
+
     if user_ids:
         name_avatar_map = await players_repo.display_names_and_avatars(session, guild_id, user_ids)
 
+        # Session counters from player_totals
+        for r in rows:
+            uid = int(r.user_id)
+            per_user_reactions_session[uid] = r.reactions_in_session
+            per_user_stanks_session[uid] = r.stanks_in_session
+
+    # Chain counters from player_chain_totals
+    per_user_reactions_chain: dict = {}
+    per_user_stanks_chain: dict = {}
+    if session_id is not None:
+        live_chain = await chains_repo.current_chain(session, guild_id, altar.id)
+        if live_chain is not None:
+            chain_totals_stmt = (
+                select(PlayerChainTotal)
+                .where(
+                    PlayerChainTotal.guild_id == guild_id,
+                    PlayerChainTotal.chain_id == live_chain.id,
+                    PlayerChainTotal.user_id.in_(user_ids) if user_ids else False,
+                )
+            )
+            chain_rows = (await session.execute(chain_totals_stmt)).scalars().all()
+            for r in chain_rows:
+                uid = int(r.user_id)
+                per_user_reactions_chain[uid] = r.reactions_in_chain
+                per_user_stanks_chain[uid] = r.stanks_in_chain
+
     rankings = []
-    for uid, sp, pp in rows:
+    for r in rows:
+        uid = int(r.user_id)
         name, avatar = name_avatar_map.get(uid, (str(uid), None))
         rankings.append({
-            "user_id": str(uid),
+            "user_id": str(r.user_id),
             "display_name": name,
             "discord_avatar": avatar,
-            "earned_sp": sp,
-            "punishments": pp,
-            "net": sp - pp,
+            "earned_sp": r.earned_sp,
+            "punishments": r.punishments,
+            "net": r.earned_sp - r.punishments,
+            "reactions_in_chain": per_user_reactions_chain.get(uid, 0),
+            "reactions_in_session": per_user_reactions_session.get(uid, 0),
+            "stanks_in_chain": per_user_stanks_chain.get(uid, 0),
+            "stanks_in_session": per_user_stanks_session.get(uid, 0),
         })
 
     return MsgPackResponse(
