@@ -17,7 +17,6 @@
 
 	const href = $derived(`${base}/player/${row.user_id}`);
 	const net = $derived(row.net ?? row.earned_sp - row.punishments);
-	const contextLabel = $derived(context === 'chain' ? 'chain total' : 'session total');
 	const stankCount = $derived(context === 'chain' ? (row.stanks_in_chain ?? 0) : (row.stanks_in_session ?? 0));
 	const reactionCount = $derived(context === 'chain' ? (row.reactions_in_chain ?? 0) : (row.reactions_in_session ?? 0));
 	const hasReactionMeta = $derived(
@@ -108,7 +107,7 @@
 			{/if}
 		</div>
 		{#if hasReactionMeta}
-			<div class="text-xs text-muted truncate">{stankCount} Stanks ({contextLabel}) · {reactionCount} reacts ({contextLabel})</div>
+			<div class="text-xs text-muted truncate">{stankCount} Stanks · {reactionCount} reacts</div>
 		{/if}
 	</div>
 	<div class="relative min-w-[4ch] text-right">

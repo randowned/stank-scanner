@@ -93,6 +93,6 @@ test.describe('Chain detail page', () => {
 		const rows = page.locator('[data-testid="rank-row"]');
 		await expect(rows.first()).toBeVisible({ timeout: 10000 });
 		const subtitle = rows.first().locator('.text-xs.text-muted');
-		await expect(subtitle).toContainText('(chain total)', { timeout: 5000 });
+		await expect(subtitle).toContainText('Stanks ·', { timeout: 5000 });
 	});
 });

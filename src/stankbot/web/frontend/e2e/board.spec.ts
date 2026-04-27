@@ -177,8 +177,8 @@ test.describe('Board', () => {
 		await expect(reactorRow).toBeVisible({ timeout: 5000 });
 		const subtitle = reactorRow.locator('.text-xs.text-muted');
 
-		// Should show "X Stanks (session total) · Y reacts (session total)" format
-		await expect(subtitle).toHaveText(/\d+ Stanks \(session total\) · \d+ reacts \(session total\)/);
+		// Should show "X Stanks · Y reacts" format
+		await expect(subtitle).toHaveText(/\d+ Stanks · \d+ reacts/);
 	});
 
 	test('random events update the board', async ({ page, startRandomEvents, stopRandomEvents }) => {

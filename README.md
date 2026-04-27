@@ -171,7 +171,7 @@ CLI alternative for rebuild: `python -m stankbot.rebuild --guild-id <id>`.
 
 ## Web dashboard
 
-- `/` — landing page for unauthenticated visitors (Discord login CTA); authenticated users see the full leaderboard + chain state board instead. Top tiles: **Reactions** (current chain, chain-scoped) · Current · Session · All-time. Leaderboard rows live-reorder on point changes with floating `+N` delta chips and show net SP (`+N SP` / `-N SP`) with stanks / reactions breakdown (session totals on board, chain totals on chain page). A chain break paints an overlay with the breaker and SP loss until the next chain starts.
+- `/` — landing page for unauthenticated visitors (Discord login CTA); authenticated users see the full leaderboard + chain state board instead. Top tiles: **Reactions** (current chain, chain-scoped) · Current · Session · All-time. Leaderboard rows live-reorder on point changes with floating `+N` delta chips and show net SP (`+N SP` / `-N SP`) with stanks and reactions counts. A chain break paints an overlay with the breaker and SP loss until the next chain starts.
 - `/me` → `/player/{user_id}` — your stats, badges, history.
 - `/sessions` → `/history/session/{id}` — session browser + summary.
 - Admin surface (six pages):
