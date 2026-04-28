@@ -16,7 +16,7 @@ These rules override any default behavior. Follow them strictly.
 - **Save changes directly to files and stop.** Do not stage, do not commit. The user previews changes in another editor via its git integration, so unstaged edits are exactly what they want to see.
 
 ### Commits
-- **Never commit unless the user explicitly asks.** After finishing a change, stop and wait.
+- **🔴 UN-SKIPPABLE: Never commit, push, or bump the version unless the user explicitly asks.** After finishing a change, stop and wait. Even if you just shipped a version and made follow-up fixes, do NOT commit them unprompted. The user decides when to ship.
 - Shipping is handled by `/commit-and-push` (version bump + README sync + commit + push). Docs-only sync is `/update-docs`.
 - **Never auto-execute `/commit-and-push` or `/update-docs`** — these must only run when the user explicitly invokes them. If there are uncommitted/unstaged changes in the repo, do not commit, push, or bump without being told.
 - **No `Co-Authored-By` trailer.** Never add AI co-author trailers. (Also enforced via `~/.claude/CLAUDE.md`.)
