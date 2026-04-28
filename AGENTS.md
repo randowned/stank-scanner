@@ -45,6 +45,7 @@ When delegating, brief the agent self-contained: state the goal, name the files/
 - Prefer editing existing code to adding new files. The project is intentionally multi-file, but resist inventing new modules when an existing one is the right home.
 - Do not invent abstractions (base classes, plugin interfaces, DI frameworks) until a second concrete implementation forces the shape.
 - **Windows (PowerShell)** does not support `&&` for chaining commands. Use `; cmd2` (run unconditionally) or two separate tool calls.
+- **Restarting processes.** When backend or frontend changes don't take effect, stale processes may be running from previous bash sessions. Kill them explicitly: `taskkill /F /IM python.exe` and `taskkill /F /IM node.exe`. On Windows, `Start-Process` does not inherit the calling shell's environment variables — use `cmd /c set ENV=... && python ...` or start from the repo root with `$env:ENV="dev-mock"` set in the same shell. The Vite dev server caches compiled components in memory; if E2E tests behave inconsistently after editing `.svelte` files, kill the Node process so the dev server recompiles fresh on next startup.
 
 ### Database migrations
 
@@ -83,6 +84,19 @@ All changes must be verified before they are considered done. The verification p
 
 **Framework stack.** SvelteKit 2 with `@sveltejs/adapter-static` (SPA mode, no SSR). Svelte 5 runes (`$state`, `$derived`, `$effect`) in `.svelte` files. Traditional `writable` stores from `svelte/store` for cross-component state (board, auth, toasts, WS events).
 
+**Svelte 5 lifecycle quirk — `bind:this` is not available in `onMount`.** In Svelte 5, element bindings (`bind:this={el}`) resolve after `onMount` runs. To access a bound element reference, use `$effect` + `tick()`:
+```typescript
+let btn: HTMLButtonElement;
+$effect(() => {
+    tick().then(() => {
+        if (!btn) return;
+        btn.addEventListener('click', handler);
+    });
+});
+```
+
+**Svelte 5 event delegation.** `onclick` (not `on:click`) is the correct syntax in runes mode, but Svelte 5 uses event delegation under the hood. If delegated events don't fire (e.g. in E2E tests with Playwright), fall back to native DOM via `$effect` + `tick()` + `addEventListener`. The `OnlineBadge` component is a reference example of this pattern.
+
 **API calls MUST use `apiFetch`**, not `fetch`. The custom `apiFetch` wrapper in `src/lib/api.ts` negotiates msgpack encoding for request body and response parsing. The same `Packr` instance is shared with the WebSocket client for consistent binary encoding. The `loadWithFallback` wrapper in `src/lib/api-utils.ts` handles page load errors gracefully — use it in `+page.ts` load functions instead of try/catch. The `toErrorMessage` helper in the same file standardizes error message extraction from `FetchError` and other error types — use it instead of repeated `err instanceof FetchError ? err.message : 'Fallback'` patterns.
 
 **Auth state is cached in sessionStorage** under keys `stankbot:auth` and `stankbot:guilds`. After login/logout, these caches must be cleared (the `mockLogin` fixture does this automatically). The `+layout.ts` root layout fetches `/auth` and `/api/guilds` once per SPA navigation and caches the results.
@@ -99,6 +113,7 @@ All changes must be verified before they are considered done. The verification p
 - `guildId` / `user` / `guilds` — auth state hydrated from `+layout.ts` load function
 - `adminSidebarOpen` — admin sidebar toggle
 - `activeChainBreak` — chain break overlay state
+- `onlineUsers` — online admin users list with session durations
 
 **Common pitfalls from historical fixes:**
 - SPA navigation does NOT reload stores (`+layout.ts`). Auth/board data is cached until a manual reload or explicit refetch (v2.19.1).
@@ -106,7 +121,7 @@ All changes must be verified before they are considered done. The verification p
 - The Vite dev server proxies `/api`, `/ws`, `/auth`, `/ping` to the backend at `localhost:8000`. If the backend isn't running, all API calls fail silently or return `ECONNREFUSED`.
 - When adding a new store, export it from `src/lib/stores/index.ts` so `$lib/stores` resolves it.
 - The `playerProfiles`, `loading`, and `cache` stores were deleted in v2.29.2. Player data loads per-page via `+page.ts`. Use local `$state` for loading flags — the global loading counter store is gone.
-- `formatNumber()` lives in `$lib/format.ts` — import it instead of redefining the M/K suffix logic in multiple components.
+- `formatNumber()` and `formatDuration()` live in `$lib/format.ts` — use them instead of redefining the M/K suffix or `XhYm` duration logic.
 
 ### E2E test execution
 
@@ -225,7 +240,7 @@ Members post messages containing the `:Stank:` emoji/sticker in a designated **a
 - **Frontend stores:** [src/stankbot/web/frontend/src/lib/stores/](src/stankbot/web/frontend/src/lib/stores/) — cross-component state for board, auth, toasts, WS events.
 - **Frontend components:** [src/stankbot/web/frontend/src/lib/components/](src/stankbot/web/frontend/src/lib/components/) — reusable UI primitives (`Button`, `Modal`, `Tabs`, `Dropdown`, `StatTile`, `RemovableItem`, `ToastContainer`, `GuildSwitcher`, etc.).
 - **WebSocket client:** [src/stankbot/web/frontend/src/lib/ws.ts](src/stankbot/web/frontend/src/lib/ws.ts) — connection lifecycle, msgpack encoding, `MsgType` enum shared with backend.
-- **Shared utilities:** [src/stankbot/web/frontend/src/lib/format.ts](src/stankbot/web/frontend/src/lib/format.ts) — `formatNumber()` for M/K suffix display. [src/stankbot/web/frontend/src/lib/api-utils.ts](src/stankbot/web/frontend/src/lib/api-utils.ts) — `toErrorMessage()` for standardized error extraction, `loadWithFallback()` for page load error resilience.
+- **Shared utilities:** [src/stankbot/web/frontend/src/lib/format.ts](src/stankbot/web/frontend/src/lib/format.ts) — `formatNumber()` for M/K suffix display, `formatDuration()` for `XhYm` duration formatting. [src/stankbot/web/frontend/src/lib/api-utils.ts](src/stankbot/web/frontend/src/lib/api-utils.ts) — `toErrorMessage()` for standardized error extraction, `loadWithFallback()` for page load error resilience.
 
 ## Reference files
 

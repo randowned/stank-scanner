@@ -184,7 +184,7 @@ The dashboard is a PWA — installable from Chrome / Edge via the address bar or
   - `/admin/audit` — admin action audit trail.
   - `/admin/events` — game event log (stanks, breaks, reactions, achievements).
   - `/admin/settings` — two-column page: left lists Altar / Scoring / Behavior / Reset windows / Announcements / Maintenance cards; right sticky rail holds New Session · Reset · Rebuild.
-- Header: single row, `Live updates` badge (gray when logged out, green/muted/red when connected), user menu with Navigate (Dashboard / Sessions) + My Profile + collapsible Switch Guild showing the active guild's icon + name.
+- Header: single row, `Live updates` badge for non-admin users (gray when logged out, green/muted/red when connected) or `N online` badge for admin users (clickable popover with avatars + session durations), user menu with Navigate (Dashboard / Sessions) + My Profile + collapsible Switch Guild showing the active guild's icon + name.
 - `/chain/{id}` — chain detail with status banner (alive / broken / rollover), length classification (Short / Medium / Long / Epic), per-position timeline (avatar + position badge + SP awarded at each stank), and per-user leaderboard with stank and reaction counts.
 - Auth guard: unauthenticated requests to any non-public route redirect to `/`. All data API endpoints require guild membership (`require_guild_member`).
 

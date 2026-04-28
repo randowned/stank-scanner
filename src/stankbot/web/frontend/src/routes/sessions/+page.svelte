@@ -2,25 +2,13 @@
 	import { base } from '$app/paths';
 	import type { SessionSummary } from '$lib/types';
 	import { formatDateTime } from '$lib/datetime';
-	import { formatNumber } from '$lib/format';
+	import { formatNumber, formatDuration } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	let { data } = $props();
 
 	const sessions = $derived(data.sessions as SessionSummary[]);
-
-	function formatDuration(started: string | null, ended: string | null | undefined): string {
-		if (!started || !ended) return '';
-		const diffMs = new Date(ended).getTime() - new Date(started).getTime();
-		if (diffMs < 0) return '';
-		const mins = Math.floor(diffMs / 60000);
-		if (mins < 1) return '< 1m';
-		if (mins < 60) return `${mins}m`;
-		const hrs = Math.floor(mins / 60);
-		const rem = mins % 60;
-		return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
-	}
 
 	function dateRange(started: string | null, ended: string | null | undefined): string {
 		const start = formatDateTime(started);

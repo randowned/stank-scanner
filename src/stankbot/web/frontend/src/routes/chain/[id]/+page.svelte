@@ -2,6 +2,7 @@
 	import { base } from '$app/paths';
 	import type { ChainSummary, ChainMessageEntry } from '$lib/types';
 	import { formatDateTime } from '$lib/datetime';
+	import { formatDuration } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LeaderboardRow from '$lib/components/LeaderboardRow.svelte';
@@ -18,17 +19,6 @@
 	const isAlive = $derived(!chain?.broken_at);
 	const isRolledOver = $derived(!!chain?.rolled_over);
 
-	function chainDuration(chain: ChainSummary): string {
-		const start = new Date(chain.started_at).getTime();
-		const end = chain.broken_at ? new Date(chain.broken_at).getTime() : Date.now();
-		const diffMs = end - start;
-		const mins = Math.floor(diffMs / 60000);
-		if (mins < 1) return '< 1m';
-		if (mins < 60) return `${mins}m`;
-		const hrs = Math.floor(mins / 60);
-		const rem = mins % 60;
-		return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
-	}
 </script>
 
 <div class="p-4 space-y-4">
@@ -64,7 +54,7 @@
 				{#if chain.total_reactions !== undefined}
 					<StatTile value={String(chain.total_reactions)} label="Reactions" color="text-accent" testId="chain-reactions" />
 				{/if}
-				<StatTile value={chainDuration(chain)} label="Duration" color="text-text" testId="chain-duration" />
+				<StatTile value={formatDuration(chain.started_at, chain.broken_at)} label="Duration" color="text-text" testId="chain-duration" />
 			</div>
 			<div class="mt-2 pt-2 border-t border-border flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
 				<span>Started: {formatDateTime(chain.started_at)}</span>

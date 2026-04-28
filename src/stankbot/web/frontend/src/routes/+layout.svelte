@@ -17,6 +17,7 @@
 	import type { User, GuildInfo } from '$lib/types';
 	import UserMenu from '$lib/components/UserMenu.svelte';
 	import LiveBadge from '$lib/components/LiveBadge.svelte';
+	import OnlineBadge from '$lib/components/OnlineBadge.svelte';
 	import NavSkeleton from '$lib/components/NavSkeleton.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 
@@ -128,7 +129,11 @@
 			</div>
 
 			<div class="flex items-center gap-2 shrink-0">
-				<LiveBadge disabled={!$user} />
+				{#if isAdmin}
+					<OnlineBadge />
+				{:else}
+					<LiveBadge disabled={!$user} />
+				{/if}
 				{#if $user}
 					<UserMenu
 						user={$user}

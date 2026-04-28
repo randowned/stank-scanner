@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import msgpack
@@ -28,19 +29,41 @@ MSG_TYPE_SESSION = 106
 MSG_TYPE_GAME_EVENT = 107
 MSG_TYPE_ERROR = 108
 MSG_TYPE_VERSION_MISMATCH = 109
+MSG_TYPE_ONLINE_USERS = 110
 
 router = APIRouter(prefix="")
+
+
+@dataclass
+class ConnectionInfo:
+    websocket: WebSocket
+    user_id: str
+    username: str
+    avatar_url: str
+    connected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    is_admin: bool = False
 
 
 class ConnectionManager:
     """Manages WebSocket connections keyed by guild_id."""
 
     def __init__(self) -> None:
-        self.active_connections: dict[int, list[WebSocket]] = defaultdict(list)
+        self.active_connections: dict[int, list[ConnectionInfo]] = defaultdict(list)
 
-    async def connect(self, websocket: WebSocket, guild_id: int) -> None:
+    async def connect(
+        self, websocket: WebSocket, guild_id: int, user_id: str = "0",
+        username: str = "Unknown", avatar_url: str = "", is_admin: bool = False,
+    ) -> None:
         await websocket.accept()
-        self.active_connections[guild_id].append(websocket)
+        info = ConnectionInfo(
+            websocket=websocket,
+            user_id=user_id,
+            username=username,
+            avatar_url=avatar_url,
+            connected_at=datetime.now(UTC),
+            is_admin=is_admin,
+        )
+        self.active_connections[guild_id].append(info)
         log.info(
             "WebSocket connected for guild %d (total: %d)",
             guild_id,
@@ -48,8 +71,9 @@ class ConnectionManager:
         )
 
     def disconnect(self, websocket: WebSocket, guild_id: int) -> None:
-        if websocket in self.active_connections[guild_id]:
-            self.active_connections[guild_id].remove(websocket)
+        self.active_connections[guild_id] = [
+            c for c in self.active_connections[guild_id] if c.websocket != websocket
+        ]
         log.info(
             "WebSocket disconnected for guild %d (remaining: %d)",
             guild_id,
@@ -58,17 +82,46 @@ class ConnectionManager:
 
     async def broadcast(self, guild_id: int, message: bytes) -> None:
         disconnected = []
-        for websocket in self.active_connections[guild_id]:
+        for conn in self.active_connections[guild_id]:
             try:
-                await websocket.send_bytes(message)
+                await conn.websocket.send_bytes(message)
             except Exception:
-                disconnected.append(websocket)
+                disconnected.append(conn.websocket)
         for ws in disconnected:
             self.disconnect(ws, guild_id)
 
     async def broadcast_json(self, guild_id: int, message: dict) -> None:
         packed = msgpack.packb(message, use_single_float=True)
         await self.broadcast(guild_id, packed)
+
+    async def broadcast_to_admins(self, guild_id: int, message: bytes) -> None:
+        disconnected = []
+        for conn in self.active_connections[guild_id]:
+            if not conn.is_admin:
+                continue
+            try:
+                await conn.websocket.send_bytes(message)
+            except Exception:
+                disconnected.append(conn.websocket)
+        for ws in disconnected:
+            self.disconnect(ws, guild_id)
+
+    def get_online_users(self, guild_id: int) -> list[dict]:
+        conns = self.active_connections.get(guild_id, [])
+        dedup: dict[str, ConnectionInfo] = {}
+        for conn in conns:
+            uid = conn.user_id
+            if uid not in dedup or conn.connected_at < dedup[uid].connected_at:
+                dedup[uid] = conn
+        return [
+            {
+                "user_id": uid,
+                "username": info.username,
+                "avatar_url": info.avatar_url,
+                "connected_at": info.connected_at.isoformat(),
+            }
+            for uid, info in dedup.items()
+        ]
 
 
 manager = ConnectionManager()
@@ -214,7 +267,34 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await websocket.close(code=4003, reason="Not in guild")
                 return
 
-    await manager.connect(websocket, guild_id)
+    user_data = session.get("user", {}) or {}
+    user_id_str = str(user_data.get("id", "0"))
+    username = str(user_data.get("username", "Unknown"))
+    avatar_url = str(user_data.get("avatar") or "")
+
+    is_admin = False
+    if is_dev_mock:
+        is_admin = bool(session.get("is_global_admin", False) or session.get("is_guild_admin", False))
+    else:
+        if user_id_str != "0" and owner_id:
+            try:
+                from stankbot.db.engine import session_scope
+                from stankbot.services.permission_service import PermissionService
+                async with session_scope(session_factory) as db:
+                    svc = PermissionService(db, owner_id=owner_id)
+                    is_admin = await svc.is_global_admin(int(user_id_str))
+            except Exception:
+                log.warning("Failed to check admin status for WS client: user_id=%s", user_id_str)
+
+    await manager.connect(websocket, guild_id, user_id=user_id_str, username=username, avatar_url=avatar_url, is_admin=is_admin)
+
+    async def _broadcast_online_users(gid: int) -> None:
+        users = manager.get_online_users(gid)
+        log.info("_broadcast_online_users: guild=%d users=%s admin_count=%d", gid, users, sum(1 for c in manager.active_connections.get(gid, []) if c.is_admin))
+        packed = msgpack.packb({"t": MSG_TYPE_ONLINE_USERS, "d": {"users": users}}, use_single_float=True)
+        await manager.broadcast_to_admins(gid, packed)
+
+    await _broadcast_online_users(guild_id)
 
     try:
         from stankbot.db.engine import session_scope
@@ -255,6 +335,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 break
     finally:
         manager.disconnect(websocket, guild_id)
+        await _broadcast_online_users(guild_id)
 
 
 # ---------------------------------------------------------------------------

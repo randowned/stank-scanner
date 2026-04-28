@@ -15,6 +15,7 @@ from stankbot.db.models import (
     Player,
 )
 from stankbot.web.ws import (
+    ConnectionInfo,
     ConnectionManager,
     get_board_state,
     manager,
@@ -52,24 +53,24 @@ class TestConnectionManager:
         await cm.connect(ws, 123)
 
         assert 123 in cm.active_connections
-        assert ws in cm.active_connections[123]
+        assert any(c.websocket is ws for c in cm.active_connections[123])
         ws.accept.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_disconnect_removes_connection(self, cm: ConnectionManager) -> None:
         ws = AsyncMock()
-        cm.active_connections[123].append(ws)
+        cm.active_connections[123].append(ConnectionInfo(websocket=ws, user_id="0", username="Test", avatar_url=""))
 
         cm.disconnect(ws, 123)
 
-        assert ws not in cm.active_connections[123]
+        assert not any(c.websocket is ws for c in cm.active_connections[123])
 
     @pytest.mark.asyncio
     async def test_broadcast_sends_to_all(self, cm: ConnectionManager) -> None:
         ws1 = AsyncMock()
         ws2 = AsyncMock()
-        cm.active_connections[123].append(ws1)
-        cm.active_connections[123].append(ws2)
+        cm.active_connections[123].append(ConnectionInfo(websocket=ws1, user_id="1", username="A", avatar_url=""))
+        cm.active_connections[123].append(ConnectionInfo(websocket=ws2, user_id="2", username="B", avatar_url=""))
 
         await cm.broadcast(123, b"test")
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { formatDateTime } from '$lib/datetime';
+	import { formatDuration } from '$lib/format';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Card from '$lib/components/Card.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -15,19 +16,6 @@
 		return names[userId] ?? `#${userId}`;
 	}
 
-	function formatDuration(started: string | null, ended: string | null | undefined): string {
-		if (!started) return '';
-		const start = new Date(started).getTime();
-		const end = ended ? new Date(ended).getTime() : Date.now();
-		const diffMs = end - start;
-		if (diffMs < 0) return '';
-		const mins = Math.floor(diffMs / 60000);
-		if (mins < 1) return '< 1m';
-		if (mins < 60) return `${mins}m`;
-		const hrs = Math.floor(mins / 60);
-		const rem = mins % 60;
-		return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
-	}
 </script>
 
 <div class="p-4 space-y-4">

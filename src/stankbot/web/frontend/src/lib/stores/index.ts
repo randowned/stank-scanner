@@ -5,4 +5,5 @@ export { toasts, addToast, removeToast } from './toast';
 export { lastWsEvent, emitWsEvent, type WsEvent } from './ws-events';
 export { activeChainBreak, type ChainBreakInfo } from './chainBreak';
 export { adminSidebarOpen } from './admin';
+export { onlineUsers, type OnlineUser } from './onlineUsers';
 export type { Toast, ToastKind } from '$lib/types';

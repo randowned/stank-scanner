@@ -1,6 +1,7 @@
 import { base } from '$app/paths';
 import { Packr } from 'msgpackr';
-import { connectionStatus, wsLatency, boardState } from './stores/index';
+import { connectionStatus, wsLatency, boardState, onlineUsers } from './stores/index';
+import type { OnlineUser } from './stores/index';
 import { emitWsEvent } from './stores/ws-events';
 import type { BoardState, Badge } from './types';
 import { get } from 'svelte/store';
@@ -21,7 +22,8 @@ export enum MsgType {
 	SESSION = 106,
 	GAME_EVENT = 107,
 	ERROR = 108,
-	VERSION_MISMATCH = 109
+	VERSION_MISMATCH = 109,
+	ONLINE_USERS = 110
 }
 
 interface PingMsg {
@@ -110,6 +112,13 @@ interface VersionMismatchMsg {
 	};
 }
 
+interface OnlineUsersMsg {
+	t: typeof MsgType.ONLINE_USERS;
+	d: {
+		users: OnlineUser[];
+	};
+}
+
 type ServerMsg =
 	| StateMsg
 	| RankUpdateMsg
@@ -119,7 +128,8 @@ type ServerMsg =
 	| SessionMsg
 	| GameEventMsg
 	| ErrorMsg
-	| VersionMismatchMsg;
+	| VersionMismatchMsg
+	| OnlineUsersMsg;
 
 let ws: WebSocket | null = null;
 let pingInterval: ReturnType<typeof setInterval> | null = null;
@@ -329,6 +339,10 @@ function handleMessage(msg: ServerMsg): void {
 				serverVersion: msg.d.server_version,
 				clientVersion: msg.d.client_version
 			});
+			break;
+
+		case MsgType.ONLINE_USERS:
+			onlineUsers.set(msg.d.users);
 			break;
 	}
 }
