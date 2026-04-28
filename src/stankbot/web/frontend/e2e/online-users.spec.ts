@@ -32,6 +32,7 @@ test.describe('Online users badge (admin)', () => {
 		const badge = page.locator('[data-testid="online-badge"]');
 		await expect(badge).toBeVisible();
 		await badge.click();
+		await page.waitForTimeout(300);
 		const popover = page.locator('[data-testid="online-popover"]');
 		await expect(popover).toBeVisible({ timeout: 5000 });
 		const rows = page.locator('[data-testid="online-user-row"]');

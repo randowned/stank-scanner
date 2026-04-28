@@ -73,4 +73,12 @@ def configure_logging(level: str = "INFO", fmt: str = "text") -> None:
         lg = logging.getLogger(name)
         lg.handlers.clear()
         lg.propagate = True
+    # Rewrite ``uvicorn.error`` → ``uvicorn`` so startup messages
+    # don't misleadingly show ``uvicorn.error:``.
+    class _RenameFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            if record.name == "uvicorn.error":
+                record.name = "uvicorn"
+            return True
+    logging.getLogger("uvicorn.error").addFilter(_RenameFilter())
     logging.getLogger("uvicorn.access").setLevel("WARNING")

@@ -117,7 +117,7 @@ class ConnectionManager:
             {
                 "user_id": uid,
                 "username": info.username,
-                "avatar_url": info.avatar_url,
+                "discord_avatar": info.avatar_url,
                 "connected_at": info.connected_at.isoformat(),
             }
             for uid, info in dedup.items()
@@ -262,15 +262,26 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         owner_id = int(getattr(config, "owner_id", 0) or 0)
         if int(user.get("id", 0)) != owner_id:
             from stankbot.web.tools import fetch_guild_member
-            member = await fetch_guild_member(config, guild_id, int(user["id"]))
-            if member is None:
+            member_data = await fetch_guild_member(config, guild_id, int(user["id"]))
+            if member_data is None:
                 await websocket.close(code=4003, reason="Not in guild")
                 return
+        else:
+            member_data = None
+    else:
+        member_data = None
 
     user_data = session.get("user", {}) or {}
     user_id_str = str(user_data.get("id", "0"))
     username = str(user_data.get("username", "Unknown"))
     avatar_url = str(user_data.get("avatar") or "")
+
+    # Use guild-specific nickname over global username when available
+    if not is_dev_mock and int(user_id_str) != owner_id and member_data is not None:
+        member_user = member_data.get("user", {})
+        guild_nick = member_data.get("nick") or member_user.get("global_name") or member_user.get("username")
+        if guild_nick:
+            username = str(guild_nick)
 
     is_admin = False
     if is_dev_mock:

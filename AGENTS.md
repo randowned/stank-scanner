@@ -44,8 +44,9 @@ When delegating, brief the agent self-contained: state the goal, name the files/
 - Stay inside the repo; don't touch external systems without being asked.
 - Prefer editing existing code to adding new files. The project is intentionally multi-file, but resist inventing new modules when an existing one is the right home.
 - Do not invent abstractions (base classes, plugin interfaces, DI frameworks) until a second concrete implementation forces the shape.
-- **Windows (PowerShell)** does not support `&&` for chaining commands. Use `; cmd2` (run unconditionally) or two separate tool calls.
-- **Restarting processes.** When backend or frontend changes don't take effect, stale processes may be running from previous bash sessions. Kill them explicitly: `taskkill /F /IM python.exe` and `taskkill /F /IM node.exe`. On Windows, `Start-Process` does not inherit the calling shell's environment variables — use `cmd /c set ENV=... && python ...` or start from the repo root with `$env:ENV="dev-mock"` set in the same shell. The Vite dev server caches compiled components in memory; if E2E tests behave inconsistently after editing `.svelte` files, kill the Node process so the dev server recompiles fresh on next startup.
+- **Use git-bash** (`"C:\Program Files\Git\bin\bash.exe" -c "..."`) instead of PowerShell for all command execution. PowerShell has quirks with `&&`, environment variable inheritance, and process management that git-bash avoids.
+- **Track PIDs, never kill by process name.** When you start a background process (backend, frontend dev server), save its PID: `echo $! > /tmp/backend.pid`. Kill only by PID: `kill $(cat /tmp/backend.pid)`. Killing by `python.exe` or `node.exe` may terminate unrelated developer tools (VS Code, other projects' servers, etc.).
+- **Restarting processes.** When backend or frontend changes don't take effect, stale processes may be running from previous bash sessions. Kill them by tracked PID. The Vite dev server caches compiled components in memory; if E2E tests behave inconsistently after editing `.svelte` files, kill the Node process so the dev server recompiles fresh on next startup.
 
 ### Database migrations
 

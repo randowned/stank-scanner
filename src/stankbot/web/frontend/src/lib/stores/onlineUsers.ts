@@ -3,7 +3,7 @@ import { writable } from 'svelte/store';
 export interface OnlineUser {
 	user_id: string;
 	username: string;
-	avatar_url: string;
+	discord_avatar: string;
 	connected_at: string;
 }
 

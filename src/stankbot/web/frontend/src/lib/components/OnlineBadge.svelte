@@ -56,23 +56,23 @@
 		</div>
 		<div class="max-h-64 overflow-y-auto">
 			{#each $onlineUsers as user (user.user_id)}
+				{@const avatarSrc = user.discord_avatar && user.user_id
+					? `https://cdn.discordapp.com/avatars/${user.user_id}/${user.discord_avatar}.${user.discord_avatar.startsWith('a_') ? 'gif' : 'png'}`
+					: null}
 				<div class="flex items-center gap-2 px-3 py-2" data-testid="online-user-row">
-					<img
-						src={user.avatar_url || ''}
-						alt={user.username}
-						class="w-6 h-6 rounded-full object-cover shrink-0"
-						onerror={(e) => {
-							const t = e.target as HTMLImageElement;
-							t.style.display = 'none';
-							if (t.nextElementSibling) (t.nextElementSibling as HTMLElement).style.display = 'flex';
-						}}
-					/>
-					<div
-						class="w-6 h-6 rounded-full bg-accent/30 text-text flex items-center justify-center text-xs font-semibold shrink-0"
-						style={user.avatar_url ? 'display: none' : ''}
-					>
-						{user.username.charAt(0).toUpperCase()}
-					</div>
+					{#if avatarSrc}
+						<img
+							src={avatarSrc}
+							alt={user.username}
+							class="w-6 h-6 rounded-full object-cover shrink-0"
+						/>
+					{:else}
+						<div
+							class="w-6 h-6 rounded-full bg-accent/30 text-text flex items-center justify-center text-xs font-semibold shrink-0"
+						>
+							{user.username.charAt(0).toUpperCase()}
+						</div>
+					{/if}
 					<span class="flex-1 min-w-0 truncate">{user.username}</span>
 					<span class="shrink-0 text-xs text-muted tabular-nums">{formatDuration(user.connected_at)}</span>
 				</div>
