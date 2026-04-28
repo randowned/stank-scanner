@@ -28,7 +28,6 @@ def coerce_naive_datetime(value: datetime | None) -> datetime | None:
 def build_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
     connect_args: dict[str, object] = {}
     if database_url.startswith("sqlite"):
-        # SQLite needs these for async + FK enforcement + WAL happens via PRAGMA
         connect_args["check_same_thread"] = False
     return create_async_engine(database_url, echo=echo, connect_args=connect_args, future=True)
 

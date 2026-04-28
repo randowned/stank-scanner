@@ -126,19 +126,9 @@ $effect(() => {
 
 ### E2E test execution
 
-- **For agent verification during development:** `cd src/stankbot/web/frontend && npm run test:e2e` (reuses the running Vite dev server).
-- **For commit-and-push readiness:** same command; the Playwright config starts the Vite dev server automatically if one isn't already running.
+**Primary: `npm run e2e`.** This single command (`scripts/run-e2e.mjs`) starts the backend (health-check polling via `/healthz` on port 8000, logs → `.stankbot_backend.log`), runs Playwright, and cleans up on exit. Backend output is buffered to a file so test results stay clean.
 
-**Critical: E2E tests require TWO processes — the backend AND the frontend.**
-`npm run test:e2e` only starts the Vite dev server. It does NOT start the Python FastAPI backend. If the backend isn't already running, all API proxy calls return ECONNREFUSED and every test that calls `mockLogin()` fails.
-
-Use the one-command startup scripts to run both:
-- Windows: `.\scripts\dev.ps1`
-- macOS/Linux: `./scripts/dev.sh`
-
-To start them manually (requires two shells):
-1. **Shell 1 — Backend:** Set `$env:ENV="dev-mock"` and `$env:PYTHONPATH="<repo>\src"`, then run `python -m stankbot` (stays running).
-2. **Shell 2 — Tests:** `cd src/stankbot/web/frontend && npm run test:e2e` (starts Vite + runs Playwright).
+When iterating on a running dev server: `npm run test:e2e` (backend already up). The `mockLogin` fixture's `waitForBackend()` guard polls `/ping` for 10s first, giving a clear error if the backend is absent.
 
 ### E2E test patterns
 
@@ -252,5 +242,6 @@ Members post messages containing the `:Stank:` emoji/sticker in a designated **a
 - [README.md](README.md) — user-facing install & usage. Source of truth is the code; README must not drift.
 - [src/stankbot/web/frontend/e2e/](src/stankbot/web/frontend/e2e/) — Playwright E2E tests and fixtures.
 - [scripts/dev.ps1](scripts/dev.ps1) / [scripts/dev.sh](scripts/dev.sh) — one-command dev startup.
+- [scripts/run-e2e.mjs](scripts/run-e2e.mjs) — cross-platform E2E launcher (spawns backend, health-polls, kills on exit).
 - `.env.dev-mock` — dev-mock configuration template (mock Discord, mock auth, separate DB). Committed — no secrets.
 - `.env.dev` — real Discord credentials for local dev. Not committed.

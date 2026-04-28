@@ -2,6 +2,23 @@ import { test as base, expect as baseExpect, type Page } from '@playwright/test'
 
 export const expect = baseExpect;
 
+async function waitForBackend(page: Page, timeoutMs = 10000): Promise<void> {
+	const started = Date.now();
+	while (Date.now() - started < timeoutMs) {
+		try {
+			const resp = await page.request.get('/ping');
+			if (resp.ok()) return;
+		} catch {
+			// backend not reachable yet
+		}
+		await new Promise((r) => setTimeout(r, 250));
+	}
+	throw new Error(
+		`Backend not reachable at /ping after ${timeoutMs}ms. ` +
+			'Is the backend running? Run `npm run e2e` instead of `npm run test:e2e` to auto-start it.'
+	);
+}
+
 export interface MockUser {
 	user_id: number;
 	username: string;
@@ -47,6 +64,7 @@ export const test = base.extend<{
 }>({
 	mockLogin: async ({ page }, use) => {
 		await use(async (user = defaultUser) => {
+			await waitForBackend(page);
 			const response = await page.request.post('/auth/mock-login', { data: user });
 			expect(response.ok()).toBeTruthy();
 			// Clear frontend caches so fresh data is fetched after login

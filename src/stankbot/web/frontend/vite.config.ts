@@ -36,6 +36,10 @@ export default defineConfig({
 			'^/ping': {
 				target: 'http://localhost:8000',
 				changeOrigin: true
+			},
+			'^/healthz': {
+				target: 'http://localhost:8000',
+				changeOrigin: true
 			}
 		}
 	}

@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { connectionStatus, onlineUsers } from '$lib/stores';
 	import { formatDuration } from '$lib/format';
-	import { tick } from 'svelte';
 
 	let open = $state(false);
 	let rootEl: HTMLDivElement;
-	let btn: HTMLButtonElement;
+	let badgeBtn: HTMLButtonElement;
 
 	const color = $derived(
 		$connectionStatus === 'connected'
@@ -18,22 +17,27 @@
 	const count = $derived($onlineUsers.length);
 
 	$effect(() => {
-		tick().then(() => {
-			if (!btn || !rootEl) return;
-			const handler = (e: MouseEvent) => {
-				if (!rootEl.contains(e.target as Node)) open = false;
-			};
-			const toggle = () => { open = !open; };
-			btn.addEventListener('click', toggle);
-			document.addEventListener('click', handler);
-		});
+		if (!badgeBtn || !rootEl) return;
+		const toggle = (e: MouseEvent) => {
+			e.stopPropagation();
+			open = !open;
+		};
+		const clickOutside = (e: MouseEvent) => {
+			if (!rootEl.contains(e.target as Node)) open = false;
+		};
+		badgeBtn.addEventListener('click', toggle);
+		document.addEventListener('click', clickOutside);
+		return () => {
+			badgeBtn.removeEventListener('click', toggle);
+			document.removeEventListener('click', clickOutside);
+		};
 	});
 </script>
 
 <div bind:this={rootEl} class="relative inline-flex items-center">
 	<button
 		type="button"
-		bind:this={btn}
+		bind:this={badgeBtn}
 		title="{count} user{count === 1 ? '' : 's'} online"
 		aria-label="Online users"
 		aria-haspopup="true"

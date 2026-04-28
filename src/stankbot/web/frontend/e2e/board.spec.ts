@@ -32,28 +32,27 @@ test.describe('Board', () => {
 		await expect(page.locator('[data-testid="chain-counter"]')).toHaveText(/^1 /);
 	});
 
-	test('websocket preserves exact Discord snowflake IDs', async ({ page }) => {
+	test('websocket preserves exact Discord snowflake IDs', async ({ page, mockLogin, mockBotGuilds }) => {
 		const largeGuildId = '1482266782306799646';
 		const largeUserId = '129508601730564096';
 
 		const wsUrls: string[] = [];
 		page.on('websocket', (ws) => wsUrls.push(ws.url()));
 
-		await page.request.post('/auth/mock-login', {
-			data: {
-				user_id: largeUserId,
-				username: 'SnowflakeTester',
-				guilds: [{ id: largeGuildId, name: 'Big Server', permissions: 0x20 }],
-				guild: largeGuildId,
-				is_admin: true
-			}
+		await mockBotGuilds([{ id: Number(largeGuildId), name: 'Big Server' }]);
+		await mockLogin({
+			user_id: largeUserId,
+			username: 'SnowflakeTester',
+			guild: largeGuildId as unknown as number,
+			is_global_admin: false,
+			is_guild_admin: false
 		});
-
-		await page.goto('/');
+		// mockLogin already navigates to /
 
 		await expect(page.locator('[data-testid="live-badge"]')).toHaveAttribute(
 			'title',
-			/Receiving live updates/
+			/Receiving live updates/,
+			{ timeout: 10000 }
 		);
 
 		const appWsUrl = wsUrls.find((u) => u.endsWith('/ws'));
@@ -143,7 +142,7 @@ test.describe('Board', () => {
 		// Wait for the last few rows to appear so pagination is active
 		await expect(page.locator('[data-testid="rank-row"]')).toHaveCount(20, { timeout: 10000 });
 
-		// Scroll down and wait for more rows to load
+		// Scroll down to trigger infinite-scroll pagination
 		await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 		await page.waitForTimeout(2000);
 
@@ -184,7 +183,13 @@ test.describe('Board', () => {
 	test('random events update the board', async ({ page, startRandomEvents, stopRandomEvents }) => {
 		await startRandomEvents(1);
 
-		await page.waitForTimeout(3500);
+		// Wait for at least one event to be processed (chain counter changes or rank row appears)
+		await page.waitForFunction(() => {
+			const counter = document.querySelector('[data-testid="chain-counter"]');
+			const text = counter?.textContent || '';
+			const rows = document.querySelectorAll('[data-testid="rank-row"]');
+			return text !== '0 / 0' || rows.length > 0;
+		}, { timeout: 5000 });
 
 		await stopRandomEvents();
 

@@ -47,7 +47,15 @@ test.describe('Game events page', () => {
 
 		const searchInput = page.locator('input[placeholder*="Search"]');
 		await searchInput.fill('break');
-		await page.waitForTimeout(500);
+
+		// Wait for search filter to apply (debounced)
+		await page.waitForFunction(() => {
+			const rows = document.querySelectorAll('[data-testid="events-table"] tbody tr');
+			for (const row of rows) {
+				if (row.textContent?.includes('chain break')) return true;
+			}
+			return false;
+		}, { timeout: 3000 });
 
 		await expect(page.getByText('chain break').first()).toBeVisible({ timeout: 5000 });
 		await expect(page.getByText('sp base')).toHaveCount(0);

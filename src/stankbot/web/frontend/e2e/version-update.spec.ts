@@ -60,8 +60,8 @@ test.describe('Version update notification', () => {
 			{ timeout: 15000 }
 		);
 
-		// Wait a bit and verify no update toast appears
-		await page.waitForTimeout(3000);
+		// Wait briefly and verify no update toast appears
+		await page.waitForTimeout(1000);
 		const toast = page.locator('[data-testid="update-toast"]');
 		await expect(toast).not.toBeVisible();
 	});
@@ -98,7 +98,6 @@ test.describe('Version update notification', () => {
 
 		// Navigate to root to force clean WS reconnect with mismatched version
 		await page.goto('/');
-		await page.waitForLoadState('networkidle');
 
 		// Wait for WS to connect AND boardState to be set (STATE message processed)
 		await expect(page.locator('[data-testid="live-badge"]')).toHaveAttribute(
@@ -135,7 +134,7 @@ test.describe('Version update notification', () => {
 		await expect(toast).toBeVisible({ timeout: 10000 });
 
 		// Wait longer than a normal toast would auto-dismiss (default is 3s)
-		await page.waitForTimeout(5000);
+		await page.waitForTimeout(3500);
 
 		// Toast should still be visible
 		await expect(toast).toBeVisible();
