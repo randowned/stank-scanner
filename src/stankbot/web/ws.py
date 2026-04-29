@@ -260,14 +260,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             return
 
         owner_id = int(getattr(config, "owner_id", 0) or 0)
+        from stankbot.web.tools import fetch_guild_member
         if int(user.get("id", 0)) != owner_id:
-            from stankbot.web.tools import fetch_guild_member
             member_data = await fetch_guild_member(config, guild_id, int(user["id"]))
             if member_data is None:
                 await websocket.close(code=4003, reason="Not in guild")
                 return
         else:
-            member_data = None
+            member_data = await fetch_guild_member(config, guild_id, int(user["id"]))
     else:
         member_data = None
 
@@ -277,7 +277,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     avatar_url = str(user_data.get("avatar") or "")
 
     # Use guild-specific nickname over global username when available
-    if not is_dev_mock and int(user_id_str) != owner_id and member_data is not None:
+    if not is_dev_mock and member_data is not None:
         member_user = member_data.get("user", {})
         guild_nick = member_data.get("nick") or member_user.get("global_name") or member_user.get("username")
         if guild_nick:

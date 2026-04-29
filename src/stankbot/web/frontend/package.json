@@ -14,9 +14,6 @@
     "tsc": "tsc --noEmit --project tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test --project=e2e",
-    "test:e2e:dev": "playwright test --project=e2e:dev",
-    "test:e2e:ui": "playwright test --ui",
     "e2e": "node ../../../../scripts/run-e2e.mjs"
   },
   "devDependencies": {

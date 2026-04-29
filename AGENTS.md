@@ -128,7 +128,11 @@ $effect(() => {
 
 **Primary: `npm run e2e`.** This single command (`scripts/run-e2e.mjs`) starts the backend (health-check polling via `/healthz` on port 8000, logs → `.stankbot_backend.log`), runs Playwright, and cleans up on exit. Backend output is buffered to a file so test results stay clean.
 
-When iterating on a running dev server: `npm run test:e2e` (backend already up). The `mockLogin` fixture's `waitForBackend()` guard polls `/ping` for 10s first, giving a clear error if the backend is absent.
+Run specific suites via extra args after `--`:
+- `npm run e2e -- board.spec.ts` — run only board tests
+- `npm run e2e -- --grep "chain break"` — run tests matching a pattern
+
+When iterating on a running dev server: `npx playwright test --project=e2e`. The `mockLogin` fixture's `waitForBackend()` guard polls `/ping` for 10s first, giving a clear error if the backend is absent.
 
 ### E2E test patterns
 

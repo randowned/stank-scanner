@@ -159,12 +159,17 @@ async function main() {
         process.exit(1);
     }
 
-    // Run E2E tests
+    // Run E2E tests — forward any extra args (e.g. board.spec.ts, --grep)
+    const extraArgs = process.argv.slice(2);
+    const playwrightArgs = ['playwright', 'test', '--project=e2e', ...extraArgs];
+    const isWin = process.platform === 'win32';
+    const cmd = isWin ? 'npx.cmd' : 'npx';
+    process.stdout.write(`Running: ${cmd} ${playwrightArgs.join(' ')}\n`);
     return new Promise((resolve) => {
-        const tests = spawn('npm', ['run', 'test:e2e'], {
+        const tests = spawn(cmd, playwrightArgs, {
             cwd: frontendDir,
             stdio: 'inherit',
-            shell: process.platform === 'win32',
+            shell: isWin,
         });
         tests.on('exit', (code) => {
             resolve();

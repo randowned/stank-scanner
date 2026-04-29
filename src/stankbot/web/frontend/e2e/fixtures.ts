@@ -15,7 +15,7 @@ async function waitForBackend(page: Page, timeoutMs = 10000): Promise<void> {
 	}
 	throw new Error(
 		`Backend not reachable at /ping after ${timeoutMs}ms. ` +
-			'Is the backend running? Run `npm run e2e` instead of `npm run test:e2e` to auto-start it.'
+			'Is the backend running? Run `npm run e2e` to auto-start it.'
 	);
 }
 
