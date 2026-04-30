@@ -38,8 +38,8 @@
 		data-testid="update-toast"
 		role="alert"
 	>
-		<div class="flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg min-w-[280px] sm:min-w-0">
-			<span class="text-sm sm:text-base">Updated version available</span>
+		<div class="flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg min-w-[300px]">
+			<span class="text-sm sm:text-base">Updated available!</span>
 			<button
 				onclick={onreload}
 				class="px-3 py-1 rounded-md bg-bg/20 hover:bg-bg/30 font-semibold text-sm transition-colors"
