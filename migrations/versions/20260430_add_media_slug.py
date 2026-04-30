@@ -23,31 +23,31 @@ down_revision = "add_media_tables"
 
 
 def upgrade() -> None:
-    try:
-        op.add_column(
-            "media_items", sa.Column("slug", sa.String(64), nullable=True)
-        )
-    except OperationalError:
-        log.warning("slug column already exists, skipping add_column")
+    # Use batch mode — SQLite can't ALTER constraints natively.
+    with op.batch_alter_table("media_items") as batch_op:
+        try:
+            batch_op.add_column(
+                sa.Column("slug", sa.String(64), nullable=True)
+            )
+        except OperationalError:
+            log.warning("slug column already exists, skipping add_column")
 
-    # Build the unique constraint.  No IF NOT EXISTS in SQLite — we rely
-    # on the convention that constraint names are unique per table so any
-    # duplicate name will trigger a distinct error that we can swallow.
-    try:
-        op.create_unique_constraint(
-            "uq_media_slug", "media_items", ["guild_id", "slug"]
-        )
-    except OperationalError:
-        log.warning("uq_media_slug constraint already exists, skipping")
+        try:
+            batch_op.create_unique_constraint(
+                "uq_media_slug", ["guild_id", "slug"]
+            )
+        except OperationalError:
+            log.warning("uq_media_slug constraint already exists, skipping")
 
 
 def downgrade() -> None:
-    try:
-        op.drop_constraint("uq_media_slug", "media_items", type_="unique")
-    except OperationalError:
-        log.warning("uq_media_slug constraint not found, skipping drop")
+    with op.batch_alter_table("media_items") as batch_op:
+        try:
+            batch_op.drop_constraint("uq_media_slug", type_="unique")
+        except OperationalError:
+            log.warning("uq_media_slug constraint not found, skipping drop")
 
-    try:
-        op.drop_column("media_items", "slug")
-    except OperationalError:
-        log.warning("slug column not found, skipping drop")
+        try:
+            batch_op.drop_column("slug")
+        except OperationalError:
+            log.warning("slug column not found, skipping drop")
