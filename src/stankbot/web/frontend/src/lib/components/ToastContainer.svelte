@@ -34,11 +34,11 @@
 <!-- Update available toast (persistent, bottom-center) -->
 {#if updateToast}
 	<div
-		class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[61] pointer-events-auto"
+		class="fixed flex flex-col items-center w-full bottom-4 z-[61] pointer-events-auto"
 		data-testid="update-toast"
 		role="alert"
 	>
-		<div class="flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg min-w-[300px]">
+		<div class="flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg">
 			<span class="text-sm sm:text-base">Updated available!</span>
 			<button
 				onclick={onreload}
