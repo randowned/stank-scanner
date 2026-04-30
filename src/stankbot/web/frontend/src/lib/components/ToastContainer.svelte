@@ -38,11 +38,11 @@
 		data-testid="update-toast"
 		role="alert"
 	>
-		<div class="flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg">
+		<div class="flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg">
 			<span class="text-sm sm:text-base">Updated available!</span>
 			<button
 				onclick={onreload}
-				class="px-3 py-1 rounded-md bg-bg/20 hover:bg-bg/30 font-semibold text-sm transition-colors"
+				class="px-3 py-2 rounded-md bg-bg/20 hover:bg-bg/30 font-semibold text-sm transition-colors"
 				data-testid="update-reload-btn"
 			>
 				Reload
