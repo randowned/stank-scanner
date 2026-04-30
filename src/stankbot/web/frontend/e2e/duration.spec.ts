@@ -6,18 +6,13 @@ test.describe('Duration', () => {
 		await newSession();
 	});
 
-	test('dashboard shows countdown that updates', async ({ page }) => {
+	test('dashboard shows countdown in 2-unit format', async ({ page }) => {
 		const countdown = page.locator('[data-testid="session-countdown"]');
 		await expect(countdown).toBeVisible();
 
-		const text1 = await countdown.textContent();
-		expect(text1).toBeTruthy();
-
-		await page.waitForTimeout(2000);
-
-		const text2 = await countdown.textContent();
-		expect(text2).toBeTruthy();
-		expect(text2.trim()).not.toBe(text1.trim());
+		const text = await countdown.textContent();
+		expect(text).toBeTruthy();
+		expect(text!.trim()).toMatch(/^\d+[hmd]/);
 	});
 
 	test('dashboard countdown shows tooltip on hover', async ({ page }) => {

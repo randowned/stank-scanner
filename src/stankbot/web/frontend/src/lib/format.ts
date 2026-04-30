@@ -12,8 +12,8 @@ export function formatDurationMs(diffMs: number): string {
 	if (mins < 60) return `${mins}m ${secs % 60}s`;
 	const hrs = Math.floor(mins / 60);
 	const days = Math.floor(hrs / 24);
-	if (days === 0) return `${hrs}h ${mins % 60}m ${secs % 60}s`;
-	return `${days}d ${hrs % 24}h ${mins % 60}m`;
+	if (days === 0) return `${hrs}h ${mins % 60}m`;
+	return `${days}d ${hrs % 24}h`;
 }
 
 export function formatDuration(started: string | null, ended?: string | null): string {

@@ -36,9 +36,9 @@
 		<span class="tabular-nums cursor-help {className}">{formatted}</span>
 		{#snippet tooltip()}
 			{#if start && end}
-				<div class="flex flex-col gap-0.5">
-					<div class="flex gap-2"><span class="w-12 shrink-0 text-right text-muted">Start</span><span>{formatDateTime(start)}</span></div>
-					<div class="flex gap-2"><span class="w-12 shrink-0 text-right text-muted">End</span><span>{formatDateTime(end)}</span></div>
+				<div class="flex gap-2">
+					<div class="flex flex-col items-end gap-2"><span class="text-right text-muted">Start</span><span class="text-right text-muted">End</span></div>
+					<div class="flex flex-col items-start gap-2"><span>{formatDateTime(start)}</span><span>{formatDateTime(end)}</span></div>
 				</div>
 			{:else if start}
 				{formatDateTime(start)}
