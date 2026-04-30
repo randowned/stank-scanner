@@ -78,7 +78,7 @@
 						</div>
 					{/if}
 					<span class="flex-1 min-w-0 truncate">{user.username}</span>
-					<span class="shrink-0 text-xs text-muted tabular-nums"><Duration start={user.connected_at} /></span>
+					<span class="shrink-0 text-xs text-muted tabular-nums"><Duration start={user.connected_at} useNativeTooltip /></span>
 				</div>
 			{/each}
 		</div>
