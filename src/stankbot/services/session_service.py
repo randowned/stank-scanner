@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stankbot.db.models import EventType, SessionEndReason
+from stankbot.db.models import EventType, Record, SessionEndReason
 from stankbot.db.repositories import cooldowns as cooldowns_repo
 from stankbot.db.repositories import events as events_repo
 from stankbot.services import achievements as achievements_svc
@@ -70,6 +70,8 @@ class SessionService(SessionIdProvider):
             reason="session started",
             created_at=when,
         )
+        # Fresh session — reset the per-session chain record.
+        await self._reset_session_records(guild_id)
         return event.id
 
     async def end_session(
@@ -120,6 +122,12 @@ class SessionService(SessionIdProvider):
                 created_at=now,
             )
             new_id = new_event.id
+
+        # A session boundary occurred — reset the per-session chain record
+        # so the new session starts with a blank slate.
+        if ended_id is not None or new_id is not None:
+            await self._reset_session_records(guild_id)
+
         return ended_id, new_id
 
     async def _session_is_alive(self, guild_id: int, session_id: int) -> bool:
@@ -138,6 +146,21 @@ class SessionService(SessionIdProvider):
             .limit(1)
         )
         return (await self.session.execute(stmt)).scalar_one_or_none() is None
+
+    async def _reset_session_records(self, guild_id: int) -> None:
+        """Delete all SESSION-scope records for every altar in the guild.
+
+        Called at session boundaries so the per-session chain record
+        always reflects the *current* session only.
+        """
+        from sqlalchemy import delete
+
+        await self.session.execute(
+            delete(Record).where(
+                Record.guild_id == guild_id,
+                Record.scope == "session",
+            )
+        )
 
     async def session_events(
         self, guild_id: int, session_id: int

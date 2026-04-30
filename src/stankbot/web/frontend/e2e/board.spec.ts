@@ -197,4 +197,106 @@ test.describe('Board', () => {
 		const rankingCount = await page.locator('[data-testid="rank-row"]').count();
 		expect(counterText !== '0 / 0' || rankingCount > 0).toBeTruthy();
 	});
+
+	test('session and alltime record tiles show 0 / 0 initially', async ({ page }) => {
+		// Session is reliably 0/0 after newSession() in beforeEach.
+		// Alltime may carry over from previous test runs — just check it has a value.
+		const sessionVal = page.locator('[data-testid="tile-session"]').locator('div').first();
+		const alltimeVal = page.locator('[data-testid="tile-alltime"]').locator('div').first();
+		await expect(sessionVal).toHaveText(/^0 \/ 0/);
+		await expect(alltimeVal).toHaveText(/\d+ \/ \d+/);
+	});
+
+	test('record tiles update after page reload following a chain break', async ({
+		page,
+		injectStank,
+		injectBreak
+	}) => {
+		const GUILD = 123456789;
+		const BASE = 400000;
+
+		// Build a chain of 3 unique stankers with IDs that won't conflict
+		await injectStank(GUILD, BASE + 1, 'RecordUserA');
+		await injectStank(GUILD, BASE + 2, 'RecordUserB');
+		await injectStank(GUILD, BASE + 3, 'RecordUserC');
+
+		await injectBreak(GUILD, BASE + 99, 'RecordBreaker');
+
+		// Record tiles only refresh on page load/reload (not via WS).
+		await page.reload();
+
+		const sessionVal = page.locator('[data-testid="tile-session"]').locator('div').first();
+		await expect(sessionVal).toHaveText(/^3 \/ 3/);
+	});
+
+	test('session record resets after session rollover', async ({
+		page,
+		injectStank,
+		injectBreak,
+		newSession
+	}) => {
+		const GUILD = 123456789;
+		const BASE = 500000;
+
+		// Build and break a chain of 3
+		await injectStank(GUILD, BASE + 1, 'RollUserA');
+		await injectStank(GUILD, BASE + 2, 'RollUserB');
+		await injectStank(GUILD, BASE + 3, 'RollUserC');
+		await injectBreak(GUILD, BASE + 99, 'RollBreaker');
+		await page.reload();
+
+		// After chain break + reload, session tile shows the chain record
+		const sessionVal1 = page.locator('[data-testid="tile-session"]').locator('div').first();
+		await expect(sessionVal1).toHaveText(/^3 \/ 3/);
+
+		// Record the current alltime value so we can verify it persists
+		const alltimeVal1 = page.locator('[data-testid="tile-alltime"]').locator('div').first();
+		const alltimeBefore = await alltimeVal1.textContent();
+
+		// Session rollover
+		await newSession();
+
+		// After rollover, session record should be zero
+		const sessionVal2 = page.locator('[data-testid="tile-session"]').locator('div').first();
+		await expect(sessionVal2).toHaveText(/^0 \/ 0/);
+
+		// Alltime should persist (same value as before rollover, or higher)
+		const alltimeVal2 = page.locator('[data-testid="tile-alltime"]').locator('div').first();
+		const alltimeAfter = await alltimeVal2.textContent();
+		expect(alltimeAfter).toBe(alltimeBefore);
+	});
+
+	test('alltime record survives multiple sessions unchanged', async ({
+		page,
+		injectStank,
+		injectBreak,
+		newSession
+	}) => {
+		const GUILD = 123456789;
+		const BASE = 600000;
+
+		// Build a chain of 15 — enough unique users to set a visible alltime record
+		for (let i = 0; i < 15; i++) {
+			await injectStank(GUILD, BASE + i, `ChainUser${i}`);
+		}
+		await injectBreak(GUILD, BASE + 999, 'BigBreaker');
+		await page.reload();
+
+		const alltimeVal1 = page.locator('[data-testid="tile-alltime"]').locator('div').first();
+		await expect(alltimeVal1).toHaveText(/^\d+ \/ \d+/);
+		const alltimeText1 = await alltimeVal1.textContent();
+
+		// Roll the session
+		await newSession();
+
+		// Alltime should be unchanged
+		const alltimeVal2 = page.locator('[data-testid="tile-alltime"]').locator('div').first();
+		await expect(alltimeVal2).toHaveText(/^\d+ \/ \d+/);
+		const alltimeText2 = await alltimeVal2.textContent();
+		expect(alltimeText2).toBe(alltimeText1);
+
+		// Session should be zero
+		const sessionVal = page.locator('[data-testid="tile-session"]').locator('div').first();
+		await expect(sessionVal).toHaveText(/^0 \/ 0/);
+	});
 });

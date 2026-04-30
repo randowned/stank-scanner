@@ -5,9 +5,18 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 
-from stankbot.db.models import EventType, Guild, SessionEndReason
+from stankbot.db.models import (
+    Altar,
+    EventType,
+    Guild,
+    Record,
+    RecordScope,
+    SessionEndReason,
+)
 from stankbot.db.repositories import events as events_repo
+from stankbot.db.repositories import records as records_repo
 from stankbot.services.session_service import SessionService
 
 
@@ -17,6 +26,34 @@ async def guild(session):  # type: ignore[no-untyped-def]
     session.add(g)
     await session.flush()
     return g
+
+
+@pytest.fixture
+async def guild_with_altar(session):  # type: ignore[no-untyped-def]
+    """Guild + primary altar for record-scoped tests."""
+    g = Guild(id=1, name="Maphra")
+    session.add(g)
+    await session.flush()
+    altar = Altar(
+        guild_id=1,
+        channel_id=200,
+        sticker_id=300,
+        display_name="primary",
+    )
+    session.add(altar)
+    await session.flush()
+    return g, altar
+
+
+async def _count_session_records(session, guild_id: int) -> int:
+    """Return how many SESSION scope records exist for a guild."""
+    result = await session.execute(
+        select(Record).where(
+            Record.guild_id == guild_id,
+            Record.scope == str(RecordScope.SESSION),
+        )
+    )
+    return len(result.scalars().all())
 
 
 async def test_current_is_none_before_ensure_started(session, guild) -> None:  # type: ignore[no-untyped-def]
@@ -89,3 +126,187 @@ async def test_session_events_slice(session, guild) -> None:  # type: ignore[no-
     s2_events = await svc.session_events(guild.id, s2)
     assert [e.delta for e in s1_events if e.type == EventType.SP_BASE] == [10]
     assert [e.delta for e in s2_events if e.type == EventType.SP_BASE] == [20]
+
+
+# ---------------------------------------------------------------------------
+# Record reset on session boundaries
+# ---------------------------------------------------------------------------
+
+
+async def test_end_session_resets_session_records(session, guild_with_altar) -> None:  # type: ignore[no-untyped-def]
+    guild, altar = guild_with_altar
+    svc = SessionService(session=session)
+
+    # Populate both SESSION and ALLTIME records
+    await records_repo.upsert(
+        session,
+        guild_id=guild.id,
+        altar_id=altar.id,
+        scope=RecordScope.SESSION,
+        chain_length=5,
+        unique_count=3,
+        chain_id=1,
+        session_id=100,
+    )
+    await records_repo.upsert(
+        session,
+        guild_id=guild.id,
+        altar_id=altar.id,
+        scope=RecordScope.ALLTIME,
+        chain_length=5,
+        unique_count=3,
+        chain_id=1,
+        session_id=100,
+    )
+    await session.commit()
+
+    await svc.ensure_started(guild.id)
+    await svc.end_session(guild.id, reason=SessionEndReason.AUTO, open_new=True)
+
+    # SESSION records should be deleted
+    assert await _count_session_records(session, guild.id) == 0
+    # ALLTIME record should survive
+    alltime = await records_repo.get(
+        session, guild_id=guild.id, altar_id=altar.id, scope=RecordScope.ALLTIME
+    )
+    assert alltime is not None
+    assert alltime.chain_length == 5
+
+
+async def test_ensure_started_resets_session_records_when_dead(session, guild_with_altar) -> None:  # type: ignore[no-untyped-def]
+    guild, altar = guild_with_altar
+    svc = SessionService(session=session)
+
+    # Seed a SESSION record (simulating a previous session that left one behind)
+    await records_repo.upsert(
+        session,
+        guild_id=guild.id,
+        altar_id=altar.id,
+        scope=RecordScope.SESSION,
+        chain_length=8,
+        unique_count=4,
+        chain_id=2,
+        session_id=200,
+    )
+    # Seed ALLTIME record too
+    await records_repo.upsert(
+        session,
+        guild_id=guild.id,
+        altar_id=altar.id,
+        scope=RecordScope.ALLTIME,
+        chain_length=8,
+        unique_count=4,
+        chain_id=2,
+        session_id=200,
+    )
+    await session.commit()
+
+    # No session alive — ensure_started should create one AND reset records
+    await svc.ensure_started(guild.id)
+
+    assert await _count_session_records(session, guild.id) == 0
+    alltime = await records_repo.get(
+        session, guild_id=guild.id, altar_id=altar.id, scope=RecordScope.ALLTIME
+    )
+    assert alltime is not None
+    assert alltime.chain_length == 8
+
+
+async def test_ensure_started_does_not_reset_records_when_session_alive(
+    session, guild_with_altar
+) -> None:  # type: ignore[no-untyped-def]
+    guild, altar = guild_with_altar
+    svc = SessionService(session=session)
+
+    await svc.ensure_started(guild.id)
+
+    # Seed a SESSION record via the chain service path (simulates mid-session record)
+    await records_repo.upsert(
+        session,
+        guild_id=guild.id,
+        altar_id=altar.id,
+        scope=RecordScope.SESSION,
+        chain_length=3,
+        unique_count=2,
+        chain_id=5,
+        session_id=1,
+    )
+    await session.commit()
+
+    # Session is alive — ensure_started should be idempotent and NOT reset records
+    await svc.ensure_started(guild.id)
+
+    assert await _count_session_records(session, guild.id) == 1
+    sess_row = await records_repo.get(
+        session, guild_id=guild.id, altar_id=altar.id, scope=RecordScope.SESSION
+    )
+    assert sess_row is not None
+    assert sess_row.chain_length == 3
+
+
+async def test_end_session_without_open_new_resets_session_records(
+    session, guild_with_altar
+) -> None:  # type: ignore[no-untyped-def]
+    guild, altar = guild_with_altar
+    svc = SessionService(session=session)
+
+    await svc.ensure_started(guild.id)
+    await records_repo.upsert(
+        session,
+        guild_id=guild.id,
+        altar_id=altar.id,
+        scope=RecordScope.SESSION,
+        chain_length=12,
+        unique_count=6,
+        chain_id=9,
+        session_id=1,
+    )
+    await session.commit()
+
+    await svc.end_session(guild.id, reason=SessionEndReason.BOARD_RESET, open_new=False)
+
+    assert await _count_session_records(session, guild.id) == 0
+
+
+async def test_end_session_preserves_alltime_record_on_close(
+    session, guild_with_altar
+) -> None:  # type: ignore[no-untyped-def]
+    guild, altar = guild_with_altar
+    svc = SessionService(session=session)
+
+    await svc.ensure_started(guild.id)
+    await records_repo.upsert(
+        session,
+        guild_id=guild.id,
+        altar_id=altar.id,
+        scope=RecordScope.ALLTIME,
+        chain_length=15,
+        unique_count=7,
+        chain_id=10,
+        session_id=1,
+    )
+    await session.commit()
+
+    await svc.end_session(guild.id, reason=SessionEndReason.AUTO, open_new=True)
+
+    alltime = await records_repo.get(
+        session, guild_id=guild.id, altar_id=altar.id, scope=RecordScope.ALLTIME
+    )
+    assert alltime is not None
+    assert alltime.chain_length == 15
+
+
+async def test_end_session_noop_when_no_session_does_not_crash(
+    session, guild
+) -> None:  # type: ignore[no-untyped-def]
+    """Calling end_session on a guild with no alive session is a no-op."""
+    svc = SessionService(session=session)
+    ended, new = await svc.end_session(
+        guild.id, reason=SessionEndReason.AUTO, open_new=True
+    )
+    assert ended is None  # nothing to end
+    assert new is not None  # still starts a new session
+    # No crash — the _reset_session_records is skipped because neither
+    # ended_id nor new_id was set... wait, new_id IS set. But the
+    # query is a DELETE, so when there are no rows it's just a no-op.
+    assert await _count_session_records(session, guild.id) == 0

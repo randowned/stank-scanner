@@ -109,6 +109,24 @@ class SessionScheduler:
         now = datetime.now(tz=UTC)
         log.info("session rollover guild=%d hour=%d", guild_id, hour)
         async with self.bot.db() as session:
+            # Read previous session record before end_session resets it.
+            from stankbot.db.repositories import altars as altars_repo
+            from stankbot.db.repositories import records as records_repo
+
+            prev_rec_len = 0
+            prev_rec_unique = 0
+            altar = await altars_repo.primary(session, guild_id)
+            if altar is not None:
+                rec_row = await records_repo.get(
+                    session,
+                    guild_id=guild_id,
+                    altar_id=altar.id,
+                    scope=RecordScope.SESSION,
+                )
+                if rec_row is not None:
+                    prev_rec_len = rec_row.chain_length
+                    prev_rec_unique = rec_row.unique_count
+
             settings = SettingsService(session)
             maintenance = bool(
                 await settings.get(guild_id, Keys.MAINTENANCE_MODE, False)
@@ -129,6 +147,8 @@ class SessionScheduler:
                 ended_id=ended_id,
                 new_id=new_id,
                 now=now,
+                prev_rec_len=prev_rec_len,
+                prev_rec_unique=prev_rec_unique,
             )
             if embed is not None:
                 await broadcast_to_guild(
@@ -168,6 +188,8 @@ async def _build_rollover_embed(
     ended_id: int | None,
     new_id: int | None,
     now: datetime,
+    prev_rec_len: int = 0,
+    prev_rec_unique: int = 0,
 ) -> discord.Embed | None:
     settings = SettingsService(session)
     reset_hours = [
@@ -183,8 +205,6 @@ async def _build_rollover_embed(
     prev_top_sp = 0
     prev_top_pp_name = "—"
     prev_top_pp = 0
-    prev_rec_len = 0
-    prev_rec_unique = 0
     if ended_id is not None:
         summary = await history_service.session_summary(session, guild_id, ended_id)
         if summary is not None:
@@ -201,11 +221,6 @@ async def _build_rollover_embed(
                 )
                 prev_top_pp = pp
 
-    # Previous session record — best we can get cheaply is the "session"
-    # scope record which is baselined to the surviving chain at rollover;
-    # for the just-ended session that's still valid until the new session
-    # writes a fresh baseline. Read it before any rebaseline happens.
-    # (We're inside the same transaction as end_session, before commit.)
     # primary altar for the guild — TODO multi-altar rollover later.
     from stankbot.db.repositories import altars as altars_repo
     from stankbot.db.repositories import records as records_repo
@@ -216,15 +231,6 @@ async def _build_rollover_embed(
         channel = bot.get_channel(altar.channel_id)
         altar_channel = getattr(channel, "name", "") if channel else ""
     if altar is not None:
-        rec_row = await records_repo.get(
-            session,
-            guild_id=guild_id,
-            altar_id=altar.id,
-            scope=RecordScope.SESSION,
-        )
-        if rec_row is not None:
-            prev_rec_len = rec_row.chain_length
-            prev_rec_unique = rec_row.unique_count
         alltime_row = await records_repo.get(
             session,
             guild_id=guild_id,
