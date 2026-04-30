@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { formatDateTime } from '$lib/datetime';
-	import { formatDuration } from '$lib/format';
+	import Duration from '$lib/components/Duration.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Card from '$lib/components/Card.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -66,7 +66,7 @@
 				{/if}
 			</dl>
 			<div class="mt-2 pt-2 border-t border-border text-xs text-muted">
-				Duration: {formatDuration(session.started_at, session.ended_at)}
+				Duration: <Duration start={session.started_at} end={session.ended_at} />
 			</div>
 		</Card>
 

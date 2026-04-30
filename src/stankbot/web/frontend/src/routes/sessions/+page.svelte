@@ -2,7 +2,8 @@
 	import { base } from '$app/paths';
 	import type { SessionSummary } from '$lib/types';
 	import { formatDateTime } from '$lib/datetime';
-	import { formatNumber, formatDuration } from '$lib/format';
+	import { formatNumber } from '$lib/format';
+	import Duration from '$lib/components/Duration.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 
@@ -38,7 +39,7 @@
 					</div>
 					<div class="text-xs text-muted mb-1">{dateRange(s.started_at, s.ended_at)}</div>
 					{#if s.ended_at}
-						<div class="text-xs text-muted mb-1">{formatDuration(s.started_at, s.ended_at)}</div>
+						<div class="text-xs text-muted mb-1"><Duration start={s.started_at} end={s.ended_at} /></div>
 					{/if}
 					<div class="text-xs text-muted">
 						Stankers: {s.unique_stankers ?? 0}

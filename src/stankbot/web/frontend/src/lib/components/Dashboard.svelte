@@ -6,8 +6,8 @@
 	import { apiFetch } from '$lib/api';
 	import { boardState, activeChainBreak } from '$lib/stores';
 	import type { BoardState, PlayerRow } from '$lib/types';
-	import { formatResetTime } from '$lib/datetime';
 	import { formatNumber } from '$lib/format';
+	import Duration from '$lib/components/Duration.svelte';
 	import LeaderboardRow from '$lib/components/LeaderboardRow.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import ChainBreakOverlay from '$lib/components/ChainBreakOverlay.svelte';
@@ -192,8 +192,14 @@
 
 		<div class="mt-3 pt-3 border-t border-border">
 			<div class="text-xs text-muted">
-				Next reset:
-				<span class="text-text">{formatResetTime(board?.next_reset_at ?? null)}</span>
+				Remaining time in the session:
+				<span class="text-text" data-testid="session-countdown">
+					{#if board?.next_reset_at}
+						<Duration end={board.next_reset_at} />
+					{:else}
+						—
+					{/if}
+				</span>
 			</div>
 		</div>
 	</div>

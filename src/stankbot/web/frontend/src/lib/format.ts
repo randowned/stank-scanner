@@ -4,16 +4,23 @@ export function formatNumber(n: number): string {
 	return n.toString();
 }
 
+export function formatDurationMs(diffMs: number): string {
+	if (diffMs < 0) return '';
+	const secs = Math.floor(diffMs / 1000);
+	if (secs < 60) return `${secs}s`;
+	const mins = Math.floor(secs / 60);
+	if (mins < 60) return `${mins}m ${secs % 60}s`;
+	const hrs = Math.floor(mins / 60);
+	const days = Math.floor(hrs / 24);
+	if (days === 0) return `${hrs}h ${mins % 60}m ${secs % 60}s`;
+	return `${days}d ${hrs % 24}h ${mins % 60}m`;
+}
+
 export function formatDuration(started: string | null, ended?: string | null): string {
 	if (!started) return '';
 	const start = new Date(started).getTime();
 	const end = ended ? new Date(ended).getTime() : Date.now();
 	const diffMs = end - start;
 	if (diffMs < 0) return '';
-	const mins = Math.floor(diffMs / 60000);
-	if (mins < 1) return '< 1m';
-	if (mins < 60) return `${mins}m`;
-	const hrs = Math.floor(mins / 60);
-	const rem = mins % 60;
-	return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+	return formatDurationMs(diffMs);
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { connectionStatus, onlineUsers } from '$lib/stores';
-	import { formatDuration } from '$lib/format';
+	import Duration from '$lib/components/Duration.svelte';
 
 	let open = $state(false);
 	let rootEl: HTMLDivElement;
@@ -78,7 +78,7 @@
 						</div>
 					{/if}
 					<span class="flex-1 min-w-0 truncate">{user.username}</span>
-					<span class="shrink-0 text-xs text-muted tabular-nums">{formatDuration(user.connected_at)}</span>
+					<span class="shrink-0 text-xs text-muted tabular-nums"><Duration start={user.connected_at} /></span>
 				</div>
 			{/each}
 		</div>

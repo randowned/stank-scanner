@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import type { ChainSummary, ChainMessageEntry } from '$lib/types';
-	import { formatDateTime } from '$lib/datetime';
-	import { formatDuration } from '$lib/format';
+	import Duration from '$lib/components/Duration.svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import LeaderboardRow from '$lib/components/LeaderboardRow.svelte';
@@ -54,11 +53,12 @@
 				{#if chain.total_reactions !== undefined}
 					<StatTile value={String(chain.total_reactions)} label="Reactions" color="text-accent" testId="chain-reactions" />
 				{/if}
-				<StatTile value={formatDuration(chain.started_at, chain.broken_at)} label="Duration" color="text-text" testId="chain-duration" />
-			</div>
-			<div class="mt-2 pt-2 border-t border-border flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-				<span>Started: {formatDateTime(chain.started_at)}</span>
-				<span>Ended: {formatDateTime(chain.broken_at, 'alive')}</span>
+				<div class="text-center">
+					<div class="text-xl font-bold text-text">
+						<Duration start={chain.started_at} end={chain.broken_at} />
+					</div>
+					<div class="text-xs text-muted uppercase">Duration</div>
+				</div>
 			</div>
 		</div>
 
