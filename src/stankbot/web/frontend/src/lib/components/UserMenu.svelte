@@ -85,6 +85,10 @@
 		<span>📜</span>
 		<span>Sessions</span>
 	</DropdownItem>
+	<DropdownItem href="{base}/media" active={isActive(base + '/media')}>
+		<span>📊</span>
+		<span>Media</span>
+	</DropdownItem>
 	<DropdownItem
 		href="{base}/player/{user.id}"
 		active={isActive(`${base}/player/${user.id}`)}

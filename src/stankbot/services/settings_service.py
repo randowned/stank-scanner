@@ -66,6 +66,12 @@ class Keys(StrEnum):
     # Features
     ENABLE_REACTION_BONUS = "enable_reaction_bonus"
     MAINTENANCE_MODE = "maintenance_mode"
+    # Media (Maphra)
+    MEDIA_METRICS_UPDATE_INTERVAL_MINUTES = "media_metrics_update_interval_minutes"
+    MEDIA_REPLIES_EPHEMERAL = "media_replies_ephemeral"
+    # Media embed templates
+    YOUTUBE_MEDIA_EMBED = "youtube_media_embed"
+    SPOTIFY_MEDIA_EMBED = "spotify_media_embed"
 
 
 DEFAULTS: dict[str, Any] = {
@@ -85,6 +91,8 @@ DEFAULTS: dict[str, Any] = {
     Keys.BOARD_NAME_MAX_LEN: 20,
     Keys.ENABLE_REACTION_BONUS: True,
     Keys.MAINTENANCE_MODE: False,
+    Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: 10,
+    Keys.MEDIA_REPLIES_EPHEMERAL: True,
     # Embed templates are seeded per guild on install (see
     # `SettingsService.seed_defaults`) rather than inlined here; default
     # dicts live in `services/default_templates.py`.
@@ -155,6 +163,14 @@ LABELS: dict[str, tuple[str, str]] = {
     Keys.MAINTENANCE_MODE: (
         "Maintenance mode",
         "Silently ignore new stanks — useful during config changes or migrations.",
+    ),
+    Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: (
+        "Media metrics update interval (minutes)",
+        "How often the scheduler fetches fresh metrics from YouTube/Spotify. Minimum 5.",
+    ),
+    Keys.MEDIA_REPLIES_EPHEMERAL: (
+        "Ephemeral media replies",
+        "When enabled, `/media` command responses are visible only to the caller.",
     ),
 }
 

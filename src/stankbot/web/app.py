@@ -28,7 +28,7 @@ from starlette.staticfiles import StaticFiles
 from stankbot.bot import StankBot
 from stankbot.config import AppConfig
 from stankbot.web import ws
-from stankbot.web.routes import admin, api, auth
+from stankbot.web.routes import admin, api, auth, media_admin, media_api
 from stankbot.web.tools import _LoginRedirect, _NotInGuild
 
 log = logging.getLogger(__name__)
@@ -80,6 +80,16 @@ def build_app(
     app.include_router(api.router)
     app.include_router(admin.router)
     app.include_router(auth.router)
+    app.include_router(media_api.router)
+    app.include_router(media_admin.router)
+
+    # Share the media registry from the bot (if available)
+    if bot is not None and hasattr(bot, "media_registry"):
+        app.state.media_registry = bot.media_registry
+    else:
+        from stankbot.services.media_providers import MediaProviderRegistry
+
+        app.state.media_registry = MediaProviderRegistry()
 
     @app.get("/healthz", include_in_schema=False)
     async def _healthz() -> JSONResponse:

@@ -179,6 +179,38 @@ POINTS_EMBED: dict[str, Any] = {
 }
 
 
+YOUTUBE_MEDIA_EMBED: dict[str, Any] = {
+    "color": "#ff0000",
+    "title": "{title}",
+    "url": "{url}",
+    "description": "by **{channel_name}**",
+    "thumbnail": "{thumbnail_url}",
+    "fields": [
+        {"name": "\U0001f441\ufe0f Views", "value": "{view_count}", "inline": True},
+        {"name": "\U0001f44d Likes", "value": "{like_count}", "inline": True},
+        {"name": "\U0001f4ac Comments", "value": "{comment_count}", "inline": True},
+        {"name": "\U0001f4c5 Published", "value": "{published_at}", "inline": True},
+        {"name": "\u23f1 Duration", "value": "{duration_seconds}", "inline": True},
+    ],
+    "footer": "\U0001f3ac YouTube \u00b7 {slug} \u00b7 Updated {last_fetched_at}",
+}
+
+
+SPOTIFY_MEDIA_EMBED: dict[str, Any] = {
+    "color": "#1db954",
+    "title": "{title}",
+    "url": "{url}",
+    "description": "by **{channel_name}**",
+    "thumbnail": "{thumbnail_url}",
+    "fields": [
+        {"name": "\U0001f525 Popularity", "value": "{popularity} / 100", "inline": True},
+        {"name": "\U0001f4c5 Released", "value": "{published_at}", "inline": True},
+        {"name": "\U0001f3b5 Type", "value": "{spotify_type}", "inline": True},
+    ],
+    "footer": "\U0001f3b5 Spotify \u00b7 {slug} \u00b7 Updated {last_fetched_at}",
+}
+
+
 ALL_DEFAULTS: dict[str, dict[str, Any]] = {
     "board_embed": BOARD_EMBED,
     "record_embed": RECORD_EMBED,
@@ -186,4 +218,6 @@ ALL_DEFAULTS: dict[str, dict[str, Any]] = {
     "new_session_embed": NEW_SESSION_EMBED,
     "cooldown_embed": COOLDOWN_EMBED,
     "points_embed": POINTS_EMBED,
+    "youtube_media_embed": YOUTUBE_MEDIA_EMBED,
+    "spotify_media_embed": SPOTIFY_MEDIA_EMBED,
 }

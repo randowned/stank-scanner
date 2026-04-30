@@ -1,9 +1,8 @@
 """Centralised embed construction for automated bot posts.
 
 One place to assemble the context dicts that feed `template_engine.render_embed`
-for records, chain-breaks, new-session rollovers, and public cooldown notices.
-Used by the chain listener, session scheduler, admin preview command, and web
-API sample-preview.
+for records, chain-breaks, new-session rollovers, public cooldown notices, and
+media item displays.
 
 Keeping stank_emoji resolution here avoids three copies of the same
 `guild.emojis` scan + `altar.display_name` fallback.
@@ -12,6 +11,7 @@ Keeping stank_emoji resolution here avoids three copies of the same
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import discord
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -307,6 +307,54 @@ async def alltime_top_pp(
     return name, int(pp)
 
 
+async def build_media_embed(
+    *,
+    media_type: str,
+    title: str,
+    channel_name: str | None,
+    slug: str | None,
+    thumbnail_url: str | None,
+    published_at: str | None,
+    duration_seconds: int | None,
+    metrics: dict[str, str | int],
+    last_fetched_at: str | None,
+    guild_id: int,
+    session: AsyncSession,
+) -> discord.Embed:
+    """Build a media item embed from the guild's per-provider template.
+
+    Variables available in templates:
+        {title}, {channel_name}, {slug}, {url}, {thumbnail_url},
+        {published_at}, {duration_seconds}, {last_fetched_at},
+        {view_count}, {like_count}, {comment_count}, {popularity}, {spotify_type}
+    """
+    variables: dict[str, Any] = {
+        "title": title or "",
+        "channel_name": channel_name or "",
+        "slug": slug or "",
+        "thumbnail_url": thumbnail_url or "",
+        "published_at": published_at or "",
+        "duration_seconds": str(duration_seconds) if duration_seconds else "—",
+        "last_fetched_at": last_fetched_at or "",
+    }
+
+    if media_type == "youtube":
+        variables["url"] = f"https://youtube.com/watch?v={metrics.get('external_id', '')}"
+        variables["view_count"] = str(metrics.get("view_count", 0))
+        variables["like_count"] = str(metrics.get("like_count", 0))
+        variables["comment_count"] = str(metrics.get("comment_count", 0))
+        template_key = "youtube_media_embed"
+    else:
+        variables["url"] = "https://open.spotify.com/" + media_type + "/" + str(metrics.get('external_id', ''))
+        variables["popularity"] = str(metrics.get("popularity", 0))
+        variables["spotify_type"] = media_type
+        template_key = "spotify_media_embed"
+
+    ctx = RenderContext(variables=variables)
+    tmpl = await template_store.load(template_key, session, guild_id)
+    return render_embed(tmpl, ctx)
+
+
 __all__ = [
     "ChainBreakVars",
     "NewSessionVars",
@@ -318,6 +366,7 @@ __all__ = [
     "board_url_for",
     "build_chain_break_embed",
     "build_cooldown_embed",
+    "build_media_embed",
     "build_new_session_embed",
     "build_record_embed",
     "current_record",

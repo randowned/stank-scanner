@@ -10,6 +10,7 @@
 		{ href: `${base}/admin`, label: 'Dashboard', icon: '🏠' },
 		{ href: `${base}/admin/channels`, label: 'Channels', icon: '📡' },
 		{ href: `${base}/admin/templates`, label: 'Templates', icon: '📝' },
+		{ href: `${base}/admin/media`, label: 'Media', icon: '🎬' },
 		{ href: `${base}/admin/admins`, label: 'Admins', icon: '👥' },
 		{ href: `${base}/admin/audit`, label: 'Audit log', icon: '📋' },
 		{ href: `${base}/admin/events`, label: 'Events', icon: '📜' },

@@ -54,6 +54,11 @@ class AppConfig(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "text"
 
+    # --- Media providers (Maphra) ---
+    youtube_api_key: SecretStr | None = None
+    spotify_client_id: SecretStr | None = None
+    spotify_client_secret: SecretStr | None = None
+
     # --- Dev mocks (ignored unless env == "dev-mock") ---
     mock_discord: bool = False
     mock_auth: bool = False

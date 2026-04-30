@@ -24,3 +24,38 @@ export function formatDuration(started: string | null, ended?: string | null): s
 	if (diffMs < 0) return '';
 	return formatDurationMs(diffMs);
 }
+
+export function formatRelativeTime(isoStr: string | null | undefined): string {
+	if (!isoStr) return '—';
+	const then = new Date(isoStr).getTime();
+	const now = Date.now();
+	const diffMs = now - then;
+	if (diffMs < 0) return 'just now';
+
+	const secs = Math.floor(diffMs / 1000);
+	if (secs < 60) return 'just now';
+	const mins = Math.floor(secs / 60);
+	if (mins < 2) return '1 minute ago';
+	if (mins < 60) return `${mins} minutes ago`;
+	const hrs = Math.floor(mins / 60);
+	if (hrs < 2) return '1 hour ago';
+	if (hrs < 24) return `${hrs} hours ago`;
+	const days = Math.floor(hrs / 24);
+	if (days < 2) return '1 day ago';
+	if (days < 14) return `${days} days ago`;
+	const weeks = Math.floor(days / 7);
+	if (weeks < 5) return `${weeks} weeks ago`;
+	const months = Math.floor(days / 30);
+	if (months < 12) return `${months} months ago`;
+	const years = Math.floor(days / 365);
+	return `${years} years ago`;
+}
+
+export function formatFreshness(fetchedAt: string | null | undefined, intervalMinutes: number = 10): { label: string; state: 'fresh' | 'stale' | 'dead' } {
+	if (!fetchedAt) return { label: 'No data', state: 'dead' };
+	const ageMs = Date.now() - new Date(fetchedAt).getTime();
+	const intervalMs = intervalMinutes * 60_000;
+	if (ageMs <= intervalMs) return { label: `Updated ${formatRelativeTime(fetchedAt)}`, state: 'fresh' };
+	if (ageMs <= intervalMs * 2) return { label: `Updated ${formatRelativeTime(fetchedAt)}`, state: 'stale' };
+	return { label: `Updated ${formatRelativeTime(fetchedAt)}`, state: 'dead' };
+}

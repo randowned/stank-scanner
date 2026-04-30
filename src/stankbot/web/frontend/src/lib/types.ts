@@ -176,3 +176,61 @@ export interface Toast {
 }
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+// ---------------------------------------------------------------------------
+// Media (Maphra)
+// ---------------------------------------------------------------------------
+
+export interface MediaItem {
+	id: number;
+	guild_id: string;
+	media_type: string;
+	external_id: string;
+	slug: string | null;
+	title: string;
+	channel_name: string | null;
+	channel_id: string | null;
+	thumbnail_url: string | null;
+	published_at: string | null;
+	duration_seconds: number | null;
+	added_by: string;
+	metrics: Record<string, MediaMetricValue>;
+	metrics_last_fetched_at: string | null;
+	created_at: string | null;
+	updated_at: string | null;
+}
+
+export interface MediaMetricValue {
+	value: number;
+	fetched_at: string;
+}
+
+export interface MetricSnapshot {
+	fetched_at: string;
+	value: number;
+}
+
+export interface MetricDef {
+	key: string;
+	label: string;
+	format: string;
+	icon: string;
+}
+
+export interface ProviderDef {
+	type: string;
+	label: string;
+	icon: string;
+	metrics: MetricDef[];
+}
+
+export interface CompareSeries {
+	media_item_id: number;
+	title: string;
+	points: Array<{ x: string; y: number }>;
+}
+
+export interface CompareData {
+	metric: MetricDef | null;
+	series: CompareSeries[];
+}

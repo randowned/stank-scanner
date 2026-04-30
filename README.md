@@ -32,6 +32,7 @@ Sessions roll over on a cron (default 07:00 / 15:00 / 23:00 UTC) with configurab
 - **Multi-altar per guild.** Run a themed event (Halloween sticker, Founders Day) alongside the normal chain with its own scoring overrides and a `custom_event_key` tag on every emitted event.
 - **Achievements / badges** derived from the event log — First Stank, Centurion, Finisher, Chainbreaker, Comeback Kid, Perfect Session, Streaker, Team Player.
 - **Web dashboard** with Discord OAuth — public board with reaction-aware leaderboard (live reorder + delta chips + chain-break overlay), player profiles with 30-day sparklines + achievement gallery, session history, and a five-page admin surface (Dashboard · Templates · Admins · Audit · Settings with embedded session ops). MsgPack-first transport over HTTP + WebSocket. SvelteKit SPA served at `/`.
+- **Maphra — media analytics** for YouTube and Spotify. Add videos/albums via the admin panel, view metric history and comparison charts on the dashboard, and query stats in Discord with `/media youtube info <slug>` / `/media spotify info <slug>`. Per-provider embed templates, scheduled metric snapshots, and configurable refresh intervals.
 
 ## Running it yourself
 
@@ -124,6 +125,8 @@ Environment (see `.env.example`):
 | `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` / `OAUTH_REDIRECT_URI` | Dashboard login |
 | `GUILD_IDS` | Comma-separated guild ids for slash sync; first entry is fallback default |
 | `SESSION_SECRET` | Cookie signing secret for the dashboard |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 key for media metrics |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify Web API credentials for media metrics |
 
 **Dev-only mocks** (`.env.dev`, no secrets needed):
 
@@ -159,6 +162,13 @@ All setup happens on the web dashboard (log in with Discord OAuth):
 | `/stank history chain <id>` | Chain replay. |
 | `/stank history session <id>` | Session summary. |
 
+### Media (`/media …`)
+
+| Command | What it does |
+|---|---|
+| `/media youtube info <slug>` | Rich embed with latest YouTube video metrics. |
+| `/media spotify info <slug>` | Rich embed with latest Spotify track/album metrics. |
+
 ### Admin (`/preview`) — requires admin role or Manage Guild
 
 | Command | What it does |
@@ -184,7 +194,10 @@ The dashboard is a PWA — installable from Chrome / Edge via the address bar or
   - `/admin/audit` — admin action audit trail.
   - `/admin/events` — game event log (stanks, breaks, reactions, achievements).
   - `/admin/settings` — two-column page: left lists Altar / Scoring / Behavior / Reset windows / Announcements / Maintenance cards; right sticky rail holds New Session · Reset · Rebuild.
-- Header: single row, `Live updates` badge for non-admin users (gray when logged out, green/muted/red when connected) or `N online` badge for admin users (clickable popover with avatars + session durations), user menu with Navigate (Dashboard / Sessions) + My Profile + collapsible Switch Guild showing the active guild's icon + name.
+- `/media` — Maphra dashboard: card grid of all tracked media with selected metric, timeframe selector, comparison mode (select 2+ videos to overlay metrics).
+- `/media/{id}` — single media item detail: metric tiles, sparkline history chart, multi-video comparison overlay.
+- Admin `/admin/media` — manage media: add (tabbed by provider, optional slug), type filter, force-refresh single or all, per-item metric update freshness, configurable refresh interval.
+- Header: single row, `Live updates` badge for non-admin users (gray when logged out, green/muted/red when connected) or `N online` badge for admin users (clickable popover with avatars + session durations), user menu with Navigate (Dashboard / Sessions / Media) + My Profile + collapsible Switch Guild showing the active guild's icon + name.
 - `/chain/{id}` — chain detail with status banner (alive / broken / rollover), length classification (Short / Medium / Long / Epic), per-position timeline (avatar + position badge + SP awarded at each stank), and per-user leaderboard with stank and reaction counts.
 - Auth guard: unauthenticated requests to any non-public route redirect to `/`. All data API endpoints require guild membership (`require_guild_member`).
 

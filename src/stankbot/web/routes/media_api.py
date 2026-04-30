@@ -1,0 +1,92 @@
+"""User-facing media API — list, detail, history, comparison.
+
+All routes require guild membership. Data comes from the MediaService
+which delegates to the provider registry stored on app.state.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from stankbot.services.media_service import MediaService
+from stankbot.web.tools import get_active_guild_id, get_db, require_guild_member
+from stankbot.web.transport import MsgPackResponse
+
+log = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/media", tags=["media"])
+
+
+async def _media_service(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> MediaService:
+    registry = request.app.state.media_registry
+    return MediaService(session=session, registry=registry)
+
+
+@router.get("")
+async def list_media(
+    request: Request,
+    guild_id: int = Depends(get_active_guild_id),
+    _user: dict[str, Any] = Depends(require_guild_member),
+    media_type: str | None = Query(None),
+) -> MsgPackResponse:
+    svc = await _media_service(request)
+    items = await svc.list_media(guild_id, media_type)
+    return MsgPackResponse({"items": items}, request)
+
+
+@router.get("/compare")
+async def compare_media(
+    request: Request,
+    ids: str = Query(...),
+    metric: str = Query("view_count"),
+    days: int = Query(30, ge=1, le=365),
+    guild_id: int = Depends(get_active_guild_id),
+    _user: dict[str, Any] = Depends(require_guild_member),
+) -> MsgPackResponse:
+    try:
+        media_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="ids must be comma-separated integers") from exc
+    if len(media_ids) < 2:
+        raise HTTPException(status_code=400, detail="at least 2 ids required for comparison")
+    if len(media_ids) > 10:
+        media_ids = media_ids[:10]
+
+    svc = await _media_service(request)
+    data = await svc.get_comparison_data(media_ids, metric, window_days=days)
+    return MsgPackResponse(data, request)
+
+
+@router.get("/{media_id}")
+async def get_media_detail(
+    request: Request,
+    media_id: int,
+    guild_id: int = Depends(get_active_guild_id),
+    _user: dict[str, Any] = Depends(require_guild_member),
+) -> MsgPackResponse:
+    svc = await _media_service(request)
+    item = await svc.get_media_item(media_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    return MsgPackResponse(item, request)
+
+
+@router.get("/{media_id}/history")
+async def get_media_history(
+    request: Request,
+    media_id: int,
+    metric: str = Query("view_count"),
+    days: int = Query(30, ge=1, le=365),
+    guild_id: int = Depends(get_active_guild_id),
+    _user: dict[str, Any] = Depends(require_guild_member),
+) -> MsgPackResponse:
+    svc = await _media_service(request)
+    history = await svc.get_metrics_history(media_id, metric, window_days=days)
+    return MsgPackResponse({"metric": metric, "days": days, "history": history}, request)

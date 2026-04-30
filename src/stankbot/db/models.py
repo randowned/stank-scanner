@@ -484,6 +484,92 @@ class PlayerBadge(Base):
 
 
 # ---------------------------------------------------------------------------
+# Media (Maphra — platform-agnostic media analytics)
+# ---------------------------------------------------------------------------
+
+
+class MediaItem(Base):
+    """Metadata for a tracked media item (YouTube video, Spotify track, etc.).
+
+    Scoped per-guild. Unique per (guild_id, media_type, external_id).
+    Metrics themselves live in :class:`MetricCache` (latest) and
+    :class:`MetricSnapshot` (time-series).
+    """
+
+    __tablename__ = "media_items"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "media_type", "external_id", name="uq_media_item_unique"),
+        UniqueConstraint("guild_id", "slug", name="uq_media_slug"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("guilds.id", ondelete="CASCADE"), nullable=False
+    )
+    media_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    slug: Mapped[str | None] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    channel_name: Mapped[str | None] = mapped_column(String(255))
+    channel_id: Mapped[str | None] = mapped_column(String(128))
+    thumbnail_url: Mapped[str | None] = mapped_column(String(500))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    added_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    metrics_last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class MetricCache(Base):
+    """Latest metric values — one row per (media_item, metric_key).
+
+    Upserted on every refresh for fast list-page renders without scanning
+    the full time-series table.
+    """
+
+    __tablename__ = "metric_cache"
+
+    media_item_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("media_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    metric_key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    value: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MetricSnapshot(Base):
+    """Time-series metric snapshots — one row per refresh per metric.
+
+    Use for historical charts. Query with:
+        SELECT fetched_at, value FROM metric_snapshots
+        WHERE media_item_id = ? AND metric_key = ? AND fetched_at >= ?
+        ORDER BY fetched_at
+    """
+
+    __tablename__ = "metric_snapshots"
+    __table_args__ = (
+        Index("ix_metric_snapshots_item_key_time", "media_item_id", "metric_key", "fetched_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    media_item_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False
+    )
+    metric_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    value: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------
 

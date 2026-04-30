@@ -12,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from stankbot.config import AppConfig
 from stankbot.db.engine import build_engine, build_sessionmaker, session_scope
 from stankbot.scheduling.session_scheduler import SessionScheduler
+from stankbot.scheduling.media_metrics_scheduler import MediaMetricsScheduler
+from stankbot.services.media_providers import (
+    MediaProviderRegistry,
+    YouTubeProvider,
+    SpotifyProvider,
+)
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +41,7 @@ _COG_MODULES: tuple[str, ...] = (
     "stankbot.cogs.chain_listener",
     "stankbot.cogs.stank_commands",
     "stankbot.cogs.preview",
+    "stankbot.cogs.media_commands",
 )
 
 
@@ -54,6 +61,16 @@ class StankBot(commands.Bot):
         self.engine = build_engine(config.database_url)
         self.session_factory = build_sessionmaker(self.engine)
         self.scheduler = SessionScheduler(self)
+
+        yt_key = config.youtube_api_key.get_secret_value() if config.youtube_api_key else None
+        spot_id = config.spotify_client_id.get_secret_value() if config.spotify_client_id else None
+        spot_secret = config.spotify_client_secret.get_secret_value() if config.spotify_client_secret else None
+
+        self.media_registry = MediaProviderRegistry()
+        self.media_registry.register(YouTubeProvider(api_key=yt_key))
+        self.media_registry.register(SpotifyProvider(client_id=spot_id, client_secret=spot_secret))
+        self.media_scheduler = MediaMetricsScheduler(self, self.media_registry)
+
         self._bot_guilds = []
         self._guilds_loaded = asyncio.Event()
 
@@ -83,6 +100,7 @@ class StankBot(commands.Bot):
         log.info("Loaded %d cogs", len(_COG_MODULES))
 
         await self.scheduler.start()
+        await self.media_scheduler.start()
 
         if self.config.guild_ids:
             for gid in self.config.guild_ids:
@@ -138,5 +156,6 @@ class StankBot(commands.Bot):
 
     async def close(self) -> None:
         await self.scheduler.shutdown()
+        await self.media_scheduler.shutdown()
         await super().close()
         await self.engine.dispose()
