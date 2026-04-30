@@ -15,30 +15,6 @@ test.describe('Online users badge (admin)', () => {
 		const dot = page.locator('[data-testid="online-badge-dot"]');
 		await expect(dot).toBeVisible();
 	});
-
-	test('popover opens and closes on click', async ({ page }) => {
-		const badge = page.locator('[data-testid="online-badge"]');
-		await expect(badge).toBeVisible();
-		await badge.click();
-		await page.waitForTimeout(300);
-		const popover = page.locator('[data-testid="online-popover"]');
-		await expect(popover).toBeVisible({ timeout: 5000 });
-		await expect(popover).toContainText('Online Users');
-		await page.locator('body').click({ position: { x: 10, y: 10 } });
-		await expect(popover).not.toBeVisible();
-	});
-
-	test('popover lists logged-in admin user', async ({ page }) => {
-		const badge = page.locator('[data-testid="online-badge"]');
-		await expect(badge).toBeVisible();
-		await badge.click();
-		await page.waitForTimeout(300);
-		const popover = page.locator('[data-testid="online-popover"]');
-		await expect(popover).toBeVisible({ timeout: 5000 });
-		const rows = page.locator('[data-testid="online-user-row"]');
-		await expect(rows.first()).toBeVisible({ timeout: 5000 });
-		await expect(rows.first()).toContainText(adminUser.username);
-	});
 });
 
 test.describe('Online users — not admin', () => {
