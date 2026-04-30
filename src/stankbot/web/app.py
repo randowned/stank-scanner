@@ -83,8 +83,21 @@ def build_app(
     app.include_router(media_api.router)
     app.include_router(media_admin.router)
 
-    # Share the media registry from the bot (if available)
-    if bot is not None and hasattr(bot, "media_registry"):
+    # Share the media registry from the bot (if available).
+    # In dev-mock mode, always use mock providers regardless.
+    if config.env == "dev-mock":
+        from stankbot.services.media_providers import MediaProviderRegistry
+        from stankbot.services.media_providers.mock_providers import (
+            MockSpotifyProvider,
+            MockYouTubeProvider,
+        )
+
+        registry = MediaProviderRegistry()
+        registry.register(MockYouTubeProvider())
+        registry.register(MockSpotifyProvider())
+        app.state.media_registry = registry
+        log.info("Mock media providers registered (dev-mock)")
+    elif bot is not None and hasattr(bot, "media_registry"):
         app.state.media_registry = bot.media_registry
     else:
         from stankbot.services.media_providers import MediaProviderRegistry
@@ -100,9 +113,10 @@ def build_app(
         return JSONResponse({"version": app.state.app_version})
 
     if config.env == "dev-mock":
-        from stankbot.web.routes import mock_events
+        from stankbot.web.routes import mock_events, mock_media
 
         app.include_router(mock_events.router)
+        app.include_router(mock_media.router)
         log.info("Mock event API mounted at /api/mock")
 
     @app.exception_handler(_LoginRedirect)

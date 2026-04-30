@@ -61,6 +61,8 @@ export const test = base.extend<{
 	injectReaction: (guildId: number, messageId: number, userId: number) => Promise<void>;
 	startRandomEvents: (interval?: number) => Promise<void>;
 	stopRandomEvents: () => Promise<void>;
+	injectMedia: (opts?: { guildId?: number; mediaType?: string; slug?: string }) => Promise<{ id: number; slug: string }>;
+	clearMedia: (guildId?: number) => Promise<void>;
 }>({
 	mockLogin: async ({ page }, use) => {
 		await use(async (user = defaultUser) => {
@@ -147,6 +149,29 @@ export const test = base.extend<{
 	stopRandomEvents: async ({ page }, use) => {
 		await use(async () => {
 			await page.request.post('/api/mock/random/stop');
+		});
+	},
+
+	injectMedia: async ({ page }, use) => {
+		await use(async (opts = {}) => {
+			const guildId = opts.guildId ?? 123456789;
+			const mediaType = opts.mediaType ?? 'youtube';
+			const slug = opts.slug ?? `e2e-test-${Date.now() % 100000}`;
+			const response = await page.request.post('/api/mock/media', {
+				data: { guild_id: guildId, media_type: mediaType, slug }
+			});
+			if (!response.ok()) {
+				const body = await response.text().catch(() => 'unknown');
+				console.error('injectMedia failed:', response.status(), body);
+			}
+			expect(response.ok()).toBeTruthy();
+			return response.json() as Promise<{ id: number; slug: string }>;
+		});
+	},
+
+	clearMedia: async ({ page }, use) => {
+		await use(async (guildId = 123456789) => {
+			await page.request.post('/api/mock/clear-media', { data: { guild_id: guildId } });
 		});
 	}
 });

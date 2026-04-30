@@ -10,7 +10,7 @@
 	let { title, subtitle, actions }: Props = $props();
 </script>
 
-<header class="flex flex-wrap items-center justify-between gap-3 mb-4">
+<header class="flex flex-wrap items-center justify-between gap-3 mb-4" data-testid="page-header">
 	<div>
 		<h1 class="text-2xl font-bold text-text">{title}</h1>
 		{#if subtitle}

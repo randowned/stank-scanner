@@ -32,7 +32,7 @@ def _ok(request: Request, extra: dict[str, Any] | None = None) -> MsgPackRespons
 
 async def _media_service(
     request: Request,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession,
 ) -> MediaService:
     registry = request.app.state.media_registry
     return MediaService(session=session, registry=registry)
@@ -49,8 +49,9 @@ async def list_media_admin(
     guild_id: int = Depends(get_active_guild_id),
     _admin: dict[str, Any] = Depends(require_guild_admin),
     media_type: str | None = Query(None),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
-    svc = await _media_service(request)
+    svc = await _media_service(request, session)
     items = await svc.list_media(guild_id, media_type)
     return MsgPackResponse({"items": items}, request)
 
@@ -144,8 +145,9 @@ async def get_media_admin(
     media_id: int,
     guild_id: int = Depends(get_active_guild_id),
     _admin: dict[str, Any] = Depends(require_guild_admin),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
-    svc = await _media_service(request)
+    svc = await _media_service(request, session)
     item = await svc.get_media_item(media_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Media item not found")

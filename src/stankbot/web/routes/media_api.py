@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 
 async def _media_service(
     request: Request,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession,
 ) -> MediaService:
     registry = request.app.state.media_registry
     return MediaService(session=session, registry=registry)
@@ -35,8 +35,9 @@ async def list_media(
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
     media_type: str | None = Query(None),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
-    svc = await _media_service(request)
+    svc = await _media_service(request, session)
     items = await svc.list_media(guild_id, media_type)
     return MsgPackResponse({"items": items}, request)
 
@@ -49,6 +50,7 @@ async def compare_media(
     days: int = Query(30, ge=1, le=365),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
     try:
         media_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
@@ -59,7 +61,7 @@ async def compare_media(
     if len(media_ids) > 10:
         media_ids = media_ids[:10]
 
-    svc = await _media_service(request)
+    svc = await _media_service(request, session)
     data = await svc.get_comparison_data(media_ids, metric, window_days=days)
     return MsgPackResponse(data, request)
 
@@ -70,8 +72,9 @@ async def get_media_detail(
     media_id: int,
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
-    svc = await _media_service(request)
+    svc = await _media_service(request, session)
     item = await svc.get_media_item(media_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -86,7 +89,8 @@ async def get_media_history(
     days: int = Query(30, ge=1, le=365),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
-    svc = await _media_service(request)
+    svc = await _media_service(request, session)
     history = await svc.get_metrics_history(media_id, metric, window_days=days)
     return MsgPackResponse({"metric": metric, "days": days, "history": history}, request)
