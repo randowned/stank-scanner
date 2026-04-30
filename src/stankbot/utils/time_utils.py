@@ -5,6 +5,31 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 
+def utc_isoformat(dt: datetime | None) -> str | None:
+    """ISO-8601 with ``+00:00``, safely handling naive datetimes.
+
+    SQLite's ``DateTime(timezone=True)`` round-trips as a naive datetime,
+    so we stamp UTC explicitly to ensure the output is parseable as UTC
+    by JavaScript ``new Date()``.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.isoformat()
+
+
+def utc_timestamp(dt: datetime) -> float:
+    """Unix timestamp, safely handling naive datetimes (SQLite).
+
+    ``datetime.timestamp()`` on a naive value assumes local timezone,
+    which would produce a wrong Unix timestamp.  This stamps UTC first.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.timestamp()
+
+
 def humanize_duration(seconds: float) -> str:
     """Format ``seconds`` as a compact duration string like ``2h 14m`` or
     ``45s``. Negative / zero values render as ``0s``.

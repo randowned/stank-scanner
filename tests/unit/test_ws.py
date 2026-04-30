@@ -81,17 +81,17 @@ class TestConnectionManager:
 class TestMessageTypes:
     def test_msgtype_values(self) -> None:
         from stankbot.web.ws import (
-            MSG_TYPE_PING,
-            MSG_TYPE_VERSION_RESPONSE,
-            MSG_TYPE_STATE,
-            MSG_TYPE_RANK_UPDATE,
-            MSG_TYPE_CHAIN_UPDATE,
-            MSG_TYPE_PONG,
             MSG_TYPE_ACHIEVEMENT,
-            MSG_TYPE_SESSION,
-            MSG_TYPE_GAME_EVENT,
+            MSG_TYPE_CHAIN_UPDATE,
             MSG_TYPE_ERROR,
+            MSG_TYPE_GAME_EVENT,
+            MSG_TYPE_PING,
+            MSG_TYPE_PONG,
+            MSG_TYPE_RANK_UPDATE,
+            MSG_TYPE_SESSION,
+            MSG_TYPE_STATE,
             MSG_TYPE_VERSION_MISMATCH,
+            MSG_TYPE_VERSION_RESPONSE,
         )
         assert MSG_TYPE_PING == 2
         assert MSG_TYPE_VERSION_RESPONSE == 3
@@ -110,7 +110,7 @@ class TestBroadcastFunctions:
     @pytest.mark.asyncio
     async def test_notify_chain_update(self) -> None:
         with patch.object(manager, 'broadcast_json', new_callable=AsyncMock) as mock:
-            from stankbot.web.ws import notify_chain_update, MSG_TYPE_CHAIN_UPDATE
+            from stankbot.web.ws import MSG_TYPE_CHAIN_UPDATE, notify_chain_update
             await notify_chain_update(123, 50, 10, 456)
             mock.assert_called_once()
             call_args = mock.call_args[0]
@@ -121,7 +121,7 @@ class TestBroadcastFunctions:
     @pytest.mark.asyncio
     async def test_notify_rank_update(self) -> None:
         with patch.object(manager, 'broadcast_json', new_callable=AsyncMock) as mock:
-            from stankbot.web.ws import notify_rank_update, MSG_TYPE_RANK_UPDATE
+            from stankbot.web.ws import MSG_TYPE_RANK_UPDATE, notify_rank_update
             rankings = [{"user_id": 1, "display_name": "Test", "earned_sp": 100, "punishments": 0}]
             await notify_rank_update(123, rankings)
             mock.assert_called_once()
@@ -132,7 +132,7 @@ class TestBroadcastFunctions:
     @pytest.mark.asyncio
     async def test_notify_achievement(self) -> None:
         with patch.object(manager, 'broadcast_json', new_callable=AsyncMock) as mock:
-            from stankbot.web.ws import notify_achievement, MSG_TYPE_ACHIEVEMENT
+            from stankbot.web.ws import MSG_TYPE_ACHIEVEMENT, notify_achievement
             badge = {"key": "first_stank", "name": "First Stank", "icon": "✨"}
             await notify_achievement(123, 456, badge)
             mock.assert_called_once()
@@ -145,7 +145,7 @@ class TestBroadcastFunctions:
         with patch.object(manager, 'broadcast_json', new_callable=AsyncMock) as mock:
             from datetime import datetime
 
-            from stankbot.web.ws import notify_session, MSG_TYPE_SESSION
+            from stankbot.web.ws import MSG_TYPE_SESSION, notify_session
             await notify_session(123, 1, "start", datetime.now(UTC), None)
             mock.assert_called_once()
             call_args = mock.call_args[0]

@@ -21,6 +21,7 @@ from stankbot.db.repositories import guilds as guilds_repo
 from stankbot.services.permission_service import PermissionService
 from stankbot.services.session_service import SessionService
 from stankbot.services.settings_service import LABELS, Keys, SettingsService
+from stankbot.utils.time_utils import utc_isoformat
 from stankbot.web.tools import (
     get_active_guild_id,
     get_db,
@@ -406,7 +407,7 @@ async def get_audit(
     def to_dict(e: AuditLog) -> dict[str, Any]:
         return {
             "id": e.id,
-            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "created_at": utc_isoformat(e.created_at),
             "actor_id": str(e.actor_id) if e.actor_id else None,
             "actor_name": names.get(e.actor_id) if e.actor_id else None,
             "action": e.action,
@@ -453,7 +454,7 @@ async def get_events(
     def to_dict(e: Event) -> dict[str, Any]:
         return {
             "id": e.id,
-            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "created_at": utc_isoformat(e.created_at),
             "type": e.type,
             "user_id": str(e.user_id) if e.user_id is not None else None,
             "user_name": names.get(e.user_id) if e.user_id is not None else None,

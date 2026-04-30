@@ -17,6 +17,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Event, EventType
+from stankbot.utils.time_utils import utc_isoformat
 
 
 async def append(
@@ -121,7 +122,7 @@ async def append(
                     user_name=_user_name,
                     delta=event.delta,
                     reason=event.reason,
-                    created_at=event.created_at.isoformat() if event.created_at else None,
+                    created_at=utc_isoformat(event.created_at),
                 )
             )
     except Exception:

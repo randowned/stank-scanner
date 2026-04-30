@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from stankbot.utils.time_utils import utc_isoformat
 from stankbot.web.tools import (
     get_active_guild_id,
     get_db,
@@ -275,7 +276,7 @@ async def api_player(
                 "chains_broken": both.alltime.chains_broken,
             },
             "achievements": achievement_catalog,
-            "last_stank_at": both.alltime.last_stank_at.isoformat() if both.alltime.last_stank_at else None,
+            "last_stank_at": utc_isoformat(both.alltime.last_stank_at),
         },
         request,
     )
@@ -452,8 +453,8 @@ async def api_player_chains(
         [
             {
                 "chain_id": r.chain_id,
-                "started_at": r.started_at.isoformat() if r.started_at else None,
-                "broken_at": r.broken_at.isoformat() if r.broken_at else None,
+                "started_at": utc_isoformat(r.started_at),
+                "broken_at": utc_isoformat(r.broken_at),
                 "length": r.final_length or 0,
                 "unique_contributors": r.final_unique or 0,
                 "user_stanks": int(r.user_stanks or 0),
@@ -539,7 +540,7 @@ async def api_chain(
         timeline.append({
             "position": msg.position,
             "user_id": str(msg.user_id),
-            "created_at": msg.created_at.isoformat(),
+            "created_at": utc_isoformat(msg.created_at),
             "sp_awarded": scoring_service.stank_sp(msg.position, config),
         })
 
@@ -561,8 +562,8 @@ async def api_chain(
             "session_id": effective_session_id,
             "altar_name": altar_name,
             "rolled_over": summary.broken_at is None and effective_session_id != summary.session_id,
-            "started_at": summary.started_at.isoformat(),
-            "broken_at": summary.broken_at.isoformat() if summary.broken_at else None,
+            "started_at": utc_isoformat(summary.started_at),
+            "broken_at": utc_isoformat(summary.broken_at),
             "length": summary.length,
             "unique_contributors": summary.unique_contributors,
             "starter_user_id": str(summary.starter_user_id) if summary.starter_user_id is not None else None,
@@ -639,14 +640,14 @@ async def api_sessions(
             "reactions": int(row[4] or 0),
             "total_sp": int(row[5] or 0),
             "total_pp": int(row[6] or 0),
-            "ended_at": row[7].isoformat() if row[7] else None,
+            "ended_at": utc_isoformat(row[7]),
         }
 
     return MsgPackResponse(
         [
             {
                 "session_id": int(r[0]),
-                "started_at": r[1].isoformat() if r[1] else None,
+                "started_at": utc_isoformat(r[1]),
                 "active": stats_map.get(int(r[0]), {}).get("ended_at") is None,
                 **stats_map.get(int(r[0]), {"unique_stankers": 0, "stanks": 0, "chains": 0, "reactions": 0, "total_sp": 0, "total_pp": 0, "ended_at": None}),
             }
@@ -710,8 +711,8 @@ async def api_session(
             live_len, live_unique = c.final_length or 0, c.final_unique or 0
         chains_payload.append({
             "chain_id": c.id,
-            "started_at": c.started_at.isoformat() if c.started_at else None,
-            "broken_at": c.broken_at.isoformat() if c.broken_at else None,
+            "started_at": utc_isoformat(c.started_at),
+            "broken_at": utc_isoformat(c.broken_at),
             "length": live_len,
             "unique_contributors": live_unique,
             "starter_user_id": str(c.starter_user_id) if c.starter_user_id is not None else None,
@@ -774,8 +775,8 @@ async def api_session(
     return MsgPackResponse(
         {
             "session_id": summary.session_id,
-            "started_at": summary.started_at.isoformat() if summary.started_at else None,
-            "ended_at": summary.ended_at.isoformat() if summary.ended_at else None,
+            "started_at": utc_isoformat(summary.started_at),
+            "ended_at": utc_isoformat(summary.ended_at),
             "chains_started": summary.chains_started,
             "chains_broken": summary.chains_broken,
             "total_sp": total_sp,

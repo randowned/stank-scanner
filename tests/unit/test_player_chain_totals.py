@@ -13,10 +13,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from stankbot.db.models import Chain, EventType, Guild, PlayerChainTotal
+from stankbot.db.models import EventType, Guild
 from stankbot.db.repositories import events as events_repo
 from stankbot.db.repositories import player_chain_totals as pct_repo
-
 
 # ── helpers ────────────────────────────────────────────────────────────────
 

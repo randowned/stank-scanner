@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Event, EventType, PlayerChainTotal
 
-
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------

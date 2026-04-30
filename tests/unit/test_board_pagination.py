@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from stankbot.db.models import Guild, PlayerTotal
 from stankbot.db.repositories import player_totals as pt_repo
 

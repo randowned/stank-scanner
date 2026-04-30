@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from stankbot.db.models import RecordScope
 from stankbot.db.repositories import records as records_repo
 
-
 # ---------------------------------------------------------------------------
 # beats
 # ---------------------------------------------------------------------------

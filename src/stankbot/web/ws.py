@@ -15,6 +15,8 @@ import msgpack
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from stankbot.utils.time_utils import utc_isoformat
+
 log = logging.getLogger(__name__)
 
 # WS message type constants (shared with frontend ws.ts)
@@ -118,7 +120,7 @@ class ConnectionManager:
                 "user_id": uid,
                 "username": info.username,
                 "discord_avatar": info.avatar_url,
-                "connected_at": info.connected_at.isoformat(),
+                "connected_at": utc_isoformat(info.connected_at),
             }
             for uid, info in dedup.items()
         ]
@@ -220,7 +222,7 @@ async def get_board_state(session: AsyncSession, guild_id: int, guild_name: str)
         "record_unique": state.record_unique,
         "alltime_record": state.alltime_record,
         "alltime_record_unique": state.alltime_record_unique,
-        "next_reset_at": state.next_reset_at.isoformat() if state.next_reset_at else None,
+        "next_reset_at": utc_isoformat(state.next_reset_at),
         "rankings": [row_to_dict(r) for r in state.rankings],
         "chain_starter": row_to_dict(state.chain_starter) if state.chain_starter else None,
         "chainbreaker": row_to_dict(state.chainbreaker) if state.chainbreaker else None,
@@ -490,8 +492,8 @@ async def notify_session(
             "d": {
                 "session_id": session_id,
                 "action": action,
-                "started_at": started_at.isoformat() if started_at else None,
-                "ended_at": ended_at.isoformat() if ended_at else None,
+                "started_at": utc_isoformat(started_at),
+                "ended_at": utc_isoformat(ended_at),
             },
         },
     )

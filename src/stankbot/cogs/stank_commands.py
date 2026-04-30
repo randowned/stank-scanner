@@ -45,7 +45,7 @@ from stankbot.services.default_templates import (
 from stankbot.services.session_service import SessionService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.services.template_engine import RenderContext, render_embed
-from stankbot.utils.time_utils import humanize_duration
+from stankbot.utils.time_utils import humanize_duration, utc_timestamp
 
 if TYPE_CHECKING:
     from stankbot.bot import StankBot
@@ -460,7 +460,7 @@ class StankCommands(commands.GroupCog, name="stank"):
             embed.add_field(name="Broken by", value=breaker, inline=True)
         embed.add_field(
             name="Started",
-            value=f"<t:{int(summary.started_at.timestamp())}:f>"
+            value=f"<t:{int(utc_timestamp(summary.started_at))}:f>"
             if summary.started_at
             else "—",
             inline=True,
@@ -468,7 +468,7 @@ class StankCommands(commands.GroupCog, name="stank"):
         if summary.broken_at:
             embed.add_field(
                 name="Ended",
-                value=f"<t:{int(summary.broken_at.timestamp())}:f>",
+                value=f"<t:{int(utc_timestamp(summary.broken_at))}:f>",
                 inline=True,
             )
         if summary.contributors:
@@ -527,13 +527,13 @@ class StankCommands(commands.GroupCog, name="stank"):
         if summary.started_at:
             embed.add_field(
                 name="Started",
-                value=f"<t:{int(summary.started_at.timestamp())}:f>",
+                value=f"<t:{int(utc_timestamp(summary.started_at))}:f>",
                 inline=True,
             )
         embed.add_field(
             name="Ended",
             value=(
-                f"<t:{int(summary.ended_at.timestamp())}:f>"
+                f"<t:{int(utc_timestamp(summary.ended_at))}:f>"
                 if summary.ended_at
                 else "_still open_"
             ),
