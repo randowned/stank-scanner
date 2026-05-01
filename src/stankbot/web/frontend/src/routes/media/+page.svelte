@@ -75,9 +75,9 @@
 	}
 </script>
 
-<PageHeader title="Media" subtitle="Media analytics" />
-
 <div class="p-4 space-y-4">
+	<PageHeader title="Media" subtitle="Media analytics" />
+
 	<div class="flex flex-wrap items-center gap-3">
 		<div class="flex items-center gap-2">
 			<Select options={timeframeOptions} bind:value={timeframe} testId="media-timeframe" />
