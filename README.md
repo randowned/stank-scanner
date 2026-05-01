@@ -194,7 +194,7 @@ The dashboard is a PWA — installable from Chrome / Edge via the address bar or
   - `/admin/audit` — admin action audit trail.
   - `/admin/events` — game event log (stanks, breaks, reactions, achievements).
   - `/admin/settings` — two-column page: left lists Altar / Scoring / Behavior / Reset windows / Announcements / Maintenance cards; right sticky rail holds New Session · Reset · Rebuild.
-- `/media` — Maphra dashboard: card grid of all tracked media showing all three metrics (views, likes, comments) per card, compare mode (select 2+ items to navigate to a detail page with comparison charts via `?compare=` query param).
+- `/media` — Maphra dashboard: provider type tabs (All / YouTube / Spotify) with colored left borders, card grid showing all three metrics (views, likes, comments) per card, compare mode (select 2+ items via whole-card click to navigate to a detail page with comparison charts via `?compare=` query param).
 - `/media/{id}` — single media item detail: metric tiles, history chart, multi-series comparison overlay when reached via `?compare=ids` from the list page.
 - Admin `/admin/media` — manage media: add (tabbed by provider, optional slug), type filter, force-refresh single or all, per-item metric update freshness, interval dropdown (15 min to 24 hr, clock-aligned fetches).
 - Header: single row, `Live updates` badge for non-admin users (gray when logged out, green/muted/red when connected) or `N online` badge for admin users (clickable popover with avatars + session durations), user menu with Navigate (Dashboard / Sessions / Media) + My Profile + collapsible Switch Guild showing the active guild's icon + name.

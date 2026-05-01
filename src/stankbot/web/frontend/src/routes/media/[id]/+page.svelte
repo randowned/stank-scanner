@@ -20,7 +20,7 @@
 	const initialHistory = $derived(data.history as MetricSnapshot[]);
 
 	let selectedMetric = $state<string>('view_count');
-	let selectedDays = $state<number>(30);
+	let selectedDays = $state<number>(7);
 	let history = $state<MetricSnapshot[]>(untrack(() => initialHistory));
 	let loadingHistory = $state(false);
 

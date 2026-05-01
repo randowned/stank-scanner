@@ -16,7 +16,7 @@ export const load: Load = async ({ params, fetch }) => {
 		history = await loadWithFallback<MetricSnapshot[]>(
 			() =>
 				apiFetch<{ history: MetricSnapshot[] }>(
-					`/api/media/${mediaId}/history?metric=view_count&days=30`,
+					`/api/media/${mediaId}/history?metric=view_count&days=7`,
 					{ fetch }
 				).then((r) => r.history),
 			{ fallback: [] }

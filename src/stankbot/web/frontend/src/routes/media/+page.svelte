@@ -5,6 +5,7 @@
 	import type { MediaItem } from '$lib/types';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
+	import Tabs from '$lib/components/Tabs.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import RelativeTime from '$lib/components/RelativeTime.svelte';
 
@@ -12,8 +13,25 @@
 
 	const items = $derived(data.items as MediaItem[]);
 
+	let activeType = $state<string>('');
 	let compareMode = $state(false);
 	let selectedIds = $state<number[]>([]);
+
+	const typeTabs = [
+		{ value: '', label: 'All' },
+		{ value: 'youtube', label: 'YouTube' },
+		{ value: 'spotify', label: 'Spotify' },
+	];
+
+	const filteredItems = $derived(
+		activeType ? items.filter((i) => i.media_type === activeType) : items
+	);
+
+	function borderClass(type: string): string {
+		if (type === 'youtube') return 'border-l-[3px] border-l-[#ff0000]/70';
+		if (type === 'spotify') return 'border-l-[3px] border-l-[#1db954]/70';
+		return '';
+	}
 
 	function metricValue(item: MediaItem, key: string): number {
 		return item.metrics?.[key]?.value ?? 0;
@@ -35,14 +53,16 @@
 		if (selectedIds.length < 2) return;
 		const primary = selectedIds[0];
 		const extras = selectedIds.slice(1);
-		void goto(`${base}/media/${primary}?compare=${extras.join(',')}&metric=view_count&days=30`);
+		void goto(`${base}/media/${primary}?compare=${extras.join(',')}&metric=view_count&days=7`);
 	}
 
-	const showCompareBtn = $derived(items.length > 1);
+	const showCompareBtn = $derived(filteredItems.length > 1);
 </script>
 
 <div class="p-4 space-y-4">
 	<PageHeader title="Media" subtitle="Media analytics" />
+
+	<Tabs tabs={typeTabs} bind:value={activeType} />
 
 	<div class="flex flex-wrap items-center gap-2">
 		{#if showCompareBtn}
@@ -66,26 +86,31 @@
 		{/if}
 	</div>
 
-	{#if items.length === 0}
+	{#if filteredItems.length === 0}
 		<EmptyState icon="📊" title="No media yet" message="Admins can add YouTube and Spotify media from the admin panel." />
 	{:else}
 		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-			{#each items as item (item.id)}
+			{#each filteredItems as item (item.id)}
 				{@const freshness = formatFreshness(item.metrics_last_fetched_at, 10)}
 				<div
-					class="panel overflow-hidden p-0 block hover:border-accent transition-colors relative {compareMode ? (selectedIds.includes(item.id) ? 'ring-2 ring-accent' : 'opacity-50') : ''}"
+					class="panel overflow-hidden p-0 block hover:border-accent transition-colors relative {borderClass(item.media_type)} {compareMode ? (selectedIds.includes(item.id) ? 'ring-2 ring-accent' : 'opacity-50') : ''}"
 				>
 					{#if compareMode}
 						<button
 							type="button"
 							class="absolute top-2 right-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center {selectedIds.includes(item.id) ? 'bg-accent border-accent text-white' : 'border-muted bg-panel'}"
-							onclick={(e) => { e.preventDefault(); toggleSelect(item.id); }}
+							onclick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelect(item.id); }}
 							data-testid="media-select-check"
 						>
 							{#if selectedIds.includes(item.id)}✓{/if}
 						</button>
 					{/if}
-					<a href="{base}/media/{item.id}" class="block no-underline" data-testid="media-card">
+					<a
+						href={compareMode ? '#' : `${base}/media/${item.id}`}
+						{...(compareMode ? { onclick: (e: MouseEvent) => { e.preventDefault(); toggleSelect(item.id); } } : {})}
+						class="block no-underline"
+						data-testid="media-card"
+					>
 						{#if item.thumbnail_url}
 							<img src={item.thumbnail_url} alt={item.title} class="w-full h-40 object-cover" loading="lazy" />
 						{:else}
