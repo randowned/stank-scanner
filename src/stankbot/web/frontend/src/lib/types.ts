@@ -233,4 +233,5 @@ export interface CompareSeries {
 export interface CompareData {
 	metric: MetricDef | null;
 	series: CompareSeries[];
+	aligned?: boolean;
 }

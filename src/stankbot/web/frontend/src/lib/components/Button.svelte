@@ -9,6 +9,7 @@
 		disabled?: boolean;
 		loading?: boolean;
 		fullWidth?: boolean;
+		title?: string;
 		onclick?: (e: MouseEvent) => void;
 		children?: Snippet;
 		class?: string;
@@ -23,6 +24,7 @@
 		disabled = false,
 		loading = false,
 		fullWidth = false,
+		title,
 		onclick,
 		children,
 		class: klass = '',
@@ -49,12 +51,12 @@
 </script>
 
 {#if href}
-	<a {href} class={cls} role="button" aria-disabled={disabled || loading} data-testid={testId}>
+	<a {href} {title} class={cls} role="button" aria-disabled={disabled || loading} data-testid={testId}>
 		{#if loading}<span class="animate-spin">⟳</span>{/if}
 		{@render children?.()}
 	</a>
 {:else}
-	<button {type} class={cls} disabled={disabled || loading} {onclick} data-testid={testId}>
+	<button {type} {title} class={cls} disabled={disabled || loading} {onclick} data-testid={testId}>
 		{#if loading}<span class="animate-spin">⟳</span>{/if}
 		{@render children?.()}
 	</button>

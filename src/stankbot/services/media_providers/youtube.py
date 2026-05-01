@@ -80,7 +80,11 @@ class YouTubeProvider(MediaProvider):
         video_id = self.extract_video_id(url_or_id)
         if not video_id:
             return None
-        results = await self._fetch_resolved_batch([video_id])
+        try:
+            results = await self._fetch_resolved_batch([video_id])
+        except QuotaExceededError:
+            log.warning("YouTube quota exceeded while resolving video_id=%s", video_id)
+            return None
         return results.get(video_id)
 
     async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:

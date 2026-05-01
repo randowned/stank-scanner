@@ -68,7 +68,13 @@ class MediaService:
         if resolved is None:
             return None
 
-        slug_final = slug
+        # Check for duplicate external_id
+        if await media_repo.is_external_id_taken(
+            self.session, guild_id, media_type, resolved.external_id
+        ):
+            return None
+
+        slug_final = str(slug).strip() if slug else None
         if not slug_final:
             slug_final = _slugify(resolved.title)[:50]
         if not slug_final:
@@ -104,7 +110,8 @@ class MediaService:
         item = await media_repo.get(self.session, media_item_id)
         if item is None:
             return None
-        return self._serialize_item(item)
+        metrics = await media_repo.get_metric_cache(self.session, media_item_id)
+        return self._serialize_item(item, metrics)
 
     async def get_media_item_by_slug(
         self, guild_id: int, media_type: str, slug: str
@@ -153,7 +160,11 @@ class MediaService:
         media_item_ids: list[int],
         metric_key: str,
         window_days: int = 30,
+        align_release: bool = False,
     ) -> dict[str, Any]:
+        if align_release:
+            return await self._comparison_aligned(media_item_ids, metric_key, window_days)
+
         since = None
         if window_days > 0:
             since = datetime.now(UTC) - timedelta(days=window_days)
@@ -177,7 +188,7 @@ class MediaService:
                 ],
             })
 
-        provider = self.registry.get("youtube")  # metric def from any provider works
+        provider = self.registry.get("youtube")
         metric_def = None
         if provider:
             for m in provider.metrics:
@@ -185,7 +196,52 @@ class MediaService:
                     metric_def = {"key": m.key, "label": m.label, "format": m.format}
                     break
 
-        return {"metric": metric_def, "series": items}
+        return {"metric": metric_def, "series": items, "aligned": False}
+
+    async def _comparison_aligned(
+        self,
+        media_item_ids: list[int],
+        metric_key: str,
+        window_days: int = 90,
+    ) -> dict[str, Any]:
+        snapshots_by_id = await media_repo.get_comparison_snapshots(
+            self.session, media_item_ids, metric_key, None
+        )
+
+        items = []
+        for mid in media_item_ids:
+            item = await media_repo.get(self.session, mid)
+            if item is None:
+                continue
+            snaps = snapshots_by_id.get(mid, [])
+            pub_date = item.published_at
+            points: list[dict[str, object]] = []
+            for s in snaps:
+                if pub_date is None:
+                    continue
+                delta = s.fetched_at - pub_date
+                day = delta.days
+                if day < 0:
+                    continue
+                if window_days > 0 and day > window_days:
+                    continue
+                points.append({"x": day, "y": s.value})
+            if points:
+                items.append({
+                    "media_item_id": mid,
+                    "title": item.title,
+                    "points": points,
+                })
+
+        provider = self.registry.get("youtube")
+        metric_def = None
+        if provider:
+            for m in provider.metrics:
+                if m.key == metric_key:
+                    metric_def = {"key": m.key, "label": m.label, "format": m.format}
+                    break
+
+        return {"metric": metric_def, "series": items, "aligned": True}
 
     # ------------------------------------------------------------------
     # Refresh

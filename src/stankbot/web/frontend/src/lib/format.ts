@@ -51,6 +51,27 @@ export function formatRelativeTime(isoStr: string | null | undefined): string {
 	return `${years} years ago`;
 }
 
+export function formatRelativeTimeShort(isoStr: string | null | undefined): string {
+	if (!isoStr) return '—';
+	const then = new Date(isoStr).getTime();
+	const now = Date.now();
+	const diffMs = now - then;
+	if (diffMs < 0) return 'now';
+
+	const secs = Math.floor(diffMs / 1000);
+	if (secs < 60) return 'now';
+	const mins = Math.floor(secs / 60);
+	if (mins < 60) return `${mins}m ago`;
+	const hrs = Math.floor(mins / 60);
+	if (hrs < 24) return `${hrs}h ago`;
+	const days = Math.floor(hrs / 24);
+	if (days < 30) return `${days}d ago`;
+	const months = Math.floor(days / 30);
+	if (months < 12) return `${months}mo ago`;
+	const years = Math.floor(days / 365);
+	return `${years}y ago`;
+}
+
 export function formatFreshness(fetchedAt: string | null | undefined, intervalMinutes: number = 10): { label: string; state: 'fresh' | 'stale' | 'dead' } {
 	if (!fetchedAt) return { label: 'No data', state: 'dead' };
 	const ageMs = Date.now() - new Date(fetchedAt).getTime();

@@ -2,15 +2,14 @@
 	import { base } from '$app/paths';
 	import { untrack } from 'svelte';
 	import { apiFetch } from '$lib/api';
-	import { formatNumber, formatRelativeTime, formatFreshness } from '$lib/format';
-	import type { MediaItem, MetricSnapshot, CompareData } from '$lib/types';
+	import { formatNumber, formatFreshness } from '$lib/format';
+	import type { MediaItem, MetricSnapshot } from '$lib/types';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import ErrorState from '$lib/components/ErrorState.svelte';
 	import StatTile from '$lib/components/StatTile.svelte';
-	import Select from '$lib/components/Select.svelte';
-	import Button from '$lib/components/Button.svelte';
-	import Sparkline from '$lib/components/Sparkline.svelte';
-	import ComparisonChart from '$lib/components/ComparisonChart.svelte';
+	import SelectDropdown from '$lib/components/SelectDropdown.svelte';
+	import Chart from '$lib/components/Chart.svelte';
+	import RelativeTime from '$lib/components/RelativeTime.svelte';
 
 	let { data } = $props();
 
@@ -22,21 +21,17 @@
 	let history = $state<MetricSnapshot[]>(untrack(() => initialHistory));
 	let loadingHistory = $state(false);
 
-	let compareIds = $state<string>('');
-	let compareData = $state<CompareData | null>(null);
-	let loadingCompare = $state(false);
-
 	const metricOptions = [
-		{ value: 'view_count', label: 'Views' },
-		{ value: 'like_count', label: 'Likes' },
-		{ value: 'comment_count', label: 'Comments' }
+		{ value: 'view_count', label: 'Views', icon: '👁️' },
+		{ value: 'like_count', label: 'Likes', icon: '👍' },
+		{ value: 'comment_count', label: 'Comments', icon: '💬' }
 	];
 
 	const daysOptions = [
-		{ value: 7, label: '7 days' },
-		{ value: 30, label: '30 days' },
-		{ value: 90, label: '90 days' },
-		{ value: 365, label: '1 year' }
+		{ value: 7, label: '7 days', icon: '📅' },
+		{ value: 30, label: '30 days', icon: '📅' },
+		{ value: 90, label: '90 days', icon: '📅' },
+		{ value: 365, label: '1 year', icon: '📅' }
 	];
 
 	function metricValue(key: string): number {
@@ -63,26 +58,60 @@
 		}
 	}
 
-	async function loadComparison() {
-		if (!item || !compareIds.trim()) return;
-		const ids = [item.id, ...compareIds.split(',').map((s) => Number(s.trim())).filter((n) => !isNaN(n))];
-		if (ids.length < 2) return;
-		loadingCompare = true;
-		try {
-			const res = await apiFetch<CompareData>(
-				`/api/media/compare?ids=${ids.join(',')}&metric=${selectedMetric}&days=${selectedDays}`
-			);
-			compareData = res;
-		} catch {
-			compareData = null;
-		} finally {
-			loadingCompare = false;
-		}
+	$effect(() => {
+		void selectedMetric;
+		void selectedDays;
+		void loadHistory();
+	});
+
+	function buildChartDatasets(): Array<{ label: string; data: Array<{ x: number; y: number }> }> {
+		return [{
+			label: metricLabel(selectedMetric),
+			data: history.map((h) => ({
+				x: new Date(h.fetched_at).getTime(),
+				y: h.value
+			}))
+		}];
 	}
 
-	const sparkValues = $derived(history.map((h) => h.value));
+	function buildChartOptions(): Record<string, unknown> {
+		return {
+			scales: {
+				x: {
+					ticks: {
+						callback: (value: number) => {
+							const d = new Date(value);
+							return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+						},
+						maxTicksLimit: 7,
+						color: 'var(--muted-color, #888)',
+						font: { size: 10 }
+					},
+					grid: { display: false }
+				},
+				y: {
+					title: { display: true, text: metricLabel(selectedMetric), color: 'var(--muted-color, #888)' },
+					ticks: {
+						callback: (value: number) => {
+							if (value >= 1_000_000) return (value / 1_000_000).toFixed(1) + 'M';
+							if (value >= 1_000) return (value / 1_000).toFixed(1) + 'K';
+							return value.toString();
+						},
+						color: 'var(--muted-color, #888)',
+						font: { size: 10 }
+					},
+					grid: { color: 'var(--border-color, #333)', drawBorder: false }
+				}
+			},
+			plugins: {
+				legend: { display: false }
+			}
+		};
+	}
 
 	const freshness = $derived(formatFreshness(item?.metrics_last_fetched_at, 10));
+
+	const graphs = $derived(history.length > 0);
 </script>
 
 {#if !item}
@@ -97,16 +126,18 @@
 
 		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
 			<div class="md:col-span-1">
-				{#if item.thumbnail_url}
-					<img src={item.thumbnail_url} alt={item.title} class="w-full rounded-lg" loading="lazy" />
-				{:else}
-					<div class="w-full aspect-video bg-border rounded-lg flex items-center justify-center text-muted text-5xl">
-						▶️
-					</div>
-				{/if}
+				<div class="panel overflow-hidden p-0">
+					{#if item.thumbnail_url}
+						<img src={item.thumbnail_url} alt={item.title} class="w-full" loading="lazy" />
+					{:else}
+						<div class="w-full aspect-video bg-border flex items-center justify-center text-muted text-5xl">
+							▶️
+						</div>
+					{/if}
+				</div>
 				<div class="mt-3 text-sm space-y-1">
 					<div class="text-muted">
-						Published: <span class="text-text">{item.published_at ? formatRelativeTime(item.published_at) : '—'}</span>
+						Published: <RelativeTime datetime={item.published_at} class="text-text" />
 					</div>
 					{#if item.duration_seconds !== null && item.duration_seconds !== undefined}
 						{@const mins = Math.floor((item.duration_seconds ?? 0) / 60)}
@@ -143,41 +174,19 @@
 					/>
 				</div>
 
-				<div class="flex items-center gap-2 mb-3 flex-wrap">
-					<Select options={metricOptions} bind:value={selectedMetric} testId="media-detail-metric" />
-					<Select options={daysOptions} bind:value={selectedDays} testId="media-detail-days" />
-					<Button variant="secondary" onclick={loadHistory} loading={loadingHistory} testId="media-detail-refresh-history">
-						Reload
-					</Button>
+				<div class="flex items-center gap-2 mb-3 flex-nowrap">
+					<SelectDropdown options={metricOptions} bind:value={selectedMetric} testId="media-detail-metric" />
+					<SelectDropdown options={daysOptions} bind:value={selectedDays} testId="media-detail-days" />
 				</div>
 
 				<div class="panel mb-4">
 					<h3 class="text-sm font-semibold mb-2">{metricLabel(selectedMetric)} over time</h3>
-					{#if history.length > 0}
-						<Sparkline values={sparkValues} width={600} height={160} stroke="var(--accent-color)" fill="var(--accent-color-10)" ariaLabel={metricLabel(selectedMetric)} />
+					{#if graphs}
+						<div class={loadingHistory ? 'opacity-60 transition-opacity' : ''}>
+							<Chart datasets={buildChartDatasets()} options={buildChartOptions()} height={220} />
+						</div>
 					{:else}
 						<div class="text-muted text-sm py-4 text-center">No history data yet</div>
-					{/if}
-				</div>
-
-				<div class="panel">
-					<h3 class="text-sm font-semibold mb-2">Compare with other videos</h3>
-					<div class="flex items-center gap-2 flex-wrap">
-						<input
-							type="text"
-							class="input flex-1 min-w-0"
-							placeholder="Comma-separated media IDs (e.g. 2,3)"
-							bind:value={compareIds}
-							data-testid="media-compare-input"
-						/>
-						<Button variant="secondary" onclick={loadComparison} loading={loadingCompare} testId="media-compare-load">
-							Compare
-						</Button>
-					</div>
-					{#if compareData}
-						<div class="mt-3">
-							<ComparisonChart {compareData} />
-						</div>
 					{/if}
 				</div>
 			</div>

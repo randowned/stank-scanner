@@ -90,6 +90,21 @@ async def is_slug_taken(
     return result.scalar_one_or_none() is not None
 
 
+async def is_external_id_taken(
+    session: AsyncSession,
+    guild_id: int,
+    media_type: str,
+    external_id: str,
+) -> bool:
+    stmt = select(MediaItem).where(
+        MediaItem.guild_id == guild_id,
+        MediaItem.media_type == media_type,
+        MediaItem.external_id == external_id,
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none() is not None
+
+
 async def delete_media(session: AsyncSession, media_item_id: int) -> bool:
     item = await session.get(MediaItem, media_item_id)
     if item is None:

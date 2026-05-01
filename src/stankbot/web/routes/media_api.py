@@ -48,6 +48,7 @@ async def compare_media(
     ids: str = Query(...),
     metric: str = Query("view_count"),
     days: int = Query(30, ge=1, le=365),
+    align: str = Query("calendar"),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
     session: AsyncSession = Depends(get_db),
@@ -62,7 +63,9 @@ async def compare_media(
         media_ids = media_ids[:10]
 
     svc = await _media_service(request, session)
-    data = await svc.get_comparison_data(media_ids, metric, window_days=days)
+    data = await svc.get_comparison_data(
+        media_ids, metric, window_days=days, align_release=(align == "release")
+    )
     return MsgPackResponse(data, request)
 
 

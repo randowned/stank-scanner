@@ -38,6 +38,7 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
+    "chart.js": "^4.5.1",
     "msgpackr": "^1.11.0"
   }
 }
