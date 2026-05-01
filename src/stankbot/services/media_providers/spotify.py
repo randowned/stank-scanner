@@ -114,8 +114,14 @@ class SpotifyProvider(MediaProvider):
             resp = await client.get(url, headers=headers, timeout=10.0)
             if resp.status_code == 401:
                 self._token = None  # force re-auth
+                log.warning("Spotify resolve 401 for %s/%s", kind, spotify_id)
                 return None
             if resp.status_code != 200:
+                try:
+                    body = resp.text
+                except Exception:
+                    body = "<unreadable>"
+                log.warning("Spotify resolve failed for %s/%s: %d — %s", kind, spotify_id, resp.status_code, body[:200])
                 return None
             data: dict[str, Any] = resp.json()
 
@@ -156,7 +162,8 @@ class SpotifyProvider(MediaProvider):
                 duration_seconds=duration_seconds,
                 extra={"spotify_type": kind},
             )
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            log.warning("Spotify resolve HTTP error for %s/%s: %s", kind, spotify_id, exc)
             return None
 
     async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
