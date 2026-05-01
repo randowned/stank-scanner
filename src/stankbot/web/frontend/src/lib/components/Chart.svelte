@@ -72,7 +72,7 @@
 				legend: {
 					position: 'bottom',
 					labels: {
-						color: 'var(--muted-color, #888)',
+						color: '#9aa4b2',
 						font: { size: 11 },
 						padding: 16,
 						boxWidth: 10,
@@ -80,22 +80,22 @@
 					},
 				},
 				tooltip: {
-					backgroundColor: 'var(--panel-bg, #1a1a2e)',
-					titleColor: 'var(--text-color, #fff)',
-					bodyColor: 'var(--muted-color, #888)',
-					borderColor: 'var(--border-color, #333)',
+					backgroundColor: '#181b22',
+					titleColor: '#e5e7eb',
+					bodyColor: '#9aa4b2',
+					borderColor: '#262a33',
 					borderWidth: 1,
 					padding: 10,
 				},
 			},
 			scales: {
 				x: {
-					ticks: { color: 'var(--muted-color, #888)', font: { size: 10 } },
+					ticks: { color: '#9aa4b2', font: { size: 10 } },
 					grid: { display: false },
 				},
 				y: {
-					ticks: { color: 'var(--muted-color, #888)', font: { size: 10 } },
-					grid: { color: 'var(--border-color, #333)', drawBorder: false },
+					ticks: { color: '#9aa4b2', font: { size: 10 } },
+					grid: { color: '#262a33', drawBorder: false },
 				},
 			},
 		};

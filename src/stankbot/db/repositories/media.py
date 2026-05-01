@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +74,22 @@ async def get_by_slug(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def get_by_slugs(
+    session: AsyncSession,
+    guild_id: int,
+    slugs: list[str],
+) -> dict[str, MediaItem]:
+    """Bulk lookup by slug; returns {slug: MediaItem} for found items."""
+    if not slugs:
+        return {}
+    stmt = select(MediaItem).where(
+        MediaItem.guild_id == guild_id,
+        MediaItem.slug.in_(slugs),
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return {r.slug: r for r in rows if r.slug}
+
+
 async def is_slug_taken(
     session: AsyncSession,
     guild_id: int,
@@ -137,7 +153,7 @@ async def upsert_metric_cache(
         if fetched_at is not None:
             row.fetched_at = fetched_at
         else:
-            row.fetched_at = datetime.utcnow()
+            row.fetched_at = datetime.now(UTC)
 
 
 async def get_metric_cache(

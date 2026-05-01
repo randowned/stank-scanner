@@ -184,13 +184,25 @@ YOUTUBE_MEDIA_EMBED: dict[str, Any] = {
     "title": "{title}",
     "url": "{url}",
     "description": "by **{channel_name}**",
-    "thumbnail": "{thumbnail_url}",
+    "image": "{image_url}",
     "fields": [
-        {"name": "\U0001f441\ufe0f Views", "value": "{view_count}", "inline": True},
-        {"name": "\U0001f44d Likes", "value": "{like_count}", "inline": True},
-        {"name": "\U0001f4ac Comments", "value": "{comment_count}", "inline": True},
+        {
+            "name": "\U0001f441\ufe0f Views",
+            "value": "{view_count}\n{view_count_delta}".strip(),
+            "inline": True,
+        },
+        {
+            "name": "\U0001f44d Likes",
+            "value": "{like_count}\n{like_count_delta}".strip(),
+            "inline": True,
+        },
+        {
+            "name": "\U0001f4ac Comments",
+            "value": "{comment_count}\n{comment_count_delta}".strip(),
+            "inline": True,
+        },
         {"name": "\U0001f4c5 Published", "value": "{published_at}", "inline": True},
-        {"name": "\u23f1 Duration", "value": "{duration_seconds}", "inline": True},
+        {"name": "\u23f1 Duration", "value": "{duration}", "inline": True},
     ],
     "footer": "\U0001f3ac YouTube \u00b7 {slug} \u00b7 Updated {last_fetched_at}",
 }
@@ -201,9 +213,13 @@ SPOTIFY_MEDIA_EMBED: dict[str, Any] = {
     "title": "{title}",
     "url": "{url}",
     "description": "by **{channel_name}**",
-    "thumbnail": "{thumbnail_url}",
+    "image": "{image_url}",
     "fields": [
-        {"name": "\U0001f525 Popularity", "value": "{popularity} / 100", "inline": True},
+        {
+            "name": "\U0001f525 Popularity",
+            "value": "{popularity}\n{popularity_delta}".strip(),
+            "inline": True,
+        },
         {"name": "\U0001f4c5 Released", "value": "{published_at}", "inline": True},
         {"name": "\U0001f3b5 Type", "value": "{spotify_type}", "inline": True},
     ],

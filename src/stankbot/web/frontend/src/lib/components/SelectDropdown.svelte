@@ -37,7 +37,7 @@
 		{#snippet trigger({ toggle, open })}
 			<button
 				type="button"
-				class="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border bg-panel hover:bg-border/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed {klass}"
+				class="inline-flex items-center gap-1 px-2 h-8 min-w-[2rem] rounded-md border border-border bg-panel hover:bg-border/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed {klass}"
 				{disabled}
 				onclick={toggle}
 				data-testid={testId}

@@ -84,6 +84,7 @@ class MediaCommands(commands.GroupCog, name="media"):
 
             embed = await build_media_embed(
                 media_type=media_type,
+                media_item_id=item.id,
                 title=item.title,
                 channel_name=item.channel_name,
                 slug=item.slug,

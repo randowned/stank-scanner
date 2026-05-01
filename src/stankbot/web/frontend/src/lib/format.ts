@@ -74,7 +74,13 @@ export function formatRelativeTimeShort(isoStr: string | null | undefined): stri
 
 export function formatFreshness(fetchedAt: string | null | undefined, intervalMinutes: number = 10): { label: string; state: 'fresh' | 'stale' | 'dead' } {
 	if (!fetchedAt) return { label: 'No data', state: 'dead' };
-	const ageMs = Date.now() - new Date(fetchedAt).getTime();
+	// Ensure the datetime is parsed as UTC. If the ISO string lacks a
+	// timezone offset (e.g. a naive datetime from the backend), append 'Z'
+	// so JavaScript doesn't interpret it as local time (causing a
+	// persistent offset equal to the browser's UTC offset — e.g. 2 hours
+	// for UTC+2).
+	const normalized = /[+\-Z]\d{2}:?\d{2}$|Z$/i.test(fetchedAt) ? fetchedAt : fetchedAt + 'Z';
+	const ageMs = Date.now() - new Date(normalized).getTime();
 	const intervalMs = intervalMinutes * 60_000;
 	if (ageMs <= intervalMs) return { label: `Updated ${formatRelativeTime(fetchedAt)}`, state: 'fresh' };
 	if (ageMs <= intervalMs * 2) return { label: `Updated ${formatRelativeTime(fetchedAt)}`, state: 'stale' };

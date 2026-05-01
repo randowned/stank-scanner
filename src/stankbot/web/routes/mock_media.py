@@ -7,12 +7,12 @@ without needing real YouTube/Spotify API keys.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+import random
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.engine import session_scope
 from stankbot.db.models import MediaItem, MetricCache, MetricSnapshot
@@ -68,6 +68,7 @@ class MockMediaPayload(BaseModel):
     media_type: str = "youtube"
     external_id: str | None = None
     slug: str | None = None
+    history_days: int = 30
 
 
 @router.post("/media")
@@ -79,7 +80,7 @@ async def mock_add_media(
 
     guild_id = payload.guild_id
     media_type = payload.media_type
-    stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
     external_id = (
         payload.external_id
         or f"mock_{media_type}_{guild_id}_{stamp}"
@@ -101,7 +102,7 @@ async def mock_add_media(
                     title=f"Mock {media_type.capitalize()} Item — {slug}",
                     channel_name="Mock Channel",
                     thumbnail_url=None,
-                    published_at=datetime.now(tz=timezone.utc),
+                    published_at=datetime.now(UTC),
                     duration_seconds=180,
                     added_by=111111111,
                     slug=slug,
@@ -115,21 +116,31 @@ async def mock_add_media(
             raise HTTPException(status_code=500, detail="Failed to insert mock media after retries")
 
         # Add fake metrics
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(UTC)
         metric_values = {"view_count": 10000, "like_count": 500, "comment_count": 50}
         if media_type == "spotify":
             metric_values = {"popularity": 75}
 
         for key, val in metric_values.items():
             await media_repo.upsert_metric_cache(session, item.id, key, val, now)
-            await media_repo.insert_metric_snapshot(session, item.id, key, val, now)
 
-        # Add a second snapshot for history
-        older = datetime(2026, 4, 15, tzinfo=timezone.utc)
+        # Generate hourly snapshots going back history_days days
+        history_days = max(1, min(365, int(payload.history_days)))
+        hours_back = history_days * 24
+        for hour_offset in range(hours_back, -1, -1):
+            ts = now - timedelta(hours=hour_offset)
+            for key, val in metric_values.items():
+                # Start at ~half the current value, grow with slight randomness
+                fraction = (1 - (hour_offset / hours_back)) if hours_back > 0 else 1.0
+                base = int(val * (0.3 + 0.7 * fraction))
+                noise = random.randint(-max(1, base // 20), max(1, base // 20))
+                await media_repo.insert_metric_snapshot(
+                    session, item.id, key, base + noise, ts
+                )
+
+        # Ensure the latest snapshot matches the cache
         for key, val in metric_values.items():
-            await media_repo.insert_metric_snapshot(
-                session, item.id, key, val // 2, older
-            )
+            await media_repo.insert_metric_snapshot(session, item.id, key, val, now)
 
         item.metrics_last_fetched_at = now
 

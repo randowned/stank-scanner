@@ -50,6 +50,25 @@ class MediaService:
     registry: MediaProviderRegistry
 
     # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _iso(dt: datetime | None) -> str | None:
+        """Serialize a datetime to an ISO-8601 string with UTC offset.
+
+        If the datetime is naive (no tzinfo), appends ``+00:00`` so that
+        JavaScript ``new Date()`` always interprets it as UTC regardless
+        of the browser's local timezone.
+        """
+        if dt is None:
+            return None
+        s = dt.isoformat()
+        if dt.tzinfo is None and s[-1] != "Z":
+            s += "+00:00"
+        return s
+
+    # ------------------------------------------------------------------
     # CRUD
     # ------------------------------------------------------------------
 
@@ -323,16 +342,12 @@ class MediaService:
             "channel_name": item.channel_name,
             "channel_id": item.channel_id,
             "thumbnail_url": item.thumbnail_url,
-            "published_at": item.published_at.isoformat() if item.published_at else None,
+            "published_at": self._iso(item.published_at),
             "duration_seconds": item.duration_seconds,
             "added_by": str(item.added_by),
             "slug": item.slug,
             "metrics": metrics or {},
-            "metrics_last_fetched_at": (
-                item.metrics_last_fetched_at.isoformat()
-                if item.metrics_last_fetched_at
-                else None
-            ),
-            "created_at": item.created_at.isoformat() if item.created_at else None,
-            "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+            "metrics_last_fetched_at": self._iso(item.metrics_last_fetched_at),
+            "created_at": self._iso(item.created_at),
+            "updated_at": self._iso(item.updated_at),
         }

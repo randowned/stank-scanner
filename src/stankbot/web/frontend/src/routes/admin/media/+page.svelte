@@ -8,7 +8,7 @@
 	import Tabs from '$lib/components/Tabs.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import Input from '$lib/components/Input.svelte';
+	import SelectDropdown from '$lib/components/SelectDropdown.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { base } from '$app/paths';
 
@@ -19,7 +19,7 @@
 	let activeType = $state<string>('');
 
 	let settingsOpen = $state(false);
-	let updateInterval = $state(10);
+	let updateInterval = $state(60);
 	let savingSettings = $state(false);
 	let settingsError = $state<string | null>(null);
 
@@ -57,11 +57,27 @@
 		}
 	}
 
+	const VALID_INTERVALS = [15, 30, 45, 60, 120, 240, 720, 1440] as const;
+
+	const intervalOptions = [
+		{ value: 15, label: '15 minutes' },
+		{ value: 30, label: '30 minutes' },
+		{ value: 45, label: '45 minutes' },
+		{ value: 60, label: '1 hour' },
+		{ value: 120, label: '2 hours' },
+		{ value: 240, label: '4 hours' },
+		{ value: 720, label: '12 hours (2× daily)' },
+		{ value: 1440, label: '24 hours (daily)' },
+	];
+
 	async function loadSettings() {
 		try {
 			const res = await apiFetch<{ values: Record<string, unknown> }>('/api/admin/settings');
 			const val = res.values?.['media_metrics_update_interval_minutes'];
-			if (typeof val === 'number') updateInterval = val;
+			if (typeof val === 'number') {
+				// Clamp to nearest valid option
+				updateInterval = VALID_INTERVALS.find(iv => iv >= val) ?? 60;
+			}
 		} catch {
 			// keep default
 		}
@@ -175,7 +191,7 @@
 {:else}
 	<div class="space-y-2">
 		{#each items as item (item.id)}
-			{@const freshness = formatFreshness(item.metrics_last_fetched_at, 10)}
+			{@const freshness = formatFreshness(item.metrics_last_fetched_at, updateInterval)}
 			<div class="panel flex items-center gap-3" data-testid="media-admin-row">
 				{#if item.thumbnail_url}
 					<img src={item.thumbnail_url} alt={item.title} class="w-20 h-12 object-cover rounded shrink-0" loading="lazy" />
@@ -210,9 +226,9 @@
 <Modal bind:open={settingsOpen} title="Media Settings">
 	<div class="space-y-4">
 		<div>
-			<label class="block text-sm font-medium mb-1" for="media-interval-input">Metrics update interval (minutes)</label>
-			<Input id="media-interval-input" type="number" bind:value={updateInterval} min={5} max={1440} disabled={savingSettings} />
-			<div class="text-xs text-muted mt-1">Minimum 5 minutes. How often the scheduler fetches fresh metrics.</div>
+			<span class="block text-sm font-medium mb-2">Metrics update interval</span>
+			<SelectDropdown options={intervalOptions} bind:value={updateInterval} disabled={savingSettings} testId="media-interval-dropdown" />
+			<div class="text-xs text-muted mt-1">How often the scheduler fetches fresh metrics. Fetches are aligned to clock boundaries.</div>
 		</div>
 		{#if settingsError}
 			<div class="text-red-400 text-sm">{settingsError}</div>

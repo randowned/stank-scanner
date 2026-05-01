@@ -11,6 +11,7 @@ Keeping stank_emoji resolution here avoids three copies of the same
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import discord
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Altar, Record, RecordScope
 from stankbot.db.repositories import events as events_repo
+from stankbot.db.repositories import media as media_repo
 from stankbot.db.repositories import players as players_repo
 from stankbot.services import template_store
 from stankbot.services.board_renderer import PlayerRow
@@ -310,6 +312,7 @@ async def alltime_top_pp(
 async def build_media_embed(
     *,
     media_type: str,
+    media_item_id: int,
     title: str,
     channel_name: str | None,
     slug: str | None,
@@ -324,30 +327,101 @@ async def build_media_embed(
     """Build a media item embed from the guild's per-provider template.
 
     Variables available in templates:
-        {title}, {channel_name}, {slug}, {url}, {thumbnail_url},
-        {published_at}, {duration_seconds}, {last_fetched_at},
-        {view_count}, {like_count}, {comment_count}, {popularity}, {spotify_type}
+        {title}, {channel_name}, {slug}, {url}, {image_url},
+        {published_at}, {duration}, {last_fetched_at},
+        {view_count}, {view_count_delta},
+        {like_count}, {like_count_delta},
+        {comment_count}, {comment_count_delta},
+        {popularity}, {popularity_delta}, {spotify_type}
     """
+
+    def _fmt_num(n: int) -> str:
+        """Format integer with thousand separators: 12,345,678."""
+        return f"{n:,}"
+
+    def _fmt_duration(secs: int | None) -> str:
+        if not secs:
+            return "—"
+        h, m = divmod(secs, 3600)
+        m, s = divmod(m, 60)
+        if h:
+            return f"{h}h {m}m"
+        if m:
+            return f"{m}m {s}s"
+        return f"{s}s"
+
+    def _fmt_date(iso: str | None) -> str:
+        if not iso:
+            return "—"
+        try:
+            dt = datetime.fromisoformat(iso)
+            return dt.strftime("%b %d, %Y")
+        except (ValueError, TypeError):
+            return iso[:10]
+
+    def _fmt_relative(iso: str | None) -> str:
+        if not iso:
+            return "unknown"
+        try:
+            dt = datetime.fromisoformat(iso)
+            diff = datetime.now(UTC) - dt
+            if diff < timedelta(minutes=2):
+                return "just now"
+            if diff < timedelta(hours=1):
+                return f"{int(diff.total_seconds() // 60)}m ago"
+            if diff < timedelta(days=1):
+                return f"{int(diff.total_seconds() // 3600)}h ago"
+            return f"{diff.days}d ago"
+        except (ValueError, TypeError):
+            return "unknown"
+
+    # Day-over-day deltas
+    yesterday = datetime.now(UTC) - timedelta(hours=24)
+
+    async def _delta(metric_key: str, current: int) -> str:
+        if current == 0:
+            return ""
+        snaps = await media_repo.get_metric_snapshots(
+            session, media_item_id, metric_key, since=yesterday
+        )
+        if len(snaps) < 2:
+            return ""
+        baseline = snaps[0].value
+        diff = current - baseline
+        if diff == 0:
+            return "(no change)"
+        sign = "+" if diff > 0 else ""
+        return f"({sign}{_fmt_num(diff)} since yesterday)"
+
+    view_count = int(metrics.get("view_count", 0))
+    like_count = int(metrics.get("like_count", 0))
+    comment_count = int(metrics.get("comment_count", 0))
+    popularity = int(metrics.get("popularity", 0))
+
     variables: dict[str, Any] = {
         "title": title or "",
         "channel_name": channel_name or "",
         "slug": slug or "",
-        "thumbnail_url": thumbnail_url or "",
-        "published_at": published_at or "",
-        "duration_seconds": str(duration_seconds) if duration_seconds else "—",
-        "last_fetched_at": last_fetched_at or "",
+        "image_url": thumbnail_url or "",
+        "published_at": _fmt_date(published_at),
+        "duration": _fmt_duration(duration_seconds),
+        "last_fetched_at": _fmt_relative(last_fetched_at),
     }
 
     if media_type == "youtube":
         variables["url"] = f"https://youtube.com/watch?v={metrics.get('external_id', '')}"
-        variables["view_count"] = str(metrics.get("view_count", 0))
-        variables["like_count"] = str(metrics.get("like_count", 0))
-        variables["comment_count"] = str(metrics.get("comment_count", 0))
+        variables["view_count"] = _fmt_num(view_count)
+        variables["like_count"] = _fmt_num(like_count)
+        variables["comment_count"] = _fmt_num(comment_count)
+        variables["view_count_delta"] = await _delta("view_count", view_count)
+        variables["like_count_delta"] = await _delta("like_count", like_count)
+        variables["comment_count_delta"] = await _delta("comment_count", comment_count)
         template_key = "youtube_media_embed"
     else:
         variables["url"] = "https://open.spotify.com/" + media_type + "/" + str(metrics.get('external_id', ''))
-        variables["popularity"] = str(metrics.get("popularity", 0))
+        variables["popularity"] = f"{popularity} / 100"
         variables["spotify_type"] = media_type
+        variables["popularity_delta"] = await _delta("popularity", popularity)
         template_key = "spotify_media_embed"
 
     ctx = RenderContext(variables=variables)

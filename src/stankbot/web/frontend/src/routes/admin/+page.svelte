@@ -8,6 +8,7 @@
 	const tiles = [
 		{ href: `${base}/admin/channels`, label: 'Channels', icon: '📡', desc: 'Altar and announcement channels' },
 		{ href: `${base}/admin/templates`, label: 'Templates', icon: '📝', desc: 'Edit bot embed templates' },
+		{ href: `${base}/admin/media`, label: 'Media', icon: '🎬', desc: 'YouTube & Spotify metrics tracking' },
 		{ href: `${base}/admin/admins`, label: 'Admins', icon: '👥', desc: 'Admin role & user grants' },
 		{ href: `${base}/admin/audit`, label: 'Audit log', icon: '📋', desc: 'History of admin actions' },
 		{ href: `${base}/admin/events`, label: 'Events', icon: '📜', desc: 'Game event log (stanks, breaks, reactions)' },

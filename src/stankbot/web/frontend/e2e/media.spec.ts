@@ -46,17 +46,52 @@ test.describe('Media page', () => {
 	});
 
 	test('shows media cards after injection', async ({ page, injectMedia }) => {
-		await injectMedia({ guildId: GUILD, slug: 'my-test-video' });
+		await injectMedia({ guildId: GUILD, slug: 'my-test-video', historyDays: 7 });
 		await page.goto('/media');
 		await expect(page.getByTestId('page-header')).toBeVisible();
 		await expect(page.getByTestId('media-card')).toBeVisible({ timeout: 10000 });
 	});
 
+	test('media card shows all three metric values', async ({ page, injectMedia }) => {
+		await injectMedia({ guildId: GUILD, slug: 'multi-metric-test', historyDays: 7 });
+		await page.goto('/media');
+		await expect(page.getByTestId('media-card')).toBeVisible({ timeout: 10000 });
+		const metricsEl = page.getByTestId('media-metrics').first();
+		await expect(metricsEl).toBeVisible();
+		// Should contain all three metric icons
+		const text = await metricsEl.textContent();
+		expect(text).toContain('👁️');
+		expect(text).toContain('👍');
+		expect(text).toContain('💬');
+	});
+
 	test('navigates to media detail page', async ({ page, injectMedia }) => {
-		const { id } = await injectMedia({ guildId: GUILD, slug: 'my-detail-video' });
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'my-detail-video', historyDays: 7 });
 		await page.goto('/media');
 		await page.getByTestId('media-card').first().click();
 		await expect(page).toHaveURL(new RegExp(`/media/${id}`));
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+	});
+
+	test('compare mode navigates to detail page with query params', async ({ page, injectMedia }) => {
+		const item1 = await injectMedia({ guildId: GUILD, slug: 'compare-video-1', historyDays: 7 });
+		const item2 = await injectMedia({ guildId: GUILD, slug: 'compare-video-2', historyDays: 7 });
+		await page.goto('/media');
+		await expect(page.getByTestId('media-compare-toggle')).toBeVisible({ timeout: 10000 });
+
+		// Enter compare mode
+		await page.getByTestId('media-compare-toggle').click();
+
+		// Select both cards
+		const checks = page.getByTestId('media-select-check');
+		await checks.first().click();
+		await checks.last().click();
+
+		// Click compare
+		await page.getByTestId('media-compare-go').click();
+
+		// Should navigate to first item's detail page with compare query param containing the second ID
+		await expect(page).toHaveURL(new RegExp(`/media/${item1.id}\\?compare=${item2.id}`));
 		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
 	});
 });

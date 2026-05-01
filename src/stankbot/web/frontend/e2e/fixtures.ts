@@ -61,7 +61,7 @@ export const test = base.extend<{
 	injectReaction: (guildId: number, messageId: number, userId: number) => Promise<void>;
 	startRandomEvents: (interval?: number) => Promise<void>;
 	stopRandomEvents: () => Promise<void>;
-	injectMedia: (opts?: { guildId?: number; mediaType?: string; slug?: string }) => Promise<{ id: number; slug: string }>;
+	injectMedia: (opts?: { guildId?: number; mediaType?: string; slug?: string; historyDays?: number }) => Promise<{ id: number; slug: string }>;
 	clearMedia: (guildId?: number) => Promise<void>;
 }>({
 	mockLogin: async ({ page }, use) => {
@@ -157,8 +157,9 @@ export const test = base.extend<{
 			const guildId = opts.guildId ?? 123456789;
 			const mediaType = opts.mediaType ?? 'youtube';
 			const slug = opts.slug ?? `e2e-test-${Date.now() % 100000}`;
+			const historyDays = opts.historyDays ?? 30;
 			const response = await page.request.post('/api/mock/media', {
-				data: { guild_id: guildId, media_type: mediaType, slug }
+				data: { guild_id: guildId, media_type: mediaType, slug, history_days: historyDays }
 			});
 			if (!response.ok()) {
 				const body = await response.text().catch(() => 'unknown');

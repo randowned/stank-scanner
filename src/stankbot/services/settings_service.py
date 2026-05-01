@@ -91,7 +91,7 @@ DEFAULTS: dict[str, Any] = {
     Keys.BOARD_NAME_MAX_LEN: 20,
     Keys.ENABLE_REACTION_BONUS: True,
     Keys.MAINTENANCE_MODE: False,
-    Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: 10,
+    Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: 60,
     Keys.MEDIA_REPLIES_EPHEMERAL: True,
     # Embed templates are seeded per guild on install (see
     # `SettingsService.seed_defaults`) rather than inlined here; default
