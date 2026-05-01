@@ -38,7 +38,7 @@
 		data-testid="update-toast"
 		role="alert"
 	>
-		<div class="flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg">
+		<div class="flex items-center gap-3 p-2 rounded-lg shadow-lg backdrop-blur-md bg-accent/95 text-bg">
 			<span class="text-sm sm:text-base">Updated available!</span>
 			<button
 				onclick={onreload}

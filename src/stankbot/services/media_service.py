@@ -86,7 +86,24 @@ class MediaService:
         resolved = await provider.resolve(url_or_id)
         if resolved is None:
             return None
+        return await self.add_resolved_media(
+            guild_id=guild_id,
+            media_type=media_type,
+            resolved=resolved,
+            added_by=added_by,
+            slug=slug,
+        )
 
+    async def add_resolved_media(
+        self,
+        guild_id: int,
+        media_type: str,
+        resolved: Any,
+        added_by: int,
+        slug: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Insert a pre-resolved media item. Caller must have already
+        validated that the provider is configured and the URL resolves."""
         # Check for duplicate external_id
         if await media_repo.is_external_id_taken(
             self.session, guild_id, media_type, resolved.external_id

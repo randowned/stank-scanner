@@ -113,15 +113,23 @@ async def add_media(
         )
 
     svc = MediaService(session=session, registry=registry)
-    item = await svc.add_media(
+
+    # Pre-validate: distinguish bad URL from auth/API failure
+    if hasattr(provider, "extract_id") and provider.extract_id(payload.external_id) is None:
+        raise HTTPException(status_code=400, detail="Could not parse the URL/URI. Use a Spotify URL like https://open.spotify.com/track/... or spotify:track:...")
+    resolved = await provider.resolve(payload.external_id)
+    if resolved is None:
+        raise HTTPException(status_code=400, detail="Could not resolve the given URL/ID. Check that your provider credentials are valid and the item exists.")
+
+    item = await svc.add_resolved_media(
         guild_id=guild_id,
         media_type=payload.media_type,
-        url_or_id=payload.external_id,
+        resolved=resolved,
         added_by=int(user["id"]),
         slug=payload.slug,
     )
     if item is None:
-        raise HTTPException(status_code=400, detail="Could not resolve the given URL/ID")
+        raise HTTPException(status_code=409, detail="This media item has already been added (duplicate URL/ID).")
 
     await audit_repo.append(
         session,

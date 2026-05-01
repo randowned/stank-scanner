@@ -71,7 +71,11 @@ class SpotifyProvider(MediaProvider):
                 timeout=10.0,
             )
             if resp.status_code != 200:
-                log.warning("Spotify token request failed: %d", resp.status_code)
+                try:
+                    body = resp.text
+                except Exception:
+                    body = "<unreadable>"
+                log.warning("Spotify token request failed: %d — %s", resp.status_code, body[:200])
                 return None
             data: dict[str, Any] = resp.json()
             self._token = data.get("access_token")
