@@ -24,7 +24,7 @@ Embeds are authored per-guild on the web dashboard and rendered by `template_eng
    - `template_store.py` handles load/save/validate against the DB.
    - Do not hardcode guild-specific strings in renderers.
 
-4. **Known template slots:** board, record announcement, session-start, session-end, points, cooldown. If you're adding a new slot, add it to the dashboard authoring UI and the renderer at the same time.
+4. **Known template slots:** board, record announcement, session-start, session-end, points, cooldown, plus per-provider media embeds (`youtube_media_embed`, `spotify_media_embed` — keys defined in `settings_service.Keys` and built in `embed_builders.build_media_embed`). If you're adding a new slot, add it to `default_templates.ALL_DEFAULTS`, the dashboard authoring UI, and the renderer at the same time.
 
 ## Red flags
 

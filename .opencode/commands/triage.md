@@ -28,7 +28,7 @@ Before going deep into code, rule out configuration drift:
 - **Single replica only.** Discord allows one gateway connection per shard. Two replicas → login loops.
 - **Volume mounted at `/data`.** SQLite at `sqlite+aiosqlite:////data/stankbot.db`. Detached volume → every redeploy wipes data and re-runs migrations from empty.
 - **Port 8000** for the dashboard. Public URL must be in Discord OAuth2 redirects as `<url>/auth/callback`, otherwise login breaks.
-- **Required env vars:** `DISCORD_TOKEN`, `DISCORD_APP_ID`, `WEB_SECRET_KEY`, `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `GUILD_IDS`.
+- **Required env vars:** `DISCORD_TOKEN`, `DISCORD_APP_ID`, `WEB_SECRET_KEY`, `OAUTH_CLIENT_SECRET`, `GUILD_IDS` (OAuth client id is `DISCORD_APP_ID`). Optional: `YOUTUBE_API_KEY`, `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` for media metrics.
 - **Shutdown path:** on SIGTERM the bot cancels APScheduler jobs, closes the gateway, disposes the engine. Jobs are rebuilt from guild settings on next boot.
 - **Restart policy:** `ON_FAILURE` max 10 retries. Exhausted retries → service stays down until next deploy.
 
@@ -38,9 +38,11 @@ Based on the symptom, read the smallest relevant surface:
 - **Chain / scoring:** `src/stankbot/services/chain_service.py`, `src/stankbot/services/scoring_service.py`.
 - **Session boundaries:** `src/stankbot/services/session_service.py`.
 - **Schema / migration:** `src/stankbot/db/models.py`, `migrations/`.
-- **Embed / rendering:** `src/stankbot/services/board_renderer.py`, `src/stankbot/services/template_engine.py`, `src/stankbot/services/template_store.py`, `src/stankbot/services/embed_builders.py`.
+- **Embed / rendering:** `src/stankbot/services/board_renderer.py`, `src/stankbot/services/template_engine.py`, `src/stankbot/services/template_store.py`, `src/stankbot/services/default_templates.py`, `src/stankbot/services/embed_builders.py`.
 - **Discord surface:** `src/stankbot/cogs/`.
 - **Dashboard / OAuth:** `src/stankbot/web/routes/`, `src/stankbot/web/app.py`.
+- **Scheduling (APScheduler):** `src/stankbot/scheduling/session_scheduler.py`, `src/stankbot/scheduling/media_metrics_scheduler.py`. Jobs are rebuilt from guild settings on each boot — no schedule state is persisted, so a missed clock-aligned tick after a redeploy is expected.
+- **Media analytics:** `src/stankbot/services/media_service.py`, `src/stankbot/services/media_providers/` (real: `youtube.py`, `spotify.py`; mock: `mock_providers.py` only on `dev-mock`), `src/stankbot/cogs/media_commands.py`, `src/stankbot/web/routes/media_api.py`, `src/stankbot/web/routes/media_admin.py`.
 - **Boot / logging:** `src/stankbot/__main__.py`, `src/stankbot/logging.py`.
 
 ### 5. Report

@@ -49,6 +49,13 @@ Always check existing components before creating new ones:
 | `NavSkeleton` | Full-page nav loading | `isAdminRoute` |
 | `Sparkline` | Mini line chart | `values`, `ariaLabel` |
 | `LeaderboardRow` | Single leaderboard row | `rank`, `row`, `isMe`, `context` |
+| `Chart` | Chart.js wrapper (line/bar) — dark-theme aware | `type`, `data`, `options` |
+| `ComparisonChart` | Multi-series media metric overlay | `series`, `metric`, `days` |
+| `RelativeTime` | Live "N min ago" label that auto-ticks | `iso`, `fallback` |
+| `SelectDropdown` | Icon-prefixed select (interval / metric pickers) | `options`, `bind:value` |
+| `Tooltip` | Hover tooltip primitive — accepts `useNativeTooltip` to opt out of custom rendering | `text`, `useNativeTooltip` |
+| `Duration` | Human duration (`XhYm`, max 2 units) | `seconds`, `useNativeTooltip` |
+| `OnlineBadge` | Admin online-users popover | reads `$onlineUsers` |
 
 Every component should use `data-testid` attributes for stable E2E queries. The `StatTile` component also accepts `valueTestId` when the inner value `<div>` needs its own test ID (e.g. `valueTestId="chain-counter"`).
 
