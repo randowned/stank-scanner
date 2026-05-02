@@ -215,7 +215,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @youtube.command(name="info", description="Show stats for a tracked YouTube video.")
-    @app_commands.describe(name="The video's slug (short name).")
+    @app_commands.describe(slug="The video's slug (short name).")
     @app_commands.rename(slug="name")
     @requires_stats_access()
     async def youtube_info(
@@ -236,7 +236,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @spotify.command(name="info", description="Show stats for a tracked Spotify item.")
-    @app_commands.describe(name="The track or album slug.")
+    @app_commands.describe(slug="The track or album slug.")
     @app_commands.rename(slug="name")
     @requires_stats_access()
     async def spotify_info(
@@ -257,8 +257,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
-    @app_commands.describe(name="The video's slug.", type_="Which metric to chart.", range_="Time range to show.")
-    @app_commands.choices(type_=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES)
+    @app_commands.describe(slug="The video's slug.", metric="Which metric to chart.", range_="Time range to show.")
+    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES)
     @app_commands.rename(slug="name", metric="type_", range_="range_")
     @requires_stats_access()
     async def youtube_chart(
@@ -281,8 +281,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
-    @app_commands.describe(name="The track or album slug.", type_="Which metric to chart.", range_="Time range to show.")
-    @app_commands.choices(type_=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES)
+    @app_commands.describe(slug="The track or album slug.", metric="Which metric to chart.", range_="Time range to show.")
+    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES)
     @app_commands.rename(slug="name", metric="type_", range_="range_")
     @requires_stats_access()
     async def spotify_chart(
