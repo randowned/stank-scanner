@@ -212,13 +212,18 @@ async def get_media_chart(
         session, [media_id], metric, since
     )
     snaps = snaps_by_id.get(media_id, [])
+    # Normalise timezone: SQLite may return naive datetimes even with timezone=True
+    # if they were inserted before timezone-aware code was deployed.
+    def _ensure_utc(dt: datetime) -> datetime:
+        return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
     # Filter snapshots at or before reference_date
-    snaps = [s for s in snaps if s.fetched_at <= reference_date]
+    snaps = [s for s in snaps if _ensure_utc(s.fetched_at) <= reference_date]
 
     # Determine cache key from the latest snapshot timestamp
     if snaps:
         latest_snap = snaps[-1]
-        cache_ts = int(latest_snap.fetched_at.timestamp())
+        cache_ts = int(_ensure_utc(latest_snap.fetched_at).timestamp())
     else:
         cache_ts = int(reference_date.timestamp())
 
@@ -234,7 +239,8 @@ async def get_media_chart(
 
     # Compute actual duration for chart title context
     if snaps:
-        duration_hours = (max(s.fetched_at for s in snaps) - min(s.fetched_at for s in snaps)).total_seconds() / 3600
+        utc_snaps = [_ensure_utc(s.fetched_at) for s in snaps]
+        duration_hours = (max(utc_snaps) - min(utc_snaps)).total_seconds() / 3600
     else:
         duration_hours = 0.0
 
