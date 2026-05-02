@@ -70,6 +70,7 @@ class Keys(StrEnum):
     MEDIA_METRICS_UPDATE_INTERVAL_MINUTES = "media_metrics_update_interval_minutes"
     MEDIA_REPLIES_EPHEMERAL = "media_replies_ephemeral"
     MEDIA_REPLIES_ADMIN_ONLY = "media_replies_admin_only"
+    MEDIA_PROVIDERS_ENABLED = "media_providers_enabled"
     # Media embed templates
     YOUTUBE_MEDIA_EMBED = "youtube_media_embed"
     SPOTIFY_MEDIA_EMBED = "spotify_media_embed"
@@ -95,6 +96,7 @@ DEFAULTS: dict[str, Any] = {
     Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: 60,
     Keys.MEDIA_REPLIES_EPHEMERAL: True,
     Keys.MEDIA_REPLIES_ADMIN_ONLY: False,
+    Keys.MEDIA_PROVIDERS_ENABLED: ["youtube", "spotify"],
     # Embed templates are seeded per guild on install (see
     # `SettingsService.seed_defaults`) rather than inlined here; default
     # dicts live in `services/default_templates.py`.
@@ -177,6 +179,10 @@ LABELS: dict[str, tuple[str, str]] = {
     Keys.MEDIA_REPLIES_ADMIN_ONLY: (
         "Admin-only media commands",
         "When enabled, only admins may use `/stats` commands.",
+    ),
+    Keys.MEDIA_PROVIDERS_ENABLED: (
+        "Enabled media providers",
+        "List of provider types to enable (e.g. [\"youtube\", \"spotify\"]). Disabled providers are hidden from non-admins.",
     ),
 }
 

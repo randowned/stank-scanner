@@ -93,7 +93,7 @@ async def list_providers(
 class AddMediaPayload(BaseModel):
     media_type: str
     external_id: str
-    slug: str | None = None
+    name: str | None = None
 
 
 @router.post("")
@@ -127,7 +127,7 @@ async def add_media(
         media_type=payload.media_type,
         resolved=resolved,
         added_by=int(user["id"]),
-        slug=payload.slug,
+        slug=payload.name,
     )
     if item is None:
         raise HTTPException(status_code=409, detail="This media item has already been added (duplicate URL/ID).")
@@ -173,7 +173,7 @@ async def get_media_admin(
 
 
 class UpdateMediaPayload(BaseModel):
-    slug: str | None = None
+    name: str | None = None
 
 
 @router.patch("/{media_id}")
@@ -186,7 +186,7 @@ async def update_media(
     user: dict[str, Any] = Depends(require_guild_admin),
 ) -> MsgPackResponse:
     svc = MediaService(session=session, registry=request.app.state.media_registry)
-    item = await svc.update_slug(media_id, payload.slug)
+    item = await svc.update_name(media_id, payload.name)
     if item is None:
         raise HTTPException(status_code=404, detail="Media item not found")
 
@@ -195,7 +195,7 @@ async def update_media(
         guild_id=guild_id,
         actor_id=int(user["id"]),
         action="media.update",
-        payload={"media_id": media_id, "slug": payload.slug},
+        payload={"media_id": media_id, "name": payload.name},
     )
     return MsgPackResponse(item, request)
 
@@ -308,6 +308,7 @@ class MediaSettingsPayload(BaseModel):
     update_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
     replies_ephemeral: bool | None = None
     admin_only: bool | None = None
+    providers_enabled: list[str] | None = None
 
 
 @router.post("/settings")
@@ -329,6 +330,9 @@ async def update_media_settings(
     if payload.admin_only is not None:
         await svc.set(guild_id, Keys.MEDIA_REPLIES_ADMIN_ONLY, payload.admin_only)
         audit_payload["admin_only"] = payload.admin_only
+    if payload.providers_enabled is not None:
+        await svc.set(guild_id, Keys.MEDIA_PROVIDERS_ENABLED, payload.providers_enabled)
+        audit_payload["providers_enabled"] = payload.providers_enabled
 
     if audit_payload:
         await audit_repo.append(

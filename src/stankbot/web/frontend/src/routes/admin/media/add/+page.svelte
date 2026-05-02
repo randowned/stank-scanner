@@ -14,7 +14,7 @@
 	let loadingProviders = $state(true);
 	let activeTab = $state<string>('');
 	let url = $state('');
-	let slug = $state('');
+	let name = $state('');
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 
@@ -43,7 +43,7 @@
 			await apiPost('/api/admin/media', {
 				media_type: activeTab,
 				external_id: url.trim(),
-				slug: slug.trim() || undefined
+				name: name.trim() || undefined
 			});
 			goto(`${base}/admin/media`);
 		} catch (err) {
@@ -86,15 +86,15 @@
 				<div class="text-xs text-muted mt-1">Paste a full YouTube URL or just the video ID (11 characters).</div>
 			</div>
 			<div>
-				<label class="block text-sm font-medium mb-1" for="media-add-slug">Slug (optional)</label>
+				<label class="block text-sm font-medium mb-1" for="media-add-name">Name (optional)</label>
 				<Input
 					type="text"
-					id="media-add-slug"
+					id="media-add-name"
 					placeholder="my-cool-video"
-					bind:value={slug}
+					bind:value={name}
 					disabled={loading}
 				/>
-				<div class="text-xs text-muted mt-1">Short name for Discord commands: <code>/media youtube my-cool-video</code>. Auto-generated if left empty.</div>
+				<div class="text-xs text-muted mt-1">Short name for Discord commands: <code>/stats youtube my-cool-video</code>. Auto-generated if left empty.</div>
 			</div>
 			{#if error}
 				<div class="text-red-400 text-sm">{error}</div>
@@ -122,15 +122,15 @@
 				<div class="text-xs text-muted mt-1">Paste a Spotify URL or URI for a track or album.</div>
 			</div>
 			<div>
-				<label class="block text-sm font-medium mb-1" for="media-add-slug-spotify">Slug (optional)</label>
+				<label class="block text-sm font-medium mb-1" for="media-add-name-spotify">Name (optional)</label>
 				<Input
 					type="text"
-					id="media-add-slug-spotify"
+					id="media-add-name-spotify"
 					placeholder="my-cool-track"
-					bind:value={slug}
+					bind:value={name}
 					disabled={loading}
 				/>
-				<div class="text-xs text-muted mt-1">Short name for Discord commands: <code>/media spotify my-cool-track</code>. Auto-generated if left empty.</div>
+				<div class="text-xs text-muted mt-1">Short name for Discord commands: <code>/stats spotify my-cool-track</code>. Auto-generated if left empty.</div>
 			</div>
 			{#if error}
 				<div class="text-red-400 text-sm">{error}</div>

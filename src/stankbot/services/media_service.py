@@ -78,7 +78,7 @@ class MediaService:
         media_type: str,
         url_or_id: str,
         added_by: int,
-        slug: str | None = None,
+        name: str | None = None,
     ) -> dict[str, Any] | None:
         provider = self.registry.get(media_type)
         if provider is None:
@@ -91,7 +91,7 @@ class MediaService:
             media_type=media_type,
             resolved=resolved,
             added_by=added_by,
-            slug=slug,
+            name=name,
         )
 
     async def add_resolved_media(
@@ -100,7 +100,7 @@ class MediaService:
         media_type: str,
         resolved: Any,
         added_by: int,
-        slug: str | None = None,
+        name: str | None = None,
     ) -> dict[str, Any] | None:
         """Insert a pre-resolved media item. Caller must have already
         validated that the provider is configured and the URL resolves."""
@@ -110,21 +110,21 @@ class MediaService:
         ):
             return None
 
-        slug_final = str(slug).strip() if slug else None
-        if not slug_final:
-            slug_final = _slugify(resolved.title)[:50]
-        if not slug_final:
-            slug_final = resolved.external_id[:50]
+        name_final = str(name).strip() if name else None
+        if not name_final:
+            name_final = _slugify(resolved.title)[:50]
+        if not name_final:
+            name_final = resolved.external_id[:50]
 
-        # Ensure unique slug per media_type
-        if await media_repo.is_slug_taken(self.session, guild_id, media_type, slug_final):
+        # Ensure unique name per media_type
+        if await media_repo.is_name_taken(self.session, guild_id, media_type, name_final):
             counter = 1
-            base_slug = slug_final[:45]
-            while await media_repo.is_slug_taken(
-                self.session, guild_id, media_type, f"{base_slug}-{counter}"
+            base_name = name_final[:45]
+            while await media_repo.is_name_taken(
+                self.session, guild_id, media_type, f"{base_name}-{counter}"
             ):
                 counter += 1
-            slug_final = f"{base_slug}-{counter}"[:50]
+            name_final = f"{base_name}-{counter}"[:50]
 
         item = await media_repo.add(
             self.session,
@@ -138,7 +138,7 @@ class MediaService:
             published_at=resolved.published_at,
             duration_seconds=resolved.duration_seconds,
             added_by=added_by,
-            slug=slug_final,
+            slug=name_final,
         )
         return self._serialize_item(item)
 
@@ -149,10 +149,10 @@ class MediaService:
         metrics = await media_repo.get_metric_cache(self.session, media_item_id)
         return self._serialize_item(item, metrics)
 
-    async def get_media_item_by_slug(
-        self, guild_id: int, media_type: str, slug: str
+    async def get_media_item_by_name(
+        self, guild_id: int, media_type: str, name: str
     ) -> dict[str, Any] | None:
-        item = await media_repo.get_by_slug(self.session, guild_id, media_type, slug)
+        item = await media_repo.get_by_name(self.session, guild_id, media_type, name)
         if item is None:
             return None
         return self._serialize_item(item)
@@ -167,33 +167,33 @@ class MediaService:
         metrics_by_id = await media_repo.get_metrics_for_items(self.session, item_ids)
         return [self._serialize_item(i, metrics_by_id.get(i.id, {})) for i in items]
 
-    async def update_slug(
-        self, media_item_id: int, slug: str | None
+    async def update_name(
+        self, media_item_id: int, name: str | None
     ) -> dict[str, Any] | None:
         item = await media_repo.get(self.session, media_item_id)
         if item is None:
             return None
 
-        slug_final = str(slug).strip() if slug else None
-        if not slug_final:
-            slug_final = _slugify(item.title)[:50]
-        if not slug_final:
-            slug_final = item.external_id[:50]
+        name_final = str(name).strip() if name else None
+        if not name_final:
+            name_final = _slugify(item.title)[:50]
+        if not name_final:
+            name_final = item.external_id[:50]
 
-        if slug_final != item.slug and await media_repo.is_slug_taken(
-            self.session, item.guild_id, item.media_type, slug_final,
+        if name_final != item.name and await media_repo.is_name_taken(
+            self.session, item.guild_id, item.media_type, name_final,
             exclude_id=item.id,
         ):
             counter = 1
-            base_slug = slug_final[:45]
-            while await media_repo.is_slug_taken(
+            base_name = name_final[:45]
+            while await media_repo.is_name_taken(
                 self.session, item.guild_id, item.media_type,
-                f"{base_slug}-{counter}", exclude_id=item.id,
+                f"{base_name}-{counter}", exclude_id=item.id,
             ):
                 counter += 1
-            slug_final = f"{base_slug}-{counter}"[:50]
+            name_final = f"{base_name}-{counter}"[:50]
 
-        item.slug = slug_final
+        item.name = name_final
         await self.session.flush()
         return self._serialize_item(item)
 
@@ -423,7 +423,7 @@ class MediaService:
             "published_at": self._iso(item.published_at),
             "duration_seconds": item.duration_seconds,
             "added_by": str(item.added_by),
-            "slug": item.slug,
+            "slug": item.name,
             "metrics": metrics or {},
             "metrics_last_fetched_at": self._iso(item.metrics_last_fetched_at),
             "created_at": self._iso(item.created_at),

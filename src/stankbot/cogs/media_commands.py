@@ -82,11 +82,11 @@ class StatsCommands(commands.GroupCog, name="stats"):
             )
         choices: list[app_commands.Choice[str]] = []
         for it in items:
-            if not it.slug:
+            if not it.name:
                 continue
-            if current.lower() in it.slug.lower():
+            if current.lower() in it.name.lower():
                 choices.append(
-                    app_commands.Choice(name=it.slug, value=it.slug)
+                    app_commands.Choice(name=it.name, value=it.name)
                 )
                 if len(choices) >= 25:
                     break
@@ -110,6 +110,15 @@ class StatsCommands(commands.GroupCog, name="stats"):
 
         async with self.bot.db() as session:
             settings = SettingsService(session)
+            enabled = await settings.get(
+                interaction.guild.id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
+            )
+            if media_type not in enabled:
+                await interaction.response.send_message(
+                    f"{media_type.capitalize()} stats are currently disabled.", ephemeral=True
+                )
+                return
+            settings = SettingsService(session)
             ephemeral = bool(
                 await settings.get(
                     interaction.guild.id,
@@ -120,7 +129,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
 
             await interaction.response.defer(thinking=True, ephemeral=ephemeral)
 
-            item = await media_repo.get_by_slug(
+            item = await media_repo.get_by_name(
                 session, interaction.guild.id, media_type, slug
             )
             if item is None:
@@ -148,7 +157,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
                 media_item_id=item.id,
                 title=item.title,
                 channel_name=item.channel_name,
-                slug=item.slug,
+                name=item.name,
                 thumbnail_url=item.thumbnail_url,
                 published_at=item.published_at.isoformat() if item.published_at else None,
                 duration_seconds=item.duration_seconds,
@@ -177,7 +186,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         async with self.bot.db() as session:
-            item = await media_repo.get_by_slug(
+            item = await media_repo.get_by_name(
                 session, interaction.guild.id, media_type, slug
             )
             if item is None:

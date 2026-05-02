@@ -23,6 +23,7 @@
 	let updateInterval = $state(60);
 	let ephemeralEnabled = $state(true);
 	let adminOnly = $state(false);
+	let enabledProviders = $state<string[]>(['youtube', 'spotify']);
 	let savingSettings = $state(false);
 	let settingsError = $state<string | null>(null);
 
@@ -86,6 +87,10 @@
 			if (typeof res.values?.['media_replies_admin_only'] === 'boolean') {
 				adminOnly = res.values?.['media_replies_admin_only'] as boolean;
 			}
+			const prov = res.values?.['media_providers_enabled'];
+			if (Array.isArray(prov)) {
+				enabledProviders = prov as string[];
+			}
 		} catch {
 			// keep defaults
 		}
@@ -98,7 +103,8 @@
 			await apiPost('/api/admin/media/settings', {
 				update_interval_minutes: updateInterval,
 				replies_ephemeral: ephemeralEnabled,
-				admin_only: adminOnly
+				admin_only: adminOnly,
+				providers_enabled: enabledProviders
 			});
 			settingsOpen = false;
 		} catch (err) {
@@ -174,6 +180,14 @@
 		if (type === 'spotify') return 'bg-[#1db954]/15 text-[#1db954]';
 		return 'bg-border text-muted';
 	}
+
+	function toggleProvider(type: string) {
+		if (enabledProviders.includes(type)) {
+			enabledProviders = enabledProviders.filter((t) => t !== type);
+		} else {
+			enabledProviders = [...enabledProviders, type];
+		}
+	}
 </script>
 
 <PageHeader title="Media" subtitle="Manage media items for the dashboard">
@@ -229,7 +243,7 @@
 						<div class="text-xs text-muted">{item.channel_name ?? '—'}</div>
 						<div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
 							<span class="text-xs px-1.5 py-0.5 rounded capitalize {typeBadgeClass(item.media_type)}">{item.media_type}</span>
-							{#if item.slug}<span class="text-xs text-muted font-mono">📛 {item.slug}</span>{/if}
+							{#if item.name}<span class="text-xs text-muted font-mono">📛 {item.name}</span>{/if}
 							<span class="text-xs text-muted">{primary.label}: {formatNumber(item.metrics?.[primary.key]?.value ?? 0)}</span>
 							<span class="text-xs {freshness.state === 'stale' ? 'text-amber-500' : freshness.state === 'dead' ? 'text-red-500' : 'text-muted'}">
 								{freshness.label}
@@ -264,6 +278,18 @@
 		<div>
 			<Toggle bind:checked={adminOnly} label="Admin-only /stats commands" />
 			<div class="text-xs text-muted mt-1">When enabled, only admins may use /stats commands.</div>
+		</div>
+		<div>
+			<span class="block text-sm font-medium mb-2">Enabled providers</span>
+			<div class="flex flex-wrap gap-3">
+				{#each providers as p}
+					<label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+						<input type="checkbox" checked={enabledProviders.includes(p.type)} onchange={() => toggleProvider(p.type)} class="accent-accent" />
+						<span class="text-sm text-text">{p.label}</span>
+					</label>
+				{/each}
+			</div>
+			<div class="text-xs text-muted mt-1">Disabled providers are hidden from non-admins in the dashboard and /stats commands.</div>
 		</div>
 		{#if settingsError}
 			<div class="text-red-400 text-sm">{settingsError}</div>

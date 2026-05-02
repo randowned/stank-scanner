@@ -67,7 +67,7 @@ class MockMediaPayload(BaseModel):
     guild_id: int
     media_type: str = "youtube"
     external_id: str | None = None
-    slug: str | None = None
+    name: str | None = None
     history_days: int = 30
 
 
@@ -85,11 +85,11 @@ async def mock_add_media(
         payload.external_id
         or f"mock_{media_type}_{guild_id}_{stamp}"
     )
-    base_slug = payload.slug or f"mock-{media_type}-{stamp[-12:]}"
+    base_name = payload.name or f"mock-{media_type}-{stamp[-12:]}"
 
     async with session_scope(request.app.state.session_factory) as session:
-        # Handle slug collisions by appending a counter
-        slug = base_slug
+        # Handle name collisions by appending a counter
+        name = base_name
         attempt = 0
         max_attempts = 10
         while attempt < max_attempts:
@@ -99,19 +99,19 @@ async def mock_add_media(
                     guild_id=guild_id,
                     media_type=media_type,
                     external_id=f"{external_id}_{attempt}" if attempt > 0 else external_id,
-                    title=f"Mock {media_type.capitalize()} Item — {slug}",
+                    title=f"Mock {media_type.capitalize()} Item — {name}",
                     channel_name="Mock Channel",
                     thumbnail_url=None,
                     published_at=datetime.now(UTC),
                     duration_seconds=180,
                     added_by=111111111,
-                    slug=slug,
+                    name=name,
                 )
                 break
             except Exception:
                 await session.rollback()
                 attempt += 1
-                slug = f"{base_slug}-{attempt}"
+                name = f"{base_name}-{attempt}"
         else:
             raise HTTPException(status_code=500, detail="Failed to insert mock media after retries")
 
@@ -145,5 +145,5 @@ async def mock_add_media(
         item.metrics_last_fetched_at = now
 
     return MsgPackResponse(
-        {"success": True, "id": item.id, "slug": slug}, request, status_code=201
+        {"success": True, "id": item.id, "name": name}, request, status_code=201
     )

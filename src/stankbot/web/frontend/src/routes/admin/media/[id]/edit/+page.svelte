@@ -37,7 +37,7 @@
 		error = null;
 		try {
 			item = await apiFetch<MediaItem>(`/api/admin/media/${mediaId}`);
-			nameValue = item.slug ?? '';
+			nameValue = item.name ?? '';
 		} catch (err) {
 			error = toErrorMessage(err, 'Failed to load');
 		} finally {
@@ -65,13 +65,10 @@
 		nameError = null;
 		nameSaved = false;
 		try {
-			const body = new Uint8Array(
-				new (await import('msgpackr')).Packr().pack({ slug: nameValue || null })
-			);
 			const res = await fetch(`/api/admin/media/${mediaId}`, {
 				method: 'PATCH',
-				headers: { 'Content-Type': 'application/msgpack', Accept: 'application/msgpack, application/json' },
-				body,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: nameValue || null }),
 			});
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({ detail: 'Failed to save' }));
@@ -160,7 +157,7 @@
 			<div class="text-red-400 text-sm">{refreshError}</div>
 		{/if}
 
-		<!-- Name / slug editor -->
+		<!-- Name editor -->
 		<div class="panel">
 			<div class="flex flex-col sm:flex-row sm:items-center gap-3">
 				<div class="flex-1 min-w-0">

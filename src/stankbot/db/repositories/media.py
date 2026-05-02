@@ -36,7 +36,7 @@ async def add(
         published_at=published_at,
         duration_seconds=duration_seconds,
         added_by=added_by,
-        slug=slug,
+        name=slug,
     )
     session.add(item)
     await session.flush()
@@ -60,47 +60,47 @@ async def list_all(
     return list(result.scalars().all())
 
 
-async def get_by_slug(
+async def get_by_name(
     session: AsyncSession,
     guild_id: int,
     media_type: str,
-    slug: str,
+    name: str,
 ) -> MediaItem | None:
     stmt = select(MediaItem).where(
         MediaItem.guild_id == guild_id,
         MediaItem.media_type == media_type,
-        MediaItem.slug == slug,
+        MediaItem.name == name,
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
-async def get_by_slugs(
+async def get_by_names(
     session: AsyncSession,
     guild_id: int,
-    slugs: list[str],
+    names: list[str],
 ) -> dict[str, MediaItem]:
-    """Bulk lookup by slug; returns {slug: MediaItem} for found items."""
-    if not slugs:
+    """Bulk lookup by name; returns {name: MediaItem} for found items."""
+    if not names:
         return {}
     stmt = select(MediaItem).where(
         MediaItem.guild_id == guild_id,
-        MediaItem.slug.in_(slugs),
+        MediaItem.name.in_(names),
     )
     rows = (await session.execute(stmt)).scalars().all()
-    return {r.slug: r for r in rows if r.slug}
+    return {r.name: r for r in rows if r.name}
 
 
-async def is_slug_taken(
+async def is_name_taken(
     session: AsyncSession,
     guild_id: int,
     media_type: str,
-    slug: str,
+    name: str,
     exclude_id: int | None = None,
 ) -> bool:
     stmt = select(MediaItem).where(
         MediaItem.guild_id == guild_id,
         MediaItem.media_type == media_type,
-        MediaItem.slug == slug,
+        MediaItem.name == name,
     )
     if exclude_id is not None:
         stmt = stmt.where(MediaItem.id != exclude_id)

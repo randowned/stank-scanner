@@ -19,12 +19,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.chart_renderer import render_media_chart
 from stankbot.services.media_service import MediaService
+from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_member
 from stankbot.web.transport import MsgPackResponse
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/media", tags=["media"])
+
+
+async def _get_enabled_providers(
+    session: AsyncSession,
+    guild_id: int,
+) -> list[str]:
+    return await SettingsService(session).get(
+        guild_id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
+    )
 
 
 async def _media_service(
@@ -45,6 +55,9 @@ async def list_media(
 ) -> MsgPackResponse:
     svc = await _media_service(request, session)
     items = await svc.list_media(guild_id, media_type)
+    # Filter disabled providers for non-admins
+    enabled = await _get_enabled_providers(session, guild_id)
+    items = [i for i in items if i["media_type"] in enabled]
     return MsgPackResponse({"items": items}, request)
 
 
@@ -52,7 +65,7 @@ async def list_media(
 async def compare_media(
     request: Request,
     ids: str = Query(None),
-    slugs: str = Query(None),
+    names: str = Query(None),
     metric: str = Query("view_count"),
     days: int = Query(30, ge=1, le=365),
     align: str = Query("calendar"),
@@ -67,15 +80,15 @@ async def compare_media(
             media_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="ids must be comma-separated integers") from exc
-    elif slugs:
-        slug_list = [s.strip() for s in slugs.split(",") if s.strip()]
-        if not slug_list:
-            raise HTTPException(status_code=400, detail="slugs must be comma-separated non-empty strings")
-        items_by_slug = await media_repo.get_by_slugs(session, guild_id, slug_list)
-        # Preserve slugs order
-        media_ids = [items_by_slug[s].id for s in slug_list if s in items_by_slug]
+    elif names:
+        name_list = [s.strip() for s in names.split(",") if s.strip()]
+        if not name_list:
+            raise HTTPException(status_code=400, detail="names must be comma-separated non-empty strings")
+        items_by_name = await media_repo.get_by_names(session, guild_id, name_list)
+        # Preserve names order
+        media_ids = [items_by_name[s].id for s in name_list if s in items_by_name]
     else:
-        raise HTTPException(status_code=400, detail="either ids or slugs parameter is required")
+        raise HTTPException(status_code=400, detail="either ids or names parameter is required")
     if len(media_ids) < 2:
         raise HTTPException(status_code=400, detail="at least 2 ids required for comparison")
     if len(media_ids) > 10:
@@ -91,9 +104,12 @@ async def compare_media(
 @router.get("/providers")
 async def list_providers(
     request: Request,
+    guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
     registry = request.app.state.media_registry
+    enabled = await _get_enabled_providers(session, guild_id)
     providers = [
         {
             "type": d.type,
@@ -105,6 +121,7 @@ async def list_providers(
             ],
         }
         for d in registry.all_defs()
+        if d.type in enabled
     ]
     return MsgPackResponse({"providers": providers}, request)
 
@@ -119,7 +136,7 @@ async def get_media_detail(
 ) -> MsgPackResponse:
     svc = await _media_service(request, session)
     item = await svc.get_media_item(media_id)
-    if item is None:
+    if item is None or item["media_type"] not in await _get_enabled_providers(session, guild_id):
         raise HTTPException(status_code=404, detail="Media item not found")
     return MsgPackResponse(item, request)
 

@@ -186,7 +186,7 @@ export interface MediaItem {
 	guild_id: string;
 	media_type: string;
 	external_id: string;
-	slug: string | null;
+	name: string | null;
 	title: string;
 	channel_name: string | null;
 	channel_id: string | null;

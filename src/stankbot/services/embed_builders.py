@@ -315,7 +315,7 @@ async def build_media_embed(
     media_item_id: int,
     title: str,
     channel_name: str | None,
-    slug: str | None,
+    name: str | None,
     thumbnail_url: str | None,
     published_at: str | None,
     duration_seconds: int | None,
@@ -401,7 +401,7 @@ async def build_media_embed(
     variables: dict[str, Any] = {
         "title": title or "",
         "channel_name": channel_name or "",
-        "slug": slug or "",
+        "slug": name or "",
         "image_url": thumbnail_url or "",
         "published_at": _fmt_date(published_at),
         "duration": _fmt_duration(duration_seconds),
