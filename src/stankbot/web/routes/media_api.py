@@ -168,10 +168,7 @@ async def get_media_history(
 
 
 CHART_CACHE_DIR = Path(
-    os.environ.get(
-        "CHART_CACHE_DIR",
-        str(Path(__file__).parent.parent.parent.parent.parent / "data" / "media" / "chart"),
-    )
+    os.environ.get("CHART_CACHE_DIR", "/data/media/chart")
 )
 
 

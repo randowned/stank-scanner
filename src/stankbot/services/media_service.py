@@ -423,7 +423,7 @@ class MediaService:
             "published_at": self._iso(item.published_at),
             "duration_seconds": item.duration_seconds,
             "added_by": str(item.added_by),
-            "slug": item.name,
+            "name": item.name,
             "metrics": metrics or {},
             "metrics_last_fetched_at": self._iso(item.metrics_last_fetched_at),
             "created_at": self._iso(item.created_at),
