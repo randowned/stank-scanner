@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import { apiFetch } from '$lib/api';
-	import { formatNumber, formatFreshness } from '$lib/format';
+	import { formatFreshness } from '$lib/format';
 	import type { MediaItem, MetricSnapshot, CompareData, MetricDef, ProviderDef } from '$lib/types';
 	import { providersByType, loadProviders } from '$lib/stores';
 	import PageHeader from '$lib/components/PageHeader.svelte';
@@ -100,6 +100,10 @@
 		return fallback?.label ?? key;
 	}
 
+	function formatDetailedNumber(n: number): string {
+		return n.toLocaleString('en-US');
+	}
+
 	function formatMetricValue(key: string, value: number): string {
 		const m = providerMetrics.find((mm) => mm.key === key);
 		if (m?.format === 'percentage') return `${Math.round(value)}%`;
@@ -108,7 +112,7 @@
 			const secs = Math.floor(value % 60);
 			return `${mins}:${String(secs).padStart(2, '0')}`;
 		}
-		return formatNumber(value);
+		return formatDetailedNumber(value);
 	}
 
 	function metricValue(key: string): number {
@@ -141,9 +145,10 @@
 		if (!item || compareIds.length === 0) return;
 		loadingCompare = true;
 		try {
+			const allIds = [item.id, ...compareIds.map(Number)];
 			const days = Math.max(1, Math.round(selectedHours / 24));
 			const res = await apiFetch<CompareData>(
-				`/api/media/compare?ids=${compareIds.join(',')}&metric=${selectedMetric}&days=${days}&align=calendar`
+				`/api/media/compare?ids=${allIds.join(',')}&metric=${selectedMetric}&days=${days}&align=calendar`
 			);
 			compareData = res;
 		} catch {
