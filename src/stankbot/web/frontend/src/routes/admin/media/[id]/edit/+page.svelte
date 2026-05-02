@@ -5,7 +5,7 @@
 	import { apiFetch, apiPost, apiDelete } from '$lib/api';
 	import { toErrorMessage } from '$lib/api-utils';
 	import { formatNumber, formatRelativeTime, formatFreshness } from '$lib/format';
-	import type { MediaItem } from '$lib/types';
+	import type { MediaItem, ProviderDef, MetricDef } from '$lib/types';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import StatTile from '$lib/components/StatTile.svelte';
@@ -18,9 +18,25 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
+	let providersByType = $state<Record<string, ProviderDef>>({});
 	let refreshing = $state(false);
 	let refreshError = $state<string | null>(null);
 	let deleteOpen = $state(false);
+
+	const providerMetrics = $derived<MetricDef[]>(
+		item ? providersByType[item.media_type]?.metrics ?? [] : []
+	);
+
+	async function loadProviders() {
+		try {
+			const res = await apiFetch<{ providers: ProviderDef[] }>('/api/admin/media/providers');
+			const map: Record<string, ProviderDef> = {};
+			for (const p of res.providers) map[p.type] = p;
+			providersByType = map;
+		} catch {
+			// providers optional
+		}
+	}
 
 	async function loadItem() {
 		loading = true;
@@ -65,6 +81,7 @@
 
 	$effect(() => {
 		loadItem();
+		loadProviders();
 	});
 </script>
 
@@ -76,10 +93,17 @@
 	<div class="panel animate-pulse space-y-3">
 		<div class="h-6 bg-border rounded w-64"></div>
 		<div class="h-4 bg-border rounded w-48"></div>
-		<div class="grid grid-cols-3 gap-3">
-			<div class="h-16 bg-border rounded"></div>
-			<div class="h-16 bg-border rounded"></div>
-			<div class="h-16 bg-border rounded"></div>
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+			<div class="md:col-span-1">
+				<div class="w-full aspect-video bg-border rounded-lg"></div>
+			</div>
+			<div class="md:col-span-2">
+				<div class="grid grid-cols-1 gap-3" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+					<div class="h-16 bg-border rounded"></div>
+					<div class="h-16 bg-border rounded"></div>
+					<div class="h-16 bg-border rounded"></div>
+				</div>
+			</div>
 		</div>
 	</div>
 {:else if error}
@@ -125,25 +149,15 @@
 			</div>
 
 			<div class="md:col-span-2">
-				<div class="grid grid-cols-3 gap-3">
-					<StatTile
-						value={formatNumber(metricValue('view_count'))}
-						label="Views"
-						testId="media-edit-views"
-						valueTestId="media-edit-views-value"
-					/>
-					<StatTile
-						value={formatNumber(metricValue('like_count'))}
-						label="Likes"
-						testId="media-edit-likes"
-						valueTestId="media-edit-likes-value"
-					/>
-					<StatTile
-						value={formatNumber(metricValue('comment_count'))}
-						label="Comments"
-						testId="media-edit-comments"
-						valueTestId="media-edit-comments-value"
-					/>
+				<div class="grid gap-3" style="grid-template-columns: repeat({Math.max(1, providerMetrics.length)}, minmax(0, 1fr));">
+					{#each providerMetrics as m (m.key)}
+						<StatTile
+							value={m.format === 'percentage' ? `${Math.round(metricValue(m.key))}%` : formatNumber(metricValue(m.key))}
+							label={m.label}
+							testId="media-edit-{m.key}"
+							valueTestId="media-edit-{m.key}-value"
+						/>
+					{/each}
 				</div>
 			</div>
 		</div>

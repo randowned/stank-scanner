@@ -82,6 +82,27 @@ async def compare_media(
     return MsgPackResponse(data, request)
 
 
+@router.get("/providers")
+async def list_providers(
+    request: Request,
+    _user: dict[str, Any] = Depends(require_guild_member),
+) -> MsgPackResponse:
+    registry = request.app.state.media_registry
+    providers = [
+        {
+            "type": d.type,
+            "label": d.label,
+            "icon": d.icon,
+            "metrics": [
+                {"key": m.key, "label": m.label, "format": m.format, "icon": m.icon}
+                for m in d.metrics
+            ],
+        }
+        for d in registry.all_defs()
+    ]
+    return MsgPackResponse({"providers": providers}, request)
+
+
 @router.get("/{media_id}")
 async def get_media_detail(
     request: Request,
@@ -103,10 +124,16 @@ async def get_media_history(
     media_id: int,
     metric: str = Query("view_count"),
     days: int = Query(30, ge=1, le=365),
+    hours: int | None = Query(None, ge=1, le=48),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
     session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
     svc = await _media_service(request, session)
-    history = await svc.get_metrics_history(media_id, metric, window_days=days)
-    return MsgPackResponse({"metric": metric, "days": days, "history": history}, request)
+    history = await svc.get_metrics_history(
+        media_id, metric, window_days=days, window_hours=hours
+    )
+    payload: dict[str, Any] = {"metric": metric, "days": days, "history": history}
+    if hours is not None:
+        payload["hours"] = hours
+    return MsgPackResponse(payload, request)

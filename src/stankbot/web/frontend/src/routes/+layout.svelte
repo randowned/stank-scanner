@@ -91,9 +91,16 @@
 	const isAdminRoute = $derived(pathname.startsWith(`${base}/admin`) || pathname.startsWith('/admin'));
 	const mainClass = $derived(isAdminRoute ? 'flex-1' : 'flex-1 w-full max-w-3xl mx-auto');
 
-	const isNavigatingAdmin = $derived(
-		$navigating ? ($navigating.to?.url?.pathname ?? '').startsWith('/admin') || ($navigating.to?.url?.pathname ?? '').startsWith(`${base}/admin`) : false
-	);
+	const skeletonPattern = $derived.by(() => {
+		if (!$navigating) return 'dashboard';
+		const p = $navigating.to?.url?.pathname ?? '';
+		if (p.startsWith('/admin') || p.startsWith(`${base}/admin`)) return 'admin';
+		const stripped = p.replace(base, '') || '/';
+		if (stripped.startsWith('/media/') && stripped !== '/media') return 'media_detail';
+		if (stripped === '/media' || stripped.startsWith('/media')) return 'media';
+		if (stripped === '/') return 'dashboard';
+		return 'generic';
+	});
 </script>
 
 <div class="min-h-screen flex flex-col">
@@ -104,7 +111,7 @@
 			role="status"
 			aria-label="Loading page"
 		>
-			<NavSkeleton isAdminRoute={isNavigatingAdmin} />
+			<NavSkeleton pattern={skeletonPattern} />
 		</div>
 	{/if}
 

@@ -179,9 +179,12 @@ class MediaService:
         media_item_id: int,
         metric_key: str,
         window_days: int = 30,
+        window_hours: int | None = None,
     ) -> list[dict[str, Any]]:
         since = None
-        if window_days > 0:
+        if window_hours is not None and window_hours > 0:
+            since = datetime.now(UTC) - timedelta(hours=window_hours)
+        elif window_days > 0:
             since = datetime.now(UTC) - timedelta(days=window_days)
         snapshots = await media_repo.get_metric_snapshots(
             self.session, media_item_id, metric_key, since

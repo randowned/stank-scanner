@@ -38,8 +38,7 @@
 		loading = true;
 		error = null;
 		try {
-			const typeParam = activeType ? `?media_type=${activeType}` : '';
-			const res = await apiFetch<{ items: MediaItem[] }>(`/api/admin/media${typeParam}`);
+			const res = await apiFetch<{ items: MediaItem[] }>('/api/admin/media');
 			items = res.items;
 		} catch (err) {
 			error = toErrorMessage(err, 'Failed to load media');
@@ -141,11 +140,19 @@
 		loadSettings();
 	});
 
-	$effect(() => {
-		if (activeType !== undefined) {
-			loadItems();
-		}
-	});
+	const providersByType = $derived(
+		Object.fromEntries(providers.map((p) => [p.type, p]))
+	);
+
+	const filteredItems = $derived(
+		activeType ? items.filter((i) => i.media_type === activeType) : items
+	);
+
+	function primaryMetric(item: MediaItem): { key: string; label: string } {
+		const p = providersByType[item.media_type];
+		const m = p?.metrics?.[0];
+		return { key: m?.key ?? 'view_count', label: m?.label ?? 'Views' };
+	}
 
 	function getEditUrl(id: number): string {
 		return `${base}/admin/media/${id}/edit`;
@@ -186,31 +193,32 @@
 			</div>
 		{/each}
 	</div>
-{:else if items.length === 0}
+{:else if filteredItems.length === 0}
 	<EmptyState icon="🎬" title="No media" message="Add your first media item to start tracking metrics." />
 {:else}
 	<div class="space-y-2">
-		{#each items as item (item.id)}
+		{#each filteredItems as item (item.id)}
 			{@const freshness = formatFreshness(item.metrics_last_fetched_at, updateInterval)}
-			<div class="panel flex items-center gap-3" data-testid="media-admin-row">
+			{@const primary = primaryMetric(item)}
+			<div class="bg-panel border border-border rounded-lg overflow-hidden flex flex-col md:flex-row md:items-stretch" data-testid="media-admin-row">
 				{#if item.thumbnail_url}
-					<img src={item.thumbnail_url} alt={item.title} class="w-20 h-12 object-cover rounded shrink-0" loading="lazy" />
+					<img src={item.thumbnail_url} alt={item.title} class="w-full md:w-24 h-auto md:min-h-[4.5rem] object-cover shrink-0" loading="lazy" />
 				{:else}
-					<div class="w-20 h-12 bg-border rounded shrink-0 flex items-center justify-center text-lg">▶️</div>
+					<div class="w-full md:w-24 min-h-[3rem] md:min-h-[4.5rem] bg-border shrink-0 flex items-center justify-center text-lg">▶️</div>
 				{/if}
-				<div class="flex-1 min-w-0">
+				<div class="flex-1 min-w-0 px-3 py-3">
 					<div class="font-medium text-sm truncate">{item.title}</div>
 					<div class="text-xs text-muted">{item.channel_name ?? '—'}</div>
-					<div class="flex items-center gap-2 mt-1">
-					<span class="text-xs px-1.5 py-0.5 rounded bg-border text-muted capitalize">{item.media_type}</span>
-					{#if item.slug}<span class="text-xs text-muted font-mono">📛 {item.slug}</span>{/if}
-					<span class="text-xs text-muted">Views: {formatNumber(item.metrics?.view_count?.value ?? 0)}</span>
+					<div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+						<span class="text-xs px-1.5 py-0.5 rounded bg-border text-muted capitalize">{item.media_type}</span>
+						{#if item.slug}<span class="text-xs text-muted font-mono">📛 {item.slug}</span>{/if}
+						<span class="text-xs text-muted">{primary.label}: {formatNumber(item.metrics?.[primary.key]?.value ?? 0)}</span>
 						<span class="text-xs {freshness.state === 'stale' ? 'text-amber-500' : freshness.state === 'dead' ? 'text-red-500' : 'text-muted'}">
 							{freshness.label}
 						</span>
 					</div>
 				</div>
-				<div class="flex items-center gap-1 shrink-0">
+				<div class="flex md:flex-col items-center justify-end gap-1 shrink-0 px-3 pb-3 md:py-3 md:pr-3 md:pl-0 max-md:border-t max-md:border-border">
 					<Button variant="ghost" onclick={() => handleRefresh(item.id)} testId="media-refresh-btn">↻</Button>
 					<a href={getEditUrl(item.id)} class="no-underline">
 						<Button variant="ghost" testId="media-edit-btn">Edit</Button>

@@ -2,30 +2,87 @@
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { formatNumber, formatFreshness } from '$lib/format';
-	import type { MediaItem } from '$lib/types';
+	import type { MediaItem, MetricDef, ProviderDef } from '$lib/types';
+	import { providersByType, loadProviders } from '$lib/stores';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Tabs from '$lib/components/Tabs.svelte';
 	import Button from '$lib/components/Button.svelte';
+	import SelectDropdown from '$lib/components/SelectDropdown.svelte';
 	import RelativeTime from '$lib/components/RelativeTime.svelte';
 
 	let { data } = $props();
 
 	const items = $derived(data.items as MediaItem[]);
+	const providers = $derived((data.providers as ProviderDef[]) ?? []);
+
+	$effect(() => {
+		if (providers.length > 0) {
+			const map: Record<string, ProviderDef> = {};
+			for (const p of providers) map[p.type] = p;
+			providersByType.set(map);
+		}
+	});
+
+	void loadProviders();
 
 	let activeType = $state<string>('');
 	let compareMode = $state(false);
 	let selectedIds = $state<number[]>([]);
+	let searchQuery = $state<string>('');
+	let sortKey = $state<string>('published_desc');
 
 	const typeTabs = [
 		{ value: '', label: 'All' },
 		{ value: 'youtube', label: 'YouTube' },
-		{ value: 'spotify', label: 'Spotify' },
+		{ value: 'spotify', label: 'Spotify' }
 	];
 
-	const filteredItems = $derived(
-		activeType ? items.filter((i) => i.media_type === activeType) : items
-	);
+	const sortOptions = [
+		{ value: 'published_desc', label: 'Newest', icon: '🆕' },
+		{ value: 'published_asc', label: 'Oldest', icon: '📜' },
+		{ value: 'updated_desc', label: 'Recently updated', icon: '🔄' },
+		{ value: 'views_desc', label: 'Most popular', icon: '🔥' },
+		{ value: 'title_asc', label: 'A → Z', icon: '🔤' }
+	];
+
+	function primaryMetricValue(item: MediaItem): number {
+		const provider = $providersByType[item.media_type];
+		const key = provider?.metrics?.[0]?.key ?? 'view_count';
+		return item.metrics?.[key]?.value ?? 0;
+	}
+
+	const filteredItems = $derived.by(() => {
+		let list = activeType ? items.filter((i) => i.media_type === activeType) : items;
+		const q = searchQuery.trim().toLowerCase();
+		if (q) {
+			list = list.filter(
+				(i) =>
+					i.title.toLowerCase().includes(q) ||
+					(i.channel_name ?? '').toLowerCase().includes(q)
+			);
+		}
+		const sorted = [...list];
+		const ts = (s: string | null) => (s ? new Date(s).getTime() : 0);
+		switch (sortKey) {
+			case 'published_asc':
+				sorted.sort((a, b) => ts(a.published_at) - ts(b.published_at));
+				break;
+			case 'updated_desc':
+				sorted.sort((a, b) => ts(b.metrics_last_fetched_at) - ts(a.metrics_last_fetched_at));
+				break;
+			case 'views_desc':
+				sorted.sort((a, b) => primaryMetricValue(b) - primaryMetricValue(a));
+				break;
+			case 'title_asc':
+				sorted.sort((a, b) => a.title.localeCompare(b.title));
+				break;
+			case 'published_desc':
+			default:
+				sorted.sort((a, b) => ts(b.published_at) - ts(a.published_at));
+		}
+		return sorted;
+	});
 
 	function borderClass(type: string): string {
 		if (type === 'youtube') return 'border-l-[3px] border-l-[#ff0000]/70';
@@ -35,6 +92,52 @@
 
 	function metricValue(item: MediaItem, key: string): number {
 		return item.metrics?.[key]?.value ?? 0;
+	}
+
+	function formatMetric(m: MetricDef, value: number): string {
+		if (m.format === 'percentage') return `${Math.round(value)}%`;
+		if (m.format === 'duration') {
+			const mins = Math.floor(value / 60);
+			const secs = Math.floor(value % 60);
+			return `${mins}:${String(secs).padStart(2, '0')}`;
+		}
+		return formatNumber(value);
+	}
+
+	function metricsForCard(item: MediaItem): Array<{ key: string; label: string; icon: string; display: string }> {
+		const provider = $providersByType[item.media_type];
+		const out: Array<{ key: string; label: string; icon: string; display: string }> = [];
+		if (provider) {
+			for (const m of provider.metrics) {
+				out.push({
+					key: m.key,
+					label: m.label,
+					icon: m.icon || '📊',
+					display: formatMetric(m, metricValue(item, m.key))
+				});
+			}
+		} else {
+			out.push(
+				{ key: 'view_count', label: 'Views', icon: '👁️', display: formatNumber(metricValue(item, 'view_count')) },
+				{ key: 'like_count', label: 'Likes', icon: '👍', display: formatNumber(metricValue(item, 'like_count')) },
+				{ key: 'comment_count', label: 'Comments', icon: '💬', display: formatNumber(metricValue(item, 'comment_count')) }
+			);
+		}
+		// For Spotify (only popularity), pad with duration + release year as filler chips
+		if (item.media_type === 'spotify' && out.length < 3) {
+			if (item.duration_seconds != null) {
+				const mins = Math.floor(item.duration_seconds / 60);
+				const secs = item.duration_seconds % 60;
+				out.push({ key: '_duration', label: 'Duration', icon: '⏱️', display: `${mins}:${String(secs).padStart(2, '0')}` });
+			}
+			if (item.published_at) {
+				const year = new Date(item.published_at).getFullYear();
+				if (Number.isFinite(year)) {
+					out.push({ key: '_year', label: 'Released', icon: '📅', display: String(year) });
+				}
+			}
+		}
+		return out.slice(0, 3);
 	}
 
 	function toggleSelect(id: number) {
@@ -53,7 +156,16 @@
 		if (selectedIds.length < 2) return;
 		const primary = selectedIds[0];
 		const extras = selectedIds.slice(1);
-		void goto(`${base}/media/${primary}?compare=${extras.join(',')}&metric=view_count&days=7`);
+		// Pick a metric all selected items share, falling back to view_count
+		const selected = items.filter((i) => selectedIds.includes(i.id));
+		const types = new Set(selected.map((i) => i.media_type));
+		let metric = 'view_count';
+		if (types.size === 1) {
+			const t = [...types][0];
+			const provider = $providersByType[t];
+			metric = provider?.metrics?.[0]?.key ?? 'view_count';
+		}
+		void goto(`${base}/media/${primary}?compare=${extras.join(',')}&metric=${metric}&days=7`);
 	}
 
 	const showCompareBtn = $derived(filteredItems.length > 1);
@@ -65,6 +177,14 @@
 	<Tabs tabs={typeTabs} bind:value={activeType} />
 
 	<div class="flex flex-wrap items-center gap-2">
+		<input
+			type="text"
+			bind:value={searchQuery}
+			placeholder="Search title or channel…"
+			class="px-3 py-1.5 text-sm rounded border border-border bg-panel text-text placeholder:text-muted focus:outline-none focus:border-accent w-full sm:w-64"
+			data-testid="media-search"
+		/>
+		<SelectDropdown options={sortOptions} bind:value={sortKey} testId="media-sort" />
 		{#if showCompareBtn}
 			<Button
 				variant={compareMode ? 'primary' : 'secondary'}
@@ -92,6 +212,7 @@
 		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 			{#each filteredItems as item (item.id)}
 				{@const freshness = formatFreshness(item.metrics_last_fetched_at, 10)}
+				{@const cardMetrics = metricsForCard(item)}
 				<div
 					class="panel overflow-hidden p-0 block hover:border-accent transition-colors relative {borderClass(item.media_type)} {compareMode ? (selectedIds.includes(item.id) ? 'ring-2 ring-accent' : 'opacity-50') : ''}"
 				>
@@ -124,10 +245,10 @@
 							<div class="flex items-center justify-between text-xs mb-1">
 								<RelativeTime datetime={item.published_at} short testId="media-published" />
 							</div>
-							<div class="grid grid-cols-3 gap-1 text-xs" data-testid="media-metrics">
-								<span class="text-muted truncate">👁️ <span class="text-text font-mono">{formatNumber(metricValue(item, 'view_count'))}</span></span>
-								<span class="text-muted truncate">👍 <span class="text-text font-mono">{formatNumber(metricValue(item, 'like_count'))}</span></span>
-								<span class="text-muted truncate">💬 <span class="text-text font-mono">{formatNumber(metricValue(item, 'comment_count'))}</span></span>
+							<div class="grid gap-1 text-xs" style="grid-template-columns: repeat({Math.max(1, cardMetrics.length)}, minmax(0, 1fr));" data-testid="media-metrics">
+								{#each cardMetrics as m (m.key)}
+									<span class="text-muted truncate" title={m.label}>{m.icon} <span class="text-text font-mono">{m.display}</span></span>
+								{/each}
 							</div>
 							<div class="mt-1 text-xs {freshness.state === 'stale' ? 'text-amber-500' : freshness.state === 'dead' ? 'text-red-500' : 'text-muted'}" data-testid="media-freshness">
 								{freshness.label}

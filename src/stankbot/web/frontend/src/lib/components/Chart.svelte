@@ -1,5 +1,6 @@
 <script lang="ts" module>
 	import ChartJS from 'chart.js/auto';
+	import 'chartjs-adapter-date-fns';
 </script>
 
 <script lang="ts">

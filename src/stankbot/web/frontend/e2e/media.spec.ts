@@ -94,4 +94,65 @@ test.describe('Media page', () => {
 		await expect(page).toHaveURL(new RegExp(`/media/${item1.id}\\?compare=${item2.id}`));
 		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
 	});
+
+	test('detail page shows chart and external link for YouTube', async ({ page, injectMedia }) => {
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'chart-test', historyDays: 7 });
+		await page.goto(`/media/${id}`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+		// Chart area renders
+		await expect(page.getByTestId('media-detail-chart')).toBeVisible();
+		// External link to YouTube
+		const link = page.getByTestId('media-external-link');
+		await expect(link).toBeVisible();
+		await expect(link).toHaveAttribute('href', /youtu\.be\//);
+		await expect(link).toContainText(/Open on/);
+	});
+
+	test('Spotify card shows provider metric instead of zeros', async ({ page, injectMedia }) => {
+		await injectMedia({ guildId: GUILD, slug: 'spotify-card', mediaType: 'spotify', historyDays: 7 });
+		await page.goto('/media');
+		await expect(page.getByTestId('media-card')).toBeVisible({ timeout: 10000 });
+		// Spotify card should show 🔥 popularity instead of fallback 👁️
+		const metricsEl = page.getByTestId('media-metrics').first();
+		await expect(metricsEl).toContainText('🔥', { timeout: 15000 });
+		await expect(metricsEl).not.toContainText('👁️');
+	});
+
+	test('Spotify detail page shows single StatTile and external link', async ({ page, injectMedia }) => {
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'spotify-detail', mediaType: 'spotify', historyDays: 7 });
+		await page.goto(`/media/${id}`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+		// Single popularity tile
+		await expect(page.getByTestId('media-detail-popularity')).toBeVisible({ timeout: 15000 });
+		// Chart renders
+		await expect(page.getByTestId('media-detail-chart')).toBeVisible();
+		// External link points to Spotify
+		const link = page.getByTestId('media-external-link');
+		await expect(link).toBeVisible();
+		await expect(link).toHaveAttribute('href', /open\.spotify\.com\//);
+		await expect(link).toContainText(/Open on/);
+	});
+});
+
+// Admin-specific tests — separate block with admin login
+test.describe('Media admin page — provider-aware', () => {
+	test.beforeEach(async ({ mockLogin, clearMedia, page }) => {
+		await mockLogin({ user_id: 222222222, username: 'E2E Admin', is_global_admin: true, is_guild_admin: true });
+		await clearMedia();
+	});
+
+	test('tabs filter list client-side', async ({ page, injectMedia }) => {
+		await injectMedia({ guildId: GUILD, slug: 'youtube-tab', mediaType: 'youtube', historyDays: 7 });
+		await injectMedia({ guildId: GUILD, slug: 'spotify-tab', mediaType: 'spotify', historyDays: 7 });
+		await page.goto('/admin/media');
+		await expect(page.getByTestId('media-admin-row')).toHaveCount(2, { timeout: 10000 });
+
+		// Click "Spotify" tab — should filter instantly
+		await page.getByRole('tab', { name: 'Spotify' }).click();
+		await expect(page.getByTestId('media-admin-row')).toHaveCount(1);
+
+		// Click "All" tab — should show all again
+		await page.getByRole('tab', { name: 'All' }).click();
+		await expect(page.getByTestId('media-admin-row')).toHaveCount(2);
+	});
 });
