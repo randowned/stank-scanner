@@ -92,7 +92,7 @@ Data persists in `./data/` (SQLite by default).
 
 1. New project → Deploy from GitHub repo → pick this repo, branch `main`.
 2. Add a **Volume** mounted at `/data` — the Dockerfile already bakes `DATABASE_URL=sqlite+aiosqlite:////data/stankbot.db` against it, so SQLite survives redeploys.
-3. Set the same env vars you use locally: `DISCORD_TOKEN`, `DISCORD_APP_ID`, `WEB_SECRET_KEY`, `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `GUILD_IDS`, etc.
+3. Set the same env vars you use locally: `DISCORD_TOKEN`, `DISCORD_APP_ID`, `WEB_SECRET_KEY`, `OAUTH_CLIENT_SECRET`, `GUILD_IDS`, etc.
 4. Expose port `8000`; Railway mints a public URL for the dashboard. Add `<that URL>/auth/callback` to the Discord OAuth2 redirects list.
 5. Keep replicas at **1** — Discord only allows one gateway connection per shard.
 
@@ -120,11 +120,12 @@ Environment (see `.env.example`):
 | `OWNER_ID` | Your Discord user id — superadmin across all guilds |
 | `OWNER_DEFAULT_GUILD_ID` | Guild presented to all players on the web dashboard (overrides first `GUILD_IDS` entry) |
 | `LOG_LEVEL` | `INFO` / `DEBUG` |
+| `LOG_FORMAT` | Log output format: `text` or `json` (default: `text`) |
 | `ENABLE_WEB` | `true` to run the dashboard in the same process |
-| `WEB_HOST` / `WEB_PORT` | Dashboard bind (defaults `127.0.0.1:8000`) |
-| `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` / `OAUTH_REDIRECT_URI` | Dashboard login |
+| `WEB_BIND` | Dashboard bind, single `host:port` string (default `127.0.0.1:8000`) |
+| `OAUTH_CLIENT_SECRET` / `OAUTH_REDIRECT_URI` | Dashboard login (OAuth client id is `DISCORD_APP_ID`) |
 | `GUILD_IDS` | Comma-separated guild ids for slash sync; first entry is fallback default |
-| `SESSION_SECRET` | Cookie signing secret for the dashboard |
+| `WEB_SECRET_KEY` | Cookie signing secret for the dashboard |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key for media metrics |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify Web API credentials for media metrics |
 
