@@ -32,7 +32,7 @@ Sessions roll over on a cron (default 07:00 / 15:00 / 23:00 UTC) with configurab
 - **Multi-altar per guild.** Run a themed event (Halloween sticker, Founders Day) alongside the normal chain with its own scoring overrides and a `custom_event_key` tag on every emitted event.
 - **Achievements / badges** derived from the event log — First Stank, Centurion, Finisher, Chainbreaker, Comeback Kid, Perfect Session, Streaker, Team Player.
 - **Web dashboard** with Discord OAuth — public board with reaction-aware leaderboard (live reorder + delta chips + chain-break overlay), player profiles with 30-day sparklines + achievement gallery, session history, and a five-page admin surface (Dashboard · Templates · Admins · Audit · Settings with embedded session ops). MsgPack-first transport over HTTP + WebSocket. SvelteKit SPA served at `/`.
-- **Media analytics** for YouTube and Spotify. Add videos/albums via the admin panel, view metric history and comparison charts on the dashboard, and query stats in Discord with `/media youtube info <slug>` / `/media spotify info <slug>`. Per-provider embed templates, scheduled metric snapshots, and configurable refresh intervals.
+- **Media analytics** for YouTube and Spotify. Add videos/albums via the admin panel, view metric history and comparison charts on the dashboard, and query stats in Discord with `/stats youtube info <name>` / `/stats spotify info <name>` / `/stats youtube chart <name> <type> <range>`. Per-provider embed templates, scheduled metric snapshots, configurable refresh intervals, and public chart image endpoint.
 
 ## Running it yourself
 
@@ -163,12 +163,16 @@ All setup happens on the web dashboard (log in with Discord OAuth):
 | `/stank history chain <id>` | Chain replay. |
 | `/stank history session <id>` | Session summary. |
 
-### Media (`/media …`)
+### Media (`/stats …`)
 
 | Command | What it does |
 |---|---|
-| `/media youtube info <slug>` | Rich embed with full-number metrics, day-over-day deltas, formatted dates/durations, and cover photo. |
-| `/media spotify info <slug>` | Rich embed with latest Spotify track/album metrics and day-over-day popularity change. |
+| `/stats youtube info <name>` | Rich embed with full-number metrics, day-over-day deltas, formatted dates/durations, and cover photo. |
+| `/stats spotify info <name>` | Rich embed with latest Spotify track/album metrics and day-over-day popularity change. |
+| `/stats youtube chart <name> <type> <range>` | Inline chart image (16:9 PNG) for views, likes, or comments over a time range (6h–1 year). |
+| `/stats spotify chart <name> <type> <range>` | Inline chart image for popularity over a time range. |
+
+All `/stats` commands support autocomplete on the `name` parameter. Admin guilds can restrict access via the media settings panel (`admin-only` toggle).
 
 ### Admin (`/preview`) — requires admin role or Manage Guild
 
@@ -195,9 +199,10 @@ The dashboard is a PWA — installable from Chrome / Edge via the address bar or
   - `/admin/audit` — admin action audit trail.
   - `/admin/events` — game event log (stanks, breaks, reactions, achievements).
   - `/admin/settings` — two-column page: left lists Altar / Scoring / Behavior / Reset windows / Announcements / Maintenance cards; right sticky rail holds New Session · Reset · Rebuild.
-- `/media` — media dashboard: provider type tabs (All / YouTube / Spotify) with colored left borders, provider-aware card grid (Spotify cards show popularity, duration, and release year; YouTube cards show views, likes, comments), search bar, sort dropdown, compare mode (select 2+ items via whole-card click to navigate to a detail page with comparison charts via `?compare=` query param).
-- `/media/{id}` — single media item detail: provider-aware metric tiles (1 tile for Spotify, 3 for YouTube), time-scale history chart with sub-day range options (6h / 12h / 1d / 7d / 30d / 90d / 1y, default 1 day), multi-series comparison overlay, staleness pill in header, "Open on YouTube / Spotify" external link button, sparse-data hint when only one snapshot exists.
-- Admin `/admin/media` — manage media: add (tabbed by provider, optional slug), client-side type filter (no API reload on tab switch), force-refresh single or all, per-item metric update freshness, interval dropdown (15 min to 24 hr, clock-aligned fetches), mobile-friendly rows with edge-to-edge thumbnails.
+- `/media` — media dashboard: provider type tabs (All / YouTube / Spotify) with colored left borders, provider-aware card grid (Spotify cards show popularity, duration, and release year; YouTube cards show views, likes, comments), search bar, sort dropdown, compare mode (select 2+ items via whole-card click — cross-type items are auto-disabled — to navigate to a detail page with comparison charts via `?compare=` query param).
+- `/media/{id}` — single media item detail: provider-aware metric tiles (1 tile for Spotify, 3 for YouTube), time-scale history chart with sub-day range options (6h / 12h / 1d / 7d / 30d / 90d / 1y, default 1 day), view mode toggle (Delta / Total), aggregation dropdown (Auto / Min / Hour / Day / Week / Month), data-start indicator when data is shorter than selected range, multi-series comparison overlay (type-filtered), staleness pill in header, "Open on YouTube / Spotify" external link button, sparse-data hint when only one snapshot exists.
+- Admin `/admin/media` — manage media: add (tabbed by provider, optional slug), client-side type filter (no API reload on tab switch), colored provider badges (YouTube red, Spotify green), force-refresh single or all, settings modal with interval dropdown + ephemeral replies toggle + admin-only toggle, mobile-friendly rows with edge-to-edge thumbnails.
+- Admin `/admin/media/{id}/edit` — edit page: editable name field with save, metadata summary, and last 20 metric snapshots in a pivoted table (all metrics side by side per timestamp).
 - Header: single row, `Live updates` badge for non-admin users (gray when logged out, green/muted/red when connected) or `N online` badge for admin users (clickable popover with avatars + session durations), user menu with Navigate (Dashboard / Sessions / Media) + My Profile + collapsible Switch Guild showing the active guild's icon + name.
 - `/chain/{id}` — chain detail with status banner (alive / broken / rollover), length classification (Short / Medium / Long / Epic), per-position timeline (avatar + position badge + SP awarded at each stank), and per-user leaderboard with stank and reaction counts.
 - Auth guard: unauthenticated requests to any non-public route redirect to `/`. All data API endpoints require guild membership (`require_guild_member`).

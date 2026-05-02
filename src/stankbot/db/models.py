@@ -499,7 +499,7 @@ class MediaItem(Base):
     __tablename__ = "media_items"
     __table_args__ = (
         UniqueConstraint("guild_id", "media_type", "external_id", name="uq_media_item_unique"),
-        UniqueConstraint("guild_id", "slug", name="uq_media_slug"),
+        UniqueConstraint("guild_id", "media_type", "slug", name="uq_media_slug"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

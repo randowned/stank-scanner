@@ -93,11 +93,13 @@ async def get_by_slugs(
 async def is_slug_taken(
     session: AsyncSession,
     guild_id: int,
+    media_type: str,
     slug: str,
     exclude_id: int | None = None,
 ) -> bool:
     stmt = select(MediaItem).where(
         MediaItem.guild_id == guild_id,
+        MediaItem.media_type == media_type,
         MediaItem.slug == slug,
     )
     if exclude_id is not None:
@@ -252,3 +254,42 @@ async def get_comparison_snapshots(
     for r in rows:
         result.setdefault(r.media_item_id, []).append(r)
     return result
+
+
+async def get_metric_snapshots_pivoted(
+    session: AsyncSession,
+    media_item_id: int,
+    limit: int = 20,
+) -> list[dict[str, int | str]]:
+    """Return last N snapshots pivoted: one row per timestamp, all metrics as columns."""
+    subq = (
+        select(
+            MetricSnapshot.fetched_at,
+            MetricSnapshot.metric_key,
+            MetricSnapshot.value,
+        )
+        .where(MetricSnapshot.media_item_id == media_item_id)
+        .order_by(MetricSnapshot.fetched_at.desc())
+        .limit(limit * 5)  # oversample since we'll pivot
+        .subquery()
+    )
+    stmt = (
+        select(subq.c.fetched_at, subq.c.metric_key, subq.c.value)
+        .order_by(subq.c.fetched_at.desc())
+    )
+    rows = (await session.execute(stmt)).all()
+
+    # Pivot: group by fetched_at
+    by_time: dict[str, dict[str, int]] = {}
+    order: list[str] = []
+    for fetched_at, metric_key, value in rows:
+        ts = fetched_at.isoformat()
+        if ts not in by_time:
+            by_time[ts] = {}
+            order.append(ts)
+        by_time[ts][metric_key] = value
+
+    return [
+        {"fetched_at": ts, **metrics}
+        for ts, metrics in [(t, by_time[t]) for t in order[:limit]]
+    ]

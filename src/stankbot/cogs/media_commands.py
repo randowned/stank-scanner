@@ -2,41 +2,101 @@
 
 Usage::
 
-    /media youtube info <slug>
-    /media spotify info <slug>
+    /stats youtube info <name>
+    /stats spotify info <name>
+    /stats youtube chart <name> <type> <range>
+    /stats spotify chart <name> <type> <range>
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from stankbot.bot import StankBot
+from stankbot.cogs._checks import requires_stats_access
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.embed_builders import build_media_embed
 from stankbot.services.settings_service import Keys, SettingsService
 
+if TYPE_CHECKING:
+    from stankbot.bot import StankBot
+
 log = logging.getLogger(__name__)
 
+YOUTUBE_TYPE_CHOICES = [
+    app_commands.Choice(name="Views", value="view_count"),
+    app_commands.Choice(name="Likes", value="like_count"),
+    app_commands.Choice(name="Comments", value="comment_count"),
+]
 
-class MediaCommands(commands.GroupCog, name="media"):
-    """``/media`` commands — show stats for tracked YouTube / Spotify items."""
+SPOTIFY_TYPE_CHOICES = [
+    app_commands.Choice(name="Popularity", value="popularity"),
+]
+
+RANGE_CHOICES = [
+    app_commands.Choice(name="6 hours", value="6h"),
+    app_commands.Choice(name="12 hours", value="12h"),
+    app_commands.Choice(name="1 day", value="24h"),
+    app_commands.Choice(name="1 week", value="7d"),
+    app_commands.Choice(name="1 month", value="30d"),
+    app_commands.Choice(name="90 days", value="90d"),
+    app_commands.Choice(name="1 year", value="365d"),
+    app_commands.Choice(name="All time", value="all"),
+]
+
+
+class StatsCommands(commands.GroupCog, name="stats"):
+    """``/stats`` commands — show metrics for tracked YouTube / Spotify items."""
 
     def __init__(self, bot: StankBot) -> None:
         self.bot = bot
         super().__init__()
 
     youtube = app_commands.Group(
-        name="youtube", description="Show YouTube media stats."
+        name="youtube", description="YouTube media stats."
     )
     spotify = app_commands.Group(
-        name="spotify", description="Show Spotify media stats."
+        name="spotify", description="Spotify media stats."
     )
 
-    async def _send_media_embed(
+    # ------------------------------------------------------------------
+    # Autocomplete helper
+    # ------------------------------------------------------------------
+
+    async def _slug_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+        media_type: str,
+    ) -> list[app_commands.Choice[str]]:
+        if interaction.guild is None:
+            return []
+        async with self.bot.db() as session:
+            items = await media_repo.list_all(
+                session, interaction.guild.id, media_type
+            )
+        choices: list[app_commands.Choice[str]] = []
+        for it in items:
+            if not it.slug:
+                continue
+            if current.lower() in it.slug.lower():
+                choices.append(
+                    app_commands.Choice(name=it.slug, value=it.slug)
+                )
+                if len(choices) >= 25:
+                    break
+        return choices
+
+    # ------------------------------------------------------------------
+    # Send helpers
+    # ------------------------------------------------------------------
+
+    async def _send_info_embed(
         self,
         interaction: discord.Interaction,
         media_type: str,
@@ -65,7 +125,8 @@ class MediaCommands(commands.GroupCog, name="media"):
             )
             if item is None:
                 await interaction.followup.send(
-                    f"No {media_type} item found with slug `{slug}`.", ephemeral=True
+                    f"No {media_type} item found with name `{slug}`.",
+                    ephemeral=True,
                 )
                 return
 
@@ -99,24 +160,146 @@ class MediaCommands(commands.GroupCog, name="media"):
 
         await interaction.followup.send(embed=embed, ephemeral=ephemeral)
 
+    async def _send_chart_embed(
+        self,
+        interaction: discord.Interaction,
+        media_type: str,
+        slug: str,
+        metric: str,
+        range_value: str,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command only works inside a server.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        async with self.bot.db() as session:
+            item = await media_repo.get_by_slug(
+                session, interaction.guild.id, media_type, slug
+            )
+            if item is None:
+                await interaction.followup.send(
+                    f"No {media_type} item found with name `{slug}`.",
+                    ephemeral=True,
+                )
+                return
+
+            base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
+            date_param = datetime.now(UTC).isoformat()
+            url = (
+                f"{base_url}/api/media/{item.id}/chart"
+                f"?metric={metric}&date={date_param}"
+            )
+
+            if range_value == "all":
+                url += "&days=0"
+            elif range_value.endswith("h"):
+                url += f"&hours={range_value[:-1]}"
+            else:
+                url += f"&days={range_value[:-1]}"
+
+            embed = discord.Embed(
+                title=item.title,
+                description=f"{media_type.capitalize()} · {metric} · {range_value}",
+                color=discord.Color.blurple(),
+            )
+            embed.set_image(url=url)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # ------------------------------------------------------------------
+    # YouTube info
+    # ------------------------------------------------------------------
+
     @youtube.command(name="info", description="Show stats for a tracked YouTube video.")
-    @app_commands.describe(slug="The video's slug (short name).")
+    @app_commands.describe(name="The video's slug (short name).")
+    @app_commands.rename(slug="name")
+    @requires_stats_access()
     async def youtube_info(
         self,
         interaction: discord.Interaction,
         slug: str,
     ) -> None:
-        await self._send_media_embed(interaction, "youtube", slug)
+        await self._send_info_embed(interaction, "youtube", slug)
+
+    @youtube_info.autocomplete("slug")
+    async def _youtube_info_name_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._slug_autocomplete(interaction, current, "youtube")
+
+    # ------------------------------------------------------------------
+    # Spotify info
+    # ------------------------------------------------------------------
 
     @spotify.command(name="info", description="Show stats for a tracked Spotify item.")
-    @app_commands.describe(slug="The track or album slug.")
+    @app_commands.describe(name="The track or album slug.")
+    @app_commands.rename(slug="name")
+    @requires_stats_access()
     async def spotify_info(
         self,
         interaction: discord.Interaction,
         slug: str,
     ) -> None:
-        await self._send_media_embed(interaction, "spotify", slug)
+        await self._send_info_embed(interaction, "spotify", slug)
+
+    @spotify_info.autocomplete("slug")
+    async def _spotify_info_name_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._slug_autocomplete(interaction, current, "spotify")
+
+    # ------------------------------------------------------------------
+    # YouTube chart
+    # ------------------------------------------------------------------
+
+    @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
+    @app_commands.describe(name="The video's slug.", type_="Which metric to chart.", range_="Time range to show.")
+    @app_commands.choices(type_=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES)
+    @app_commands.rename(slug="name", metric="type_", range_="range_")
+    @requires_stats_access()
+    async def youtube_chart(
+        self,
+        interaction: discord.Interaction,
+        slug: str,
+        metric: str,
+        range_: str,
+    ) -> None:
+        await self._send_chart_embed(interaction, "youtube", slug, metric, range_)
+
+    @youtube_chart.autocomplete("slug")
+    async def _youtube_chart_name_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._slug_autocomplete(interaction, current, "youtube")
+
+    # ------------------------------------------------------------------
+    # Spotify chart
+    # ------------------------------------------------------------------
+
+    @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
+    @app_commands.describe(name="The track or album slug.", type_="Which metric to chart.", range_="Time range to show.")
+    @app_commands.choices(type_=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES)
+    @app_commands.rename(slug="name", metric="type_", range_="range_")
+    @requires_stats_access()
+    async def spotify_chart(
+        self,
+        interaction: discord.Interaction,
+        slug: str,
+        metric: str,
+        range_: str,
+    ) -> None:
+        await self._send_chart_embed(interaction, "spotify", slug, metric, range_)
+
+    @spotify_chart.autocomplete("slug")
+    async def _spotify_chart_name_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._slug_autocomplete(interaction, current, "spotify")
 
 
 async def setup(bot: StankBot) -> None:
-    await bot.add_cog(MediaCommands(bot))
+    await bot.add_cog(StatsCommands(bot))

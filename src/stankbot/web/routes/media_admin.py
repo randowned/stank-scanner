@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.repositories import audit_log as audit_repo
+from stankbot.db.repositories import media as media_repo
 from stankbot.services.media_service import MediaService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_admin
@@ -131,12 +132,21 @@ async def add_media(
     if item is None:
         raise HTTPException(status_code=409, detail="This media item has already been added (duplicate URL/ID).")
 
+    # Fetch metrics immediately so the user sees data without waiting for the scheduler
+    media_id = item["id"]
+    result = await svc.refresh_single(media_id)
+
     await audit_repo.append(
         session,
         guild_id=guild_id,
         actor_id=int(user["id"]),
         action="media.add",
-        payload={"media_type": payload.media_type, "external_id": payload.external_id},
+        payload={
+            "media_type": payload.media_type,
+            "external_id": payload.external_id,
+            "media_id": media_id,
+            "initial_metrics": result.values if result and not result.error else None,
+        },
     )
 
     return MsgPackResponse(item, request, status_code=201)
@@ -160,6 +170,58 @@ async def get_media_admin(
     if item is None:
         raise HTTPException(status_code=404, detail="Media item not found")
     return MsgPackResponse(item, request)
+
+
+class UpdateMediaPayload(BaseModel):
+    slug: str | None = None
+
+
+@router.patch("/{media_id}")
+async def update_media(
+    request: Request,
+    media_id: int,
+    payload: UpdateMediaPayload = msgpack_body(UpdateMediaPayload),  # type: ignore[assignment]
+    session: AsyncSession = Depends(get_db),
+    guild_id: int = Depends(get_active_guild_id),
+    user: dict[str, Any] = Depends(require_guild_admin),
+) -> MsgPackResponse:
+    svc = MediaService(session=session, registry=request.app.state.media_registry)
+    item = await svc.update_slug(media_id, payload.slug)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Media item not found")
+
+    await audit_repo.append(
+        session,
+        guild_id=guild_id,
+        actor_id=int(user["id"]),
+        action="media.update",
+        payload={"media_id": media_id, "slug": payload.slug},
+    )
+    return MsgPackResponse(item, request)
+
+
+@router.get("/{media_id}/snapshots")
+async def get_media_snapshots(
+    request: Request,
+    media_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    _admin: dict[str, Any] = Depends(require_guild_admin),
+    session: AsyncSession = Depends(get_db),
+) -> MsgPackResponse:
+    item = await media_repo.get(session, media_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    snapshots = await media_repo.get_metric_snapshots_pivoted(session, media_id, limit)
+    # Include metric definitions for column labels
+    registry = request.app.state.media_registry
+    provider = registry.get(item.media_type)
+    metric_defs = [
+        {"key": m.key, "label": m.label, "format": m.format}
+        for m in provider.metrics
+    ] if provider else []
+    return MsgPackResponse(
+        {"snapshots": snapshots, "metric_defs": metric_defs}, request
+    )
 
 
 @router.delete("/{media_id}")
@@ -243,7 +305,9 @@ async def refresh_all(
 
 
 class MediaSettingsPayload(BaseModel):
-    update_interval_minutes: int = Field(ge=5, le=1440, default=10)
+    update_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
+    replies_ephemeral: bool | None = None
+    admin_only: bool | None = None
 
 
 @router.post("/settings")
@@ -255,13 +319,23 @@ async def update_media_settings(
     user: dict[str, Any] = Depends(require_guild_admin),
 ) -> MsgPackResponse:
     svc = SettingsService(session)
-    await svc.set(guild_id, Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES, payload.update_interval_minutes)
+    audit_payload: dict[str, Any] = {}
+    if payload.update_interval_minutes is not None:
+        await svc.set(guild_id, Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES, payload.update_interval_minutes)
+        audit_payload["update_interval_minutes"] = payload.update_interval_minutes
+    if payload.replies_ephemeral is not None:
+        await svc.set(guild_id, Keys.MEDIA_REPLIES_EPHEMERAL, payload.replies_ephemeral)
+        audit_payload["replies_ephemeral"] = payload.replies_ephemeral
+    if payload.admin_only is not None:
+        await svc.set(guild_id, Keys.MEDIA_REPLIES_ADMIN_ONLY, payload.admin_only)
+        audit_payload["admin_only"] = payload.admin_only
 
-    await audit_repo.append(
-        session,
-        guild_id=guild_id,
-        actor_id=int(user["id"]),
-        action="media.settings",
-        payload={"update_interval_minutes": payload.update_interval_minutes},
-    )
+    if audit_payload:
+        await audit_repo.append(
+            session,
+            guild_id=guild_id,
+            actor_id=int(user["id"]),
+            action="media.settings",
+            payload=audit_payload,
+        )
     return _ok(request)

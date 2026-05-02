@@ -55,6 +55,8 @@
 	let compareIds = $state<string[]>([]);
 	let compareData = $state<CompareData | null>(null);
 	let loadingCompare = $state(false);
+	let comparisonMode = $state<'delta' | 'total'>('delta');
+	let selectedAggregation = $state<string>('auto');
 
 	const metricOptions = $derived(
 		providerMetrics.length > 0
@@ -76,7 +78,59 @@
 		{ value: 24 * 365, label: '1 year', icon: '📅' }
 	];
 
+	const viewOptions = [
+		{ value: 'delta', label: 'Delta', icon: 'Δ' },
+		{ value: 'total', label: 'Total', icon: 'Σ' }
+	];
+
+	const aggregationOptions = [
+		{ value: 'auto', label: 'Auto', icon: '🤖' },
+		{ value: 'minutely', label: 'Min', icon: '🕐' },
+		{ value: 'hourly', label: 'Hour', icon: '⏱️' },
+		{ value: 'daily', label: 'Day', icon: '📅' },
+		{ value: 'weekly', label: 'Week', icon: '📆' },
+		{ value: 'monthly', label: 'Month', icon: '🗓️' },
+	];
+
 	const hasCompare = $derived(compareIds.length > 0);
+
+	const matchingSeriesCount = $derived(
+		compareData && item
+			? compareData.series.filter((s) => s.media_type === item.media_type).length
+			: 0
+	);
+
+	const showCompareChart = $derived(hasCompare && compareData && matchingSeriesCount >= 2);
+
+	const dataStart = $derived(history.length > 0 ? new Date(history[0].fetched_at).getTime() : 0);
+	const rangeStart = $derived(Date.now() - selectedHours * 3600 * 1000);
+	const dataShorter = $derived(dataStart > 0 && dataStart > rangeStart);
+
+	const dataSpanMs = $derived(
+		history.length >= 2
+			? new Date(history[history.length - 1].fetched_at).getTime() - dataStart
+			: 0
+	);
+
+	const dataStartLabel = $derived(
+		dataShorter && dataStart > 0
+			? new Date(dataStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+			: ''
+	);
+
+	const chartMinUnit = $derived<'minute' | 'hour' | 'day' | 'week' | 'month' | undefined>(
+		selectedAggregation === 'auto'
+			? (dataSpanMs < 7_200_000 ? 'minute' :
+			   dataSpanMs < 172_800_000 ? 'hour' :
+			   dataSpanMs < 1_209_600_000 ? 'hour' :
+			   undefined)
+			: selectedAggregation === 'minutely' ? 'minute'
+			: selectedAggregation === 'hourly' ? 'hour'
+			: selectedAggregation === 'daily' ? 'day'
+			: selectedAggregation === 'weekly' ? 'week'
+			: selectedAggregation === 'monthly' ? 'month'
+			: undefined
+	);
 
 	$effect(() => {
 		const raw = $page.url.searchParams.get('compare');
@@ -147,8 +201,9 @@
 		try {
 			const allIds = [item.id, ...compareIds.map(Number)];
 			const days = Math.max(1, Math.round(selectedHours / 24));
+			const deltaParam = comparisonMode === 'delta' ? '&delta=true' : '&delta=false';
 			const res = await apiFetch<CompareData>(
-				`/api/media/compare?ids=${allIds.join(',')}&metric=${selectedMetric}&days=${days}&align=calendar`
+				`/api/media/compare?ids=${allIds.join(',')}&metric=${selectedMetric}&days=${days}&align=calendar${deltaParam}`
 			);
 			compareData = res;
 		} catch {
@@ -161,6 +216,7 @@
 	$effect(() => {
 		void selectedMetric;
 		void selectedHours;
+		void comparisonMode;
 		void loadHistory();
 		if (hasCompare) void loadComparison();
 	});
@@ -186,7 +242,7 @@
 			millisecond: 'HH:mm:ss',
 			second: 'HH:mm:ss',
 			minute: 'HH:mm',
-			hour: 'HH:mm',
+			hour: 'MMM d HH:mm',
 			day: 'MMM d',
 			week: 'MMM d',
 			month: 'MMM yyyy',
@@ -205,14 +261,18 @@
 
 	function buildChartOptions(): Record<string, unknown> {
 		const isPercentage = metricFormat() === 'percentage';
+		const timeScaleOpts: Record<string, unknown> = {
+			tooltipFormat: 'MMM d, yyyy HH:mm',
+			displayFormats: timeDisplayFormats()
+		};
+		if (chartMinUnit) {
+			timeScaleOpts.minUnit = chartMinUnit;
+		}
 		return {
 			scales: {
 				x: {
 					type: 'time',
-					time: {
-						tooltipFormat: 'MMM d, yyyy HH:mm',
-						displayFormats: timeDisplayFormats()
-					},
+					time: timeScaleOpts,
 					ticks: {
 						maxTicksLimit: 8,
 						color: '#9aa4b2',
@@ -239,14 +299,16 @@
 	}
 
 	function buildCompareDatasets(cd: CompareData) {
-		if (!cd) return [];
-		return cd.series.map((s) => ({
-			label: s.title,
-			data: s.points.map((p) => ({
-				x: new Date(String(p.x)).getTime(),
-				y: p.y
-			}))
-		}));
+		if (!cd || !item) return [];
+		return cd.series
+			.filter((s) => s.media_type === item.media_type)
+			.map((s) => ({
+				label: s.title,
+				data: s.points.map((p) => ({
+					x: new Date(String(p.x)).getTime(),
+					y: p.y
+				}))
+			}));
 	}
 
 	function buildCompareOptions(cd: CompareData): Record<string, unknown> {
@@ -372,7 +434,12 @@
 				<div class="flex items-center gap-2 mb-3 flex-nowrap">
 					<SelectDropdown options={metricOptions} bind:value={selectedMetric} testId="media-detail-metric" />
 					<SelectDropdown options={rangeOptions} bind:value={selectedHours} testId="media-detail-range" />
+					<SelectDropdown options={aggregationOptions} bind:value={selectedAggregation} testId="media-detail-aggregation" />
+					{#if dataStartLabel}
+						<span class="text-xs text-muted whitespace-nowrap" data-testid="media-detail-data-start">Data since {dataStartLabel}</span>
+					{/if}
 					{#if hasCompare}
+						<SelectDropdown options={viewOptions} bind:value={comparisonMode} testId="media-detail-view" />
 						<Button variant="ghost" onclick={clearComparison} size="sm" testId="media-clear-compare">Clear comparison</Button>
 					{/if}
 				</div>
@@ -393,13 +460,14 @@
 					{/if}
 				</div>
 
-				{#if hasCompare && compareData}
+				{#if showCompareChart}
+					{@const cd = compareData!}
 					<div class="panel mb-4">
 						<h3 class="text-sm font-semibold mb-2">
-							{metricLabel(selectedMetric)} — comparison with {compareData.series.length} other media
+							{metricLabel(selectedMetric)} — comparing {matchingSeriesCount} items
 						</h3>
 						<div class={loadingCompare ? 'opacity-60 transition-opacity' : ''}>
-							<Chart datasets={buildCompareDatasets(compareData)} options={buildCompareOptions(compareData)} height={220} />
+							<Chart datasets={buildCompareDatasets(cd)} options={buildCompareOptions(cd)} height={220} />
 						</div>
 					</div>
 				{:else if hasCompare && !compareData && !loadingCompare}

@@ -4,11 +4,10 @@
 	import { base } from '$app/paths';
 	import { apiFetch, apiPost, apiDelete } from '$lib/api';
 	import { toErrorMessage } from '$lib/api-utils';
-	import { formatNumber, formatRelativeTime, formatFreshness } from '$lib/format';
-	import type { MediaItem, ProviderDef, MetricDef } from '$lib/types';
+	import { formatFreshness, formatRelativeTime } from '$lib/format';
+	import type { MediaItem, MetricDef } from '$lib/types';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Button from '$lib/components/Button.svelte';
-	import StatTile from '$lib/components/StatTile.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
@@ -18,35 +17,74 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	let providersByType = $state<Record<string, ProviderDef>>({});
 	let refreshing = $state(false);
 	let refreshError = $state<string | null>(null);
 	let deleteOpen = $state(false);
 
-	const providerMetrics = $derived<MetricDef[]>(
-		item ? providersByType[item.media_type]?.metrics ?? [] : []
-	);
+	let nameValue = $state('');
+	let nameSaving = $state(false);
+	let nameError = $state<string | null>(null);
+	let nameSaved = $state(false);
 
-	async function loadProviders() {
-		try {
-			const res = await apiFetch<{ providers: ProviderDef[] }>('/api/admin/media/providers');
-			const map: Record<string, ProviderDef> = {};
-			for (const p of res.providers) map[p.type] = p;
-			providersByType = map;
-		} catch {
-			// providers optional
-		}
-	}
+	let snapshots = $state<Array<Record<string, string | number>>>([]);
+	let metricDefs = $state<MetricDef[]>([]);
+	let loadingSnapshots = $state(false);
+
+	const freshness = $derived(formatFreshness(item?.metrics_last_fetched_at, 10));
 
 	async function loadItem() {
 		loading = true;
 		error = null;
 		try {
 			item = await apiFetch<MediaItem>(`/api/admin/media/${mediaId}`);
+			nameValue = item.slug ?? '';
 		} catch (err) {
 			error = toErrorMessage(err, 'Failed to load');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadSnapshots() {
+		loadingSnapshots = true;
+		try {
+			const res = await apiFetch<{ snapshots: Array<Record<string, string | number>>; metric_defs: MetricDef[] }>(
+				`/api/admin/media/${mediaId}/snapshots?limit=20`
+			);
+			snapshots = res.snapshots;
+			metricDefs = res.metric_defs;
+		} catch {
+			snapshots = [];
+		} finally {
+			loadingSnapshots = false;
+		}
+	}
+
+	async function saveName() {
+		nameSaving = true;
+		nameError = null;
+		nameSaved = false;
+		try {
+			const body = new Uint8Array(
+				new (await import('msgpackr')).Packr().pack({ slug: nameValue || null })
+			);
+			const res = await fetch(`/api/admin/media/${mediaId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/msgpack', Accept: 'application/msgpack, application/json' },
+				body,
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({ detail: 'Failed to save' }));
+				throw new Error(err.detail || 'Failed to save');
+			}
+			// re-read item to sync
+			await loadItem();
+			nameSaved = true;
+			setTimeout(() => (nameSaved = false), 2000);
+		} catch (err) {
+			nameError = toErrorMessage(err, 'Failed to save name');
+		} finally {
+			nameSaving = false;
 		}
 	}
 
@@ -56,6 +94,7 @@
 		try {
 			await apiPost(`/api/admin/media/${mediaId}/refresh`);
 			await loadItem();
+			await loadSnapshots();
 		} catch (err) {
 			refreshError = toErrorMessage(err, 'Refresh failed');
 		} finally {
@@ -73,15 +112,18 @@
 		}
 	}
 
-	function metricValue(key: string): number {
-		return (item?.metrics as Record<string, { value: number }>)?.[key]?.value ?? 0;
+	function formatCellValue(key: string, val: number | string): string {
+		if (typeof val === 'string') return val;
+		const def = metricDefs.find((m) => m.key === key);
+		if (def?.format === 'percentage') return `${Math.round(val)}%`;
+		return val.toLocaleString('en-US');
 	}
 
-	const freshness = $derived(formatFreshness(item?.metrics_last_fetched_at, 10));
+	const columnKeys = $derived(metricDefs.map((m) => m.key));
 
 	$effect(() => {
 		loadItem();
-		loadProviders();
+		loadSnapshots();
 	});
 </script>
 
@@ -93,18 +135,7 @@
 	<div class="panel animate-pulse space-y-3">
 		<div class="h-6 bg-border rounded w-64"></div>
 		<div class="h-4 bg-border rounded w-48"></div>
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-			<div class="md:col-span-1">
-				<div class="w-full aspect-video bg-border rounded-lg"></div>
-			</div>
-			<div class="md:col-span-2">
-				<div class="grid grid-cols-1 gap-3" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
-					<div class="h-16 bg-border rounded"></div>
-					<div class="h-16 bg-border rounded"></div>
-					<div class="h-16 bg-border rounded"></div>
-				</div>
-			</div>
-		</div>
+		<div class="h-4 bg-border rounded w-32"></div>
 	</div>
 {:else if error}
 	<div class="panel border-red-500/50">
@@ -124,42 +155,109 @@
 		{/snippet}
 	</PageHeader>
 
-	<div class="panel space-y-4">
+	<div class="space-y-4">
 		{#if refreshError}
 			<div class="text-red-400 text-sm">{refreshError}</div>
 		{/if}
 
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-			<div class="md:col-span-1">
-				{#if item.thumbnail_url}
-					<img src={item.thumbnail_url} alt={item.title} class="w-full rounded-lg" loading="lazy" />
-				{:else}
-					<div class="w-full aspect-video bg-border rounded-lg flex items-center justify-center text-5xl text-muted">▶️</div>
-				{/if}
-				<div class="mt-3 text-sm space-y-1">
-					<div class="text-muted">Type: <span class="text-text capitalize">{item.media_type}</span></div>
-				<div class="text-muted">External ID: <span class="text-text text-xs font-mono">{item.external_id}</span></div>
-				<div class="text-muted">Slug: <span class="text-text font-mono">{item.slug ?? '—'}</span></div>
-				<div class="text-muted">Added by: <span class="text-text">{item.added_by}</span></div>
-					<div class="text-muted">Published: <span class="text-text">{item.published_at ? formatRelativeTime(item.published_at) : '—'}</span></div>
-					<div class="{freshness.state === 'stale' ? 'text-amber-500' : freshness.state === 'dead' ? 'text-red-500' : 'text-muted'}">
-						Metrics: <span>{freshness.label}</span>
+		<!-- Name / slug editor -->
+		<div class="panel">
+			<div class="flex flex-col sm:flex-row sm:items-center gap-3">
+				<div class="flex-1 min-w-0">
+					<label for="media-name" class="block text-xs text-muted mb-1">Name</label>
+					<div class="flex gap-2">
+						<input
+							id="media-name"
+							type="text"
+							bind:value={nameValue}
+							class="flex-1 px-3 py-1.5 text-sm rounded border border-border bg-panel text-text placeholder:text-muted focus:outline-none focus:border-accent"
+							placeholder="e.g. my-track"
+							maxlength={64}
+							disabled={nameSaving}
+							data-testid="media-edit-name"
+						/>
+						<Button
+							variant="primary"
+							onclick={saveName}
+							loading={nameSaving}
+							disabled={nameSaving}
+							testId="media-edit-save-name"
+							size="sm"
+						>
+							Save
+						</Button>
 					</div>
+					{#if nameError}
+						<div class="text-red-400 text-xs mt-1">{nameError}</div>
+					{/if}
+					{#if nameSaved}
+						<div class="text-green-400 text-xs mt-1">Name saved</div>
+					{/if}
+				</div>
+				<div class="text-xs text-muted sm:text-right shrink-0 space-y-0.5">
+					<div>Type: <span class="text-text capitalize">{item.media_type}</span></div>
+					<div>External ID: <span class="text-text font-mono">{item.external_id}</span></div>
 				</div>
 			</div>
+		</div>
 
-			<div class="md:col-span-2">
-				<div class="grid gap-3" style="grid-template-columns: repeat({Math.max(1, providerMetrics.length)}, minmax(0, 1fr));">
-					{#each providerMetrics as m (m.key)}
-						<StatTile
-							value={m.format === 'percentage' ? `${Math.round(metricValue(m.key))}%` : formatNumber(metricValue(m.key))}
-							label={m.label}
-							testId="media-edit-{m.key}"
-							valueTestId="media-edit-{m.key}-value"
-						/>
+		<!-- Metadata -->
+		<div class="panel">
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+				<div class="text-muted">Added by: <span class="text-text">{item.added_by}</span></div>
+				<div class="text-muted">Published: <span class="text-text">{item.published_at ? formatRelativeTime(item.published_at) : '\u2014'}</span></div>
+				<div class="{freshness.state === 'stale' ? 'text-amber-500' : freshness.state === 'dead' ? 'text-red-500' : 'text-muted'}">
+					Metrics last updated: <span>{freshness.label}</span>
+				</div>
+			</div>
+		</div>
+
+		<!-- Debug info (thumbnail)-->
+		{#if item.thumbnail_url}
+			<div class="panel"><img src={item.thumbnail_url} alt="" class="w-32 rounded" loading="lazy" /></div>
+		{/if}
+
+		<!-- Snapshot history table -->
+		<div class="panel overflow-hidden">
+			<h3 class="text-sm font-semibold mb-3">Metric Snapshots (last 20)</h3>
+			{#if loadingSnapshots}
+				<div class="space-y-1">
+					{#each Array(5) as _}
+						<div class="h-4 bg-border rounded animate-pulse w-full"></div>
 					{/each}
 				</div>
-			</div>
+			{:else if snapshots.length === 0}
+				<div class="text-muted text-sm py-4 text-center">No snapshots yet. Force refresh to pull the first metrics.</div>
+			{:else}
+				<div class="overflow-x-auto -mx-4 sm:-mx-0">
+					<table class="w-full text-xs" data-testid="media-edit-snapshots">
+						<thead>
+							<tr class="border-b border-border">
+								<th class="text-left text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">Time</th>
+								{#each columnKeys as key}
+									<th class="text-right text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">
+										{metricDefs.find((d) => d.key === key)?.label ?? key}
+									</th>
+								{/each}
+							</tr>
+						</thead>
+						<tbody>
+							{#each snapshots as row, i}
+								<tr class="border-b border-border last:border-0 {i % 2 === 1 ? 'bg-panel/30' : ''}">
+									<td class="py-1.5 px-2 sm:px-3 text-muted whitespace-nowrap font-mono tabular-nums">
+										{formatRelativeTime(row.fetched_at as string)}
+									</td>
+									{#each columnKeys as key}
+										<td class="py-1.5 px-2 sm:px-3 text-right text-text whitespace-nowrap tabular-nums">
+											{formatCellValue(key, row[key] ?? 0)}
+										</td>
+									{/each}
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		</div>
 	</div>
 

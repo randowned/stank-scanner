@@ -116,12 +116,12 @@ class MediaService:
         if not slug_final:
             slug_final = resolved.external_id[:50]
 
-        # Ensure unique slug
-        if await media_repo.is_slug_taken(self.session, guild_id, slug_final):
+        # Ensure unique slug per media_type
+        if await media_repo.is_slug_taken(self.session, guild_id, media_type, slug_final):
             counter = 1
             base_slug = slug_final[:45]
             while await media_repo.is_slug_taken(
-                self.session, guild_id, f"{base_slug}-{counter}"
+                self.session, guild_id, media_type, f"{base_slug}-{counter}"
             ):
                 counter += 1
             slug_final = f"{base_slug}-{counter}"[:50]
@@ -167,6 +167,36 @@ class MediaService:
         metrics_by_id = await media_repo.get_metrics_for_items(self.session, item_ids)
         return [self._serialize_item(i, metrics_by_id.get(i.id, {})) for i in items]
 
+    async def update_slug(
+        self, media_item_id: int, slug: str | None
+    ) -> dict[str, Any] | None:
+        item = await media_repo.get(self.session, media_item_id)
+        if item is None:
+            return None
+
+        slug_final = str(slug).strip() if slug else None
+        if not slug_final:
+            slug_final = _slugify(item.title)[:50]
+        if not slug_final:
+            slug_final = item.external_id[:50]
+
+        if slug_final != item.slug and await media_repo.is_slug_taken(
+            self.session, item.guild_id, item.media_type, slug_final,
+            exclude_id=item.id,
+        ):
+            counter = 1
+            base_slug = slug_final[:45]
+            while await media_repo.is_slug_taken(
+                self.session, item.guild_id, item.media_type,
+                f"{base_slug}-{counter}", exclude_id=item.id,
+            ):
+                counter += 1
+            slug_final = f"{base_slug}-{counter}"[:50]
+
+        item.slug = slug_final
+        await self.session.flush()
+        return self._serialize_item(item)
+
     async def delete_media(self, media_item_id: int) -> bool:
         return await media_repo.delete_media(self.session, media_item_id)
 
@@ -200,9 +230,10 @@ class MediaService:
         metric_key: str,
         window_days: int = 30,
         align_release: bool = False,
+        delta: bool = True,
     ) -> dict[str, Any]:
         if align_release:
-            return await self._comparison_aligned(media_item_ids, metric_key, window_days)
+            return await self._comparison_aligned(media_item_ids, metric_key, window_days, delta=delta)
 
         since = None
         if window_days > 0:
@@ -212,28 +243,42 @@ class MediaService:
             self.session, media_item_ids, metric_key, since
         )
 
-        items = []
+        items: list[dict[str, Any]] = []
+        metric_def = None
         for mid in media_item_ids:
             item = await media_repo.get(self.session, mid)
             if item is None:
                 continue
             snaps = snapshots_by_id.get(mid, [])
+            raw_points = [
+                {"x": s.fetched_at.isoformat(), "y": s.value}
+                for s in snaps
+            ]
+            if delta and len(raw_points) >= 2:
+                prev = raw_points[0]["y"]
+                for _i, pt in enumerate(raw_points):
+                    cur = pt["y"]
+                    pt["y"] = cur - prev  # type: ignore[operator]
+                    prev = cur
+                raw_points[0]["y"] = 0
+            elif delta:
+                for pt in raw_points:
+                    pt["y"] = 0
+
             items.append({
                 "media_item_id": mid,
+                "media_type": item.media_type,
                 "title": item.title,
-                "points": [
-                    {"x": s.fetched_at.isoformat(), "y": s.value}
-                    for s in snaps
-                ],
+                "points": raw_points,
             })
 
-        provider = self.registry.get("youtube")
-        metric_def = None
-        if provider:
-            for m in provider.metrics:
-                if m.key == metric_key:
-                    metric_def = {"key": m.key, "label": m.label, "format": m.format}
-                    break
+            if metric_def is None:
+                provider = self.registry.get(item.media_type)
+                if provider:
+                    for m in provider.metrics:
+                        if m.key == metric_key:
+                            metric_def = {"key": m.key, "label": m.label, "format": m.format}
+                            break
 
         return {"metric": metric_def, "series": items, "aligned": False}
 
@@ -242,12 +287,14 @@ class MediaService:
         media_item_ids: list[int],
         metric_key: str,
         window_days: int = 90,
+        delta: bool = True,
     ) -> dict[str, Any]:
         snapshots_by_id = await media_repo.get_comparison_snapshots(
             self.session, media_item_ids, metric_key, None
         )
 
-        items = []
+        items: list[dict[str, Any]] = []
+        metric_def = None
         for mid in media_item_ids:
             item = await media_repo.get(self.session, mid)
             if item is None:
@@ -258,27 +305,38 @@ class MediaService:
             for s in snaps:
                 if pub_date is None:
                     continue
-                delta = s.fetched_at - pub_date
-                day = delta.days
-                if day < 0:
+                day_offset = (s.fetched_at - pub_date).days
+                if day_offset < 0:
                     continue
-                if window_days > 0 and day > window_days:
+                if window_days > 0 and day_offset > window_days:
                     continue
-                points.append({"x": day, "y": s.value})
+                points.append({"x": day_offset, "y": s.value})
             if points:
+                if delta and len(points) >= 2:
+                    prev = points[0]["y"]
+                    for _i, pt in enumerate(points):
+                        cur = pt["y"]
+                        pt["y"] = cur - prev  # type: ignore[operator]
+                        prev = cur
+                    points[0]["y"] = 0
+                elif delta:
+                    for pt in points:
+                        pt["y"] = 0
+
                 items.append({
                     "media_item_id": mid,
+                    "media_type": item.media_type,
                     "title": item.title,
                     "points": points,
                 })
 
-        provider = self.registry.get("youtube")
-        metric_def = None
-        if provider:
-            for m in provider.metrics:
-                if m.key == metric_key:
-                    metric_def = {"key": m.key, "label": m.label, "format": m.format}
-                    break
+                if metric_def is None:
+                    provider = self.registry.get(item.media_type)
+                    if provider:
+                        for m in provider.metrics:
+                            if m.key == metric_key:
+                                metric_def = {"key": m.key, "label": m.label, "format": m.format}
+                                break
 
         return {"metric": metric_def, "series": items, "aligned": True}
 

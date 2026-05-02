@@ -69,6 +69,7 @@ class Keys(StrEnum):
     # Media (Maphra)
     MEDIA_METRICS_UPDATE_INTERVAL_MINUTES = "media_metrics_update_interval_minutes"
     MEDIA_REPLIES_EPHEMERAL = "media_replies_ephemeral"
+    MEDIA_REPLIES_ADMIN_ONLY = "media_replies_admin_only"
     # Media embed templates
     YOUTUBE_MEDIA_EMBED = "youtube_media_embed"
     SPOTIFY_MEDIA_EMBED = "spotify_media_embed"
@@ -93,6 +94,7 @@ DEFAULTS: dict[str, Any] = {
     Keys.MAINTENANCE_MODE: False,
     Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: 60,
     Keys.MEDIA_REPLIES_EPHEMERAL: True,
+    Keys.MEDIA_REPLIES_ADMIN_ONLY: False,
     # Embed templates are seeded per guild on install (see
     # `SettingsService.seed_defaults`) rather than inlined here; default
     # dicts live in `services/default_templates.py`.
@@ -170,7 +172,11 @@ LABELS: dict[str, tuple[str, str]] = {
     ),
     Keys.MEDIA_REPLIES_EPHEMERAL: (
         "Ephemeral media replies",
-        "When enabled, `/media` command responses are visible only to the caller.",
+        "When enabled, `/stats` command responses are visible only to the caller.",
+    ),
+    Keys.MEDIA_REPLIES_ADMIN_ONLY: (
+        "Admin-only media commands",
+        "When enabled, only admins may use `/stats` commands.",
     ),
 }
 

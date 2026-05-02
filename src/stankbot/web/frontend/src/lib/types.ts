@@ -226,6 +226,7 @@ export interface ProviderDef {
 
 export interface CompareSeries {
 	media_item_id: number;
+	media_type: string;
 	title: string;
 	points: Array<{ x: string; y: number }>;
 }

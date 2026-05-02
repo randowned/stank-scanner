@@ -95,6 +95,26 @@ def requires_admin() -> app_commands.check:  # type: ignore[type-arg]
     return app_commands.check(predicate)
 
 
+def requires_stats_access() -> app_commands.check:  # type: ignore[type-arg]
+    """Allow everyone by default; admin-only if guild setting enabled."""
+
+    async def predicate(interaction: discord.Interaction) -> bool:
+        from stankbot.services.settings_service import Keys, SettingsService
+
+        if interaction.guild is None:
+            return False
+        bot: StankBot = interaction.client  # type: ignore[assignment]
+        async with bot.db() as session:
+            admin_only = await SettingsService(session).get(
+                interaction.guild.id, Keys.MEDIA_REPLIES_ADMIN_ONLY, False
+            )
+        if not admin_only:
+            return True
+        return await is_interaction_admin(interaction)
+
+    return app_commands.check(predicate)
+
+
 def requires_announcement_channel() -> app_commands.check:  # type: ignore[type-arg]
     """Restrict a slash command to channels wired as ``announcements``.
 

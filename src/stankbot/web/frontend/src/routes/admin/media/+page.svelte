@@ -9,6 +9,7 @@
 	import Button from '$lib/components/Button.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import SelectDropdown from '$lib/components/SelectDropdown.svelte';
+	import Toggle from '$lib/components/Toggle.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { base } from '$app/paths';
 
@@ -20,6 +21,8 @@
 
 	let settingsOpen = $state(false);
 	let updateInterval = $state(60);
+	let ephemeralEnabled = $state(true);
+	let adminOnly = $state(false);
 	let savingSettings = $state(false);
 	let settingsError = $state<string | null>(null);
 
@@ -59,14 +62,14 @@
 	const VALID_INTERVALS = [15, 30, 45, 60, 120, 240, 720, 1440] as const;
 
 	const intervalOptions = [
-		{ value: 15, label: '15 minutes' },
-		{ value: 30, label: '30 minutes' },
-		{ value: 45, label: '45 minutes' },
-		{ value: 60, label: '1 hour' },
-		{ value: 120, label: '2 hours' },
-		{ value: 240, label: '4 hours' },
-		{ value: 720, label: '12 hours (2× daily)' },
-		{ value: 1440, label: '24 hours (daily)' },
+		{ value: 15, label: '15 minutes', icon: '⏱️' },
+		{ value: 30, label: '30 minutes', icon: '⏱️' },
+		{ value: 45, label: '45 minutes', icon: '⏱️' },
+		{ value: 60, label: '1 hour', icon: '⏱️' },
+		{ value: 120, label: '2 hours', icon: '⏱️' },
+		{ value: 240, label: '4 hours', icon: '⏱️' },
+		{ value: 720, label: '12 hours (2× daily)', icon: '⏱️' },
+		{ value: 1440, label: '24 hours (daily)', icon: '⏱️' },
 	];
 
 	async function loadSettings() {
@@ -77,8 +80,14 @@
 				// Clamp to nearest valid option
 				updateInterval = VALID_INTERVALS.find(iv => iv >= val) ?? 60;
 			}
+			if (typeof res.values?.['media_replies_ephemeral'] === 'boolean') {
+				ephemeralEnabled = res.values?.['media_replies_ephemeral'] as boolean;
+			}
+			if (typeof res.values?.['media_replies_admin_only'] === 'boolean') {
+				adminOnly = res.values?.['media_replies_admin_only'] as boolean;
+			}
 		} catch {
-			// keep default
+			// keep defaults
 		}
 	}
 
@@ -87,7 +96,9 @@
 		settingsError = null;
 		try {
 			await apiPost('/api/admin/media/settings', {
-				update_interval_minutes: updateInterval
+				update_interval_minutes: updateInterval,
+				replies_ephemeral: ephemeralEnabled,
+				admin_only: adminOnly
 			});
 			settingsOpen = false;
 		} catch (err) {
@@ -157,6 +168,12 @@
 	function getEditUrl(id: number): string {
 		return `${base}/admin/media/${id}/edit`;
 	}
+
+	function typeBadgeClass(type: string): string {
+		if (type === 'youtube') return 'bg-[#ff0000]/15 text-[#ff0000]';
+		if (type === 'spotify') return 'bg-[#1db954]/15 text-[#1db954]';
+		return 'bg-border text-muted';
+	}
 </script>
 
 <PageHeader title="Media" subtitle="Manage media items for the dashboard">
@@ -206,24 +223,26 @@
 				{:else}
 					<div class="w-full md:w-24 min-h-[3rem] md:min-h-[4.5rem] bg-border shrink-0 flex items-center justify-center text-lg">▶️</div>
 				{/if}
-				<div class="flex-1 min-w-0 px-3 py-3">
-					<div class="font-medium text-sm truncate">{item.title}</div>
-					<div class="text-xs text-muted">{item.channel_name ?? '—'}</div>
-					<div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-						<span class="text-xs px-1.5 py-0.5 rounded bg-border text-muted capitalize">{item.media_type}</span>
-						{#if item.slug}<span class="text-xs text-muted font-mono">📛 {item.slug}</span>{/if}
-						<span class="text-xs text-muted">{primary.label}: {formatNumber(item.metrics?.[primary.key]?.value ?? 0)}</span>
-						<span class="text-xs {freshness.state === 'stale' ? 'text-amber-500' : freshness.state === 'dead' ? 'text-red-500' : 'text-muted'}">
-							{freshness.label}
-						</span>
+				<div class="flex flex-row flex-auto">
+					<div class="flex-1 min-w-0 p-3">
+						<div class="font-medium text-sm truncate">{item.title}</div>
+						<div class="text-xs text-muted">{item.channel_name ?? '—'}</div>
+						<div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+							<span class="text-xs px-1.5 py-0.5 rounded capitalize {typeBadgeClass(item.media_type)}">{item.media_type}</span>
+							{#if item.slug}<span class="text-xs text-muted font-mono">📛 {item.slug}</span>{/if}
+							<span class="text-xs text-muted">{primary.label}: {formatNumber(item.metrics?.[primary.key]?.value ?? 0)}</span>
+							<span class="text-xs {freshness.state === 'stale' ? 'text-amber-500' : freshness.state === 'dead' ? 'text-red-500' : 'text-muted'}">
+								{freshness.label}
+							</span>
+						</div>
 					</div>
-				</div>
-				<div class="flex md:flex-col items-center justify-end gap-1 shrink-0 px-3 pb-3 md:py-3 md:pr-3 md:pl-0 max-md:border-t max-md:border-border">
-					<Button variant="ghost" onclick={() => handleRefresh(item.id)} testId="media-refresh-btn">↻</Button>
-					<a href={getEditUrl(item.id)} class="no-underline">
-						<Button variant="ghost" testId="media-edit-btn">Edit</Button>
-					</a>
-					<Button variant="ghost" onclick={() => openDelete(item.id, item.title)} testId="media-delete-btn">🗑</Button>
+					<div class="flex items-center justify-end gap-1 shrink-0 p-3 max-md:border-t max-md:border-border">
+						<Button variant="ghost" onclick={() => handleRefresh(item.id)} testId="media-refresh-btn">↻</Button>
+						<a href={getEditUrl(item.id)} class="no-underline">
+							<Button variant="ghost" testId="media-edit-btn">Edit</Button>
+						</a>
+						<Button variant="ghost" onclick={() => openDelete(item.id, item.title)} testId="media-delete-btn">🗑</Button>
+					</div>
 				</div>
 			</div>
 		{/each}
@@ -237,6 +256,14 @@
 			<span class="block text-sm font-medium mb-2">Metrics update interval</span>
 			<SelectDropdown options={intervalOptions} bind:value={updateInterval} disabled={savingSettings} testId="media-interval-dropdown" />
 			<div class="text-xs text-muted mt-1">How often the scheduler fetches fresh metrics. Fetches are aligned to clock boundaries.</div>
+		</div>
+		<div>
+			<Toggle bind:checked={ephemeralEnabled} label="Ephemeral /stats replies" />
+			<div class="text-xs text-muted mt-1">When enabled, command responses are visible only to the caller.</div>
+		</div>
+		<div>
+			<Toggle bind:checked={adminOnly} label="Admin-only /stats commands" />
+			<div class="text-xs text-muted mt-1">When enabled, only admins may use /stats commands.</div>
 		</div>
 		{#if settingsError}
 			<div class="text-red-400 text-sm">{settingsError}</div>

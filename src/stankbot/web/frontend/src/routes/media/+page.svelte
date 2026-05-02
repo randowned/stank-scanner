@@ -29,6 +29,7 @@
 	let activeType = $state<string>('');
 	let compareMode = $state(false);
 	let selectedIds = $state<number[]>([]);
+	let selectedMediaType = $state<string | null>(null);
 	let searchQuery = $state<string>('');
 	let sortKey = $state<string>('published_desc');
 
@@ -143,13 +144,21 @@
 	function toggleSelect(id: number) {
 		if (selectedIds.includes(id)) {
 			selectedIds = selectedIds.filter((sid) => sid !== id);
+			if (selectedIds.length === 0) {
+				selectedMediaType = null;
+			}
 		} else {
+			const item = items.find((i) => i.id === id);
+			if (item && selectedIds.length === 0) {
+				selectedMediaType = item.media_type;
+			}
 			selectedIds = [...selectedIds, id];
 		}
 	}
 
 	function clearSelection() {
 		selectedIds = [];
+		selectedMediaType = null;
 	}
 
 	function compareSelected() {
@@ -213,22 +222,24 @@
 			{#each filteredItems as item (item.id)}
 				{@const freshness = formatFreshness(item.metrics_last_fetched_at, 10)}
 				{@const cardMetrics = metricsForCard(item)}
+				{@const typeLocked = compareMode && selectedMediaType !== null && item.media_type !== selectedMediaType}
 				<div
-					class="panel overflow-hidden p-0 block hover:border-accent transition-colors relative {borderClass(item.media_type)} {compareMode ? (selectedIds.includes(item.id) ? 'ring-2 ring-accent' : 'opacity-50') : ''}"
+					class="panel overflow-hidden p-0 block hover:border-accent transition-colors relative {borderClass(item.media_type)} {compareMode ? (selectedIds.includes(item.id) ? 'ring-2 ring-accent' : typeLocked ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'opacity-50') : ''}"
 				>
 					{#if compareMode}
 						<button
 							type="button"
-							class="absolute top-2 right-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center {selectedIds.includes(item.id) ? 'bg-accent border-accent text-white' : 'border-muted bg-panel'}"
+							class="absolute top-2 right-2 z-10 w-6 h-6 rounded border-2 flex items-center justify-center {selectedIds.includes(item.id) ? 'bg-accent border-accent text-white' : 'border-muted bg-panel'} {typeLocked ? 'pointer-events-none' : ''}"
 							onclick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelect(item.id); }}
 							data-testid="media-select-check"
+							disabled={typeLocked}
 						>
 							{#if selectedIds.includes(item.id)}✓{/if}
 						</button>
 					{/if}
 					<a
-						href={compareMode ? '#' : `${base}/media/${item.id}`}
-						{...(compareMode ? { onclick: (e: MouseEvent) => { e.preventDefault(); toggleSelect(item.id); } } : {})}
+						href={compareMode && !typeLocked ? '#' : `${base}/media/${item.id}`}
+						{...(compareMode && !typeLocked ? { onclick: (e: MouseEvent) => { e.preventDefault(); toggleSelect(item.id); } } : {})}
 						class="block no-underline"
 						data-testid="media-card"
 					>
