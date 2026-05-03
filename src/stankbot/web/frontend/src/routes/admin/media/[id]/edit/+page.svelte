@@ -5,7 +5,7 @@
 	import { apiFetch, apiPost, apiDelete } from '$lib/api';
 	import { toErrorMessage } from '$lib/api-utils';
 	import { formatFreshness, formatRelativeTime } from '$lib/format';
-	import { formatIsoUtc } from '$lib/datetime';
+	import { formatIsoLocal } from '$lib/datetime';
 	import type { MediaItem, MetricDef } from '$lib/types';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Button from '$lib/components/Button.svelte';
@@ -243,7 +243,7 @@
 							{#each snapshots as row, i}
 								<tr class="border-b border-border last:border-0 {i % 2 === 1 ? 'bg-panel/30' : ''}">
 									<td class="py-1.5 px-2 sm:px-3 text-muted whitespace-nowrap font-mono tabular-nums">
-										{formatIsoUtc(row.fetched_at as string)}
+										{formatIsoLocal(row.fetched_at as string)}
 									</td>
 									{#each columnKeys as key}
 										<td class="py-1.5 px-2 sm:px-3 text-right text-text whitespace-nowrap tabular-nums">

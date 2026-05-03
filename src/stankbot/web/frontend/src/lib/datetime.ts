@@ -36,3 +36,15 @@ export function formatIsoUtc(isoStr: string | null | undefined, fallback = '—'
 	const m = String(d.getUTCMinutes()).padStart(2, '0');
 	return `${Y}-${M}-${D} ${h}:${m}`;
 }
+
+export function formatIsoLocal(isoStr: string | null | undefined, fallback = '—'): string {
+	if (!isoStr) return fallback;
+	const normalized = /[+\-Z]\d{2}:?\d{2}$|Z$/i.test(isoStr) ? isoStr : isoStr + 'Z';
+	const d = new Date(normalized);
+	const Y = d.getFullYear();
+	const M = String(d.getMonth() + 1).padStart(2, '0');
+	const D = String(d.getDate()).padStart(2, '0');
+	const h = String(d.getHours()).padStart(2, '0');
+	const m = String(d.getMinutes()).padStart(2, '0');
+	return `${Y}-${M}-${D} ${h}:${m}`;
+}
