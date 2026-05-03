@@ -67,7 +67,8 @@ class Keys(StrEnum):
     ENABLE_REACTION_BONUS = "enable_reaction_bonus"
     MAINTENANCE_MODE = "maintenance_mode"
     # Media (Maphra)
-    MEDIA_METRICS_UPDATE_INTERVAL_MINUTES = "media_metrics_update_interval_minutes"
+    MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES = "media_youtube_update_interval_minutes"
+    MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES = "media_spotify_update_interval_minutes"
     MEDIA_REPLIES_EPHEMERAL = "media_replies_ephemeral"
     MEDIA_REPLIES_ADMIN_ONLY = "media_replies_admin_only"
     MEDIA_PROVIDERS_ENABLED = "media_providers_enabled"
@@ -93,7 +94,8 @@ DEFAULTS: dict[str, Any] = {
     Keys.BOARD_NAME_MAX_LEN: 20,
     Keys.ENABLE_REACTION_BONUS: True,
     Keys.MAINTENANCE_MODE: False,
-    Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: 60,
+    Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES: 60,
+    Keys.MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES: 60,
     Keys.MEDIA_REPLIES_EPHEMERAL: True,
     Keys.MEDIA_REPLIES_ADMIN_ONLY: False,
     Keys.MEDIA_PROVIDERS_ENABLED: ["youtube", "spotify"],
@@ -168,9 +170,13 @@ LABELS: dict[str, tuple[str, str]] = {
         "Maintenance mode",
         "Silently ignore new stanks — useful during config changes or migrations.",
     ),
-    Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES: (
-        "Media metrics update interval (minutes)",
-        "How often the scheduler fetches fresh metrics from YouTube/Spotify. Minimum 5.",
+    Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES: (
+        "YouTube metrics update interval (minutes)",
+        "How often the scheduler fetches fresh YouTube metrics. Minimum 1.",
+    ),
+    Keys.MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES: (
+        "Spotify metrics update interval (minutes)",
+        "How often the scheduler fetches fresh Spotify metrics. Minimum 1.",
     ),
     Keys.MEDIA_REPLIES_EPHEMERAL: (
         "Ephemeral media replies",

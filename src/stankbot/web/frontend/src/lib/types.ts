@@ -228,6 +228,7 @@ export interface CompareSeries {
 	media_item_id: number;
 	media_type: string;
 	title: string;
+	name: string | null;
 	points: Array<{ x: string; y: number }>;
 }
 

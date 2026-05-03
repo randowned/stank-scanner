@@ -5,7 +5,8 @@
 	import { apiFetch, apiPost, apiDelete } from '$lib/api';
 	import { toErrorMessage } from '$lib/api-utils';
 	import { formatFreshness, formatRelativeTime } from '$lib/format';
-	import { formatIsoUtc } from '$lib/datetime';	import type { MediaItem, MetricDef } from '$lib/types';
+	import { formatIsoUtc } from '$lib/datetime';
+	import type { MediaItem, MetricDef } from '$lib/types';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';

@@ -203,6 +203,7 @@ async def insert_metric_snapshot(
     metric_key: str,
     value: int,
     fetched_at: datetime | None = None,
+    alignment_mask: int | None = None,
 ) -> MetricSnapshot:
     snap = MetricSnapshot(
         media_item_id=media_item_id,
@@ -211,6 +212,8 @@ async def insert_metric_snapshot(
     )
     if fetched_at is not None:
         snap.fetched_at = fetched_at
+    if alignment_mask is not None:
+        snap.alignment_mask = alignment_mask
     session.add(snap)
     await session.flush()
     return snap
@@ -221,6 +224,7 @@ async def get_metric_snapshots(
     media_item_id: int,
     metric_key: str,
     since: datetime | None = None,
+    alignment_bit: int | None = None,
 ) -> list[MetricSnapshot]:
     stmt = select(MetricSnapshot).where(
         MetricSnapshot.media_item_id == media_item_id,
@@ -228,6 +232,12 @@ async def get_metric_snapshots(
     )
     if since is not None:
         stmt = stmt.where(MetricSnapshot.fetched_at >= since)
+    if alignment_bit is not None:
+        from sqlalchemy import or_
+        stmt = stmt.where(or_(
+            MetricSnapshot.alignment_mask.op('&')(alignment_bit) != 0,
+            MetricSnapshot.alignment_mask.is_(None),
+        ))
     stmt = stmt.order_by(MetricSnapshot.fetched_at.asc())
     result = await session.execute(stmt)
     return list(result.scalars().all())
@@ -238,6 +248,7 @@ async def get_comparison_snapshots(
     media_item_ids: list[int],
     metric_key: str,
     since: datetime | None = None,
+    alignment_bit: int | None = None,
 ) -> dict[int, list[MetricSnapshot]]:
     """Return {media_item_id: [snapshots]} for comparison charts."""
     if not media_item_ids:
@@ -248,6 +259,12 @@ async def get_comparison_snapshots(
     )
     if since is not None:
         stmt = stmt.where(MetricSnapshot.fetched_at >= since)
+    if alignment_bit is not None:
+        from sqlalchemy import or_
+        stmt = stmt.where(or_(
+            MetricSnapshot.alignment_mask.op('&')(alignment_bit) != 0,
+            MetricSnapshot.alignment_mask.is_(None),
+        ))
     stmt = stmt.order_by(MetricSnapshot.fetched_at.asc())
     rows = (await session.execute(stmt)).scalars().all()
     result: dict[int, list[MetricSnapshot]] = {}

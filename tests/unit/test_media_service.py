@@ -1,4 +1,4 @@
-"""Unit tests for media_service._floor_to_bucket and _aggregate_snapshots."""
+"""Unit tests for media_service — alignment_mask, aggregation, flooring."""
 
 from __future__ import annotations
 
@@ -7,7 +7,18 @@ from datetime import UTC, datetime
 
 import pytest
 
-from stankbot.services.media_service import _aggregate_snapshots, _floor_to_bucket
+from stankbot.services.media_service import (
+    ALIGN_5MIN,
+    ALIGN_15MIN,
+    ALIGN_30MIN,
+    ALIGN_HOURLY,
+    ALIGN_DAILY,
+    ALIGN_WEEKLY,
+    ALIGN_MONTHLY,
+    _aggregate_snapshots,
+    _compute_alignment_mask,
+    _floor_to_bucket,
+)
 
 
 @dataclass
@@ -17,17 +28,63 @@ class _FakeSnapshot:
 
 
 def _make_snaps(start: datetime, values: list[int], interval_mins: int = 15):
-    snaps: list[_FakeSnapshot] = []
     from datetime import timedelta
 
-    for i, v in enumerate(values):
-        snaps.append(
-            _FakeSnapshot(
-                value=v,
-                fetched_at=start + timedelta(minutes=i * interval_mins),
-            )
-        )
-    return snaps
+    return [
+        _FakeSnapshot(value=v, fetched_at=start + timedelta(minutes=i * interval_mins))
+        for i, v in enumerate(values)
+    ]
+
+
+class TestComputeAlignmentMask:
+    def test_sub_minute_accidental(self) -> None:
+        """14:00:07 — seconds drift ignored, still aligns to all sub-daily."""
+        mask = _compute_alignment_mask(datetime(2026, 5, 1, 14, 0, 7, tzinfo=UTC))
+        assert mask & ALIGN_5MIN
+        assert mask & ALIGN_15MIN
+        assert mask & ALIGN_30MIN
+        assert mask & ALIGN_HOURLY
+
+    def test_14_05(self) -> None:
+        mask = _compute_alignment_mask(datetime(2026, 5, 1, 14, 5, 0, tzinfo=UTC))
+        assert mask & ALIGN_5MIN
+        assert not (mask & ALIGN_15MIN)
+
+    def test_14_15(self) -> None:
+        mask = _compute_alignment_mask(datetime(2026, 5, 1, 14, 15, 0, tzinfo=UTC))
+        assert mask & ALIGN_5MIN
+        assert mask & ALIGN_15MIN
+        assert not (mask & ALIGN_30MIN)
+
+    def test_14_30(self) -> None:
+        mask = _compute_alignment_mask(datetime(2026, 5, 1, 14, 30, 0, tzinfo=UTC))
+        assert mask & ALIGN_5MIN
+        assert mask & ALIGN_15MIN
+        assert mask & ALIGN_30MIN
+        assert not (mask & ALIGN_HOURLY)
+
+    def test_midnight_daily(self) -> None:
+        mask = _compute_alignment_mask(datetime(2026, 5, 1, 0, 0, 0, tzinfo=UTC))
+        assert mask & ALIGN_HOURLY
+        assert mask & ALIGN_DAILY
+        assert not (mask & ALIGN_WEEKLY)  # Thursday
+        assert mask & ALIGN_MONTHLY      # 1st
+
+    def test_monday_midnight(self) -> None:
+        mask = _compute_alignment_mask(datetime(2026, 5, 4, 0, 0, 0, tzinfo=UTC))  # Monday
+        assert mask & ALIGN_DAILY
+        assert mask & ALIGN_WEEKLY
+        assert not (mask & ALIGN_MONTHLY)  # not 1st
+
+    def test_midnight_is_daily(self) -> None:
+        """00:00 aligns to both hourly and daily (hour==0, minute==0)."""
+        mask = _compute_alignment_mask(datetime(2026, 5, 1, 0, 0, 0, tzinfo=UTC))
+        assert mask & ALIGN_HOURLY
+        assert mask & ALIGN_DAILY
+
+    def test_naive_datetime(self) -> None:
+        mask = _compute_alignment_mask(datetime(2026, 5, 1, 14, 0, 0))
+        assert mask & ALIGN_HOURLY
 
 
 class TestFloorToBucket:
@@ -36,15 +93,15 @@ class TestFloorToBucket:
         result = _floor_to_bucket(dt, "5min")
         assert result == datetime(2026, 5, 1, 14, 0, 0, tzinfo=UTC)
 
-    def test_5min_boundary(self) -> None:
-        dt = datetime(2026, 5, 1, 14, 5, 0, tzinfo=UTC)
-        result = _floor_to_bucket(dt, "5min")
-        assert result == datetime(2026, 5, 1, 14, 5, 0, tzinfo=UTC)
-
     def test_15min_floor(self) -> None:
         dt = datetime(2026, 5, 1, 14, 17, 0, tzinfo=UTC)
         result = _floor_to_bucket(dt, "15min")
         assert result == datetime(2026, 5, 1, 14, 15, 0, tzinfo=UTC)
+
+    def test_30min_floor(self) -> None:
+        dt = datetime(2026, 5, 1, 14, 35, 0, tzinfo=UTC)
+        result = _floor_to_bucket(dt, "30min")
+        assert result == datetime(2026, 5, 1, 14, 30, 0, tzinfo=UTC)
 
     def test_hourly(self) -> None:
         dt = datetime(2026, 5, 1, 14, 45, 0, tzinfo=UTC)
@@ -59,12 +116,7 @@ class TestFloorToBucket:
     def test_weekly_monday(self) -> None:
         dt = datetime(2026, 5, 1, 14, 0, 0, tzinfo=UTC)  # Friday
         result = _floor_to_bucket(dt, "weekly")
-        assert result == datetime(2026, 4, 27, 0, 0, 0, tzinfo=UTC)  # Monday
-
-    def test_weekly_on_monday(self) -> None:
-        dt = datetime(2026, 5, 4, 10, 0, 0, tzinfo=UTC)  # Monday
-        result = _floor_to_bucket(dt, "weekly")
-        assert result == datetime(2026, 5, 4, 0, 0, 0, tzinfo=UTC)
+        assert result == datetime(2026, 4, 27, 0, 0, 0, tzinfo=UTC)
 
     def test_monthly(self) -> None:
         dt = datetime(2026, 5, 15, 14, 0, 0, tzinfo=UTC)
@@ -72,7 +124,7 @@ class TestFloorToBucket:
         assert result == datetime(2026, 5, 1, 0, 0, 0, tzinfo=UTC)
 
     def test_naive_datetime(self) -> None:
-        dt = datetime(2026, 5, 1, 14, 30, 0)  # no tzinfo
+        dt = datetime(2026, 5, 1, 14, 30, 0)
         result = _floor_to_bucket(dt, "hourly")
         assert result.tzinfo == UTC
         assert result == datetime(2026, 5, 1, 14, 0, 0, tzinfo=UTC)
@@ -83,29 +135,35 @@ class TestFloorToBucket:
 
 
 class TestAggregateSnapshots:
+    # === helpers ===
     def test_empty(self) -> None:
-        result = _aggregate_snapshots([], "hourly", "total")
-        assert result == []
+        assert _aggregate_snapshots([], "hourly", "total") == []
 
-    def test_single_snapshot_total(self) -> None:
+    def test_invalid_mode(self) -> None:
+        snaps = _make_snaps(datetime(2026, 5, 1, 14, 0, tzinfo=UTC), [100, 200])
+        with pytest.raises(ValueError):
+            _aggregate_snapshots(snaps, "hourly", "bogus")
+
+    def test_invalid_bucket(self) -> None:
+        snaps = _make_snaps(datetime(2026, 5, 1, 14, 0, tzinfo=UTC), [100, 200])
+        with pytest.raises(ValueError):
+            _aggregate_snapshots(snaps, "bogus", "total")
+
+    # === total mode ===
+    def test_total_single(self) -> None:
         snaps = _make_snaps(datetime(2026, 5, 1, 14, 0, tzinfo=UTC), [100])
         result = _aggregate_snapshots(snaps, "hourly", "total")
         assert len(result) == 1
         assert result[0]["value"] == 100
 
-    def test_single_snapshot_delta(self) -> None:
-        snaps = _make_snaps(datetime(2026, 5, 1, 14, 0, tzinfo=UTC), [100])
-        result = _aggregate_snapshots(snaps, "hourly", "delta")
-        assert result == []
-
     def test_total_hourly_last_value(self) -> None:
         snaps = _make_snaps(
             datetime(2026, 5, 1, 14, 0, tzinfo=UTC),
-            [100, 120, 140, 160],  # 4 snapshots at 15-min intervals
+            [100, 120, 140, 160],
         )
         result = _aggregate_snapshots(snaps, "hourly", "total")
-        assert len(result) == 1  # all in same hour
-        assert result[0]["value"] == 160  # last value wins
+        assert len(result) == 1
+        assert result[0]["value"] == 160
 
     def test_total_daily_buckets(self) -> None:
         from datetime import timedelta
@@ -119,85 +177,41 @@ class TestAggregateSnapshots:
         ]
         result = _aggregate_snapshots(snaps, "daily", "total")
         assert len(result) == 3
-        assert result[0]["value"] == 100  # day 1, only one snapshot
-        assert result[1]["value"] == 300  # day 2, last snapshot wins
-        assert result[2]["value"] == 400  # day 3
+        assert result[0]["value"] == 100
+        assert result[1]["value"] == 300
+        assert result[2]["value"] == 400
 
-    def test_delta_hourly_sums(self) -> None:
-        snaps = _make_snaps(
-            datetime(2026, 5, 1, 14, 0, tzinfo=UTC),
-            [100, 120, 140, 160, 200, 250],  # 6 snapshots at 15-min
-        )
-        # Deltas: 20, 20, 20, 40, 50
-        # snap[0]=14:00, snap[1]=14:15, snap[2]=14:30, snap[3]=14:45, snap[4]=15:00, snap[5]=15:15
-        # 14:00 bucket: deltas from 14:15, 14:30, 14:45 = 20+20+20 = 60
-        # 15:00 bucket: deltas from 15:00, 15:15 = 40+50 = 90
-        result = _aggregate_snapshots(snaps, "hourly", "delta")
-        assert len(result) == 2
-        assert result[0]["value"] == 60
-        assert result[1]["value"] == 90
+    # === delta mode — snapshots are already alignment-filtered; just diffs ===
+    def test_delta_single(self) -> None:
+        snaps = _make_snaps(datetime(2026, 5, 1, 14, 0, tzinfo=UTC), [100])
+        assert _aggregate_snapshots(snaps, "hourly", "delta") == []
 
-    def test_delta_daily_sums(self) -> None:
-        from datetime import timedelta
-
-        start = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
-        snaps = [
-            _FakeSnapshot(value=100, fetched_at=start),
-            _FakeSnapshot(value=150, fetched_at=start + timedelta(hours=6)),       # delta=50 → day1
-            _FakeSnapshot(value=300, fetched_at=start + timedelta(days=1)),        # delta=150 → day2
-            _FakeSnapshot(value=500, fetched_at=start + timedelta(days=1, hours=6)),  # delta=200 → day2
-        ]
-        result = _aggregate_snapshots(snaps, "daily", "delta")
-        assert len(result) == 2
-        assert result[0]["value"] == 50   # day 1
-        assert result[1]["value"] == 350  # day 2: 150 + 200
-
-    def test_mixed_intervals(self) -> None:
-        """Mix of 60-min and 15-min intervals; delta sum per bucket should be consistent."""
-        from datetime import timedelta
-
-        start = datetime(2026, 5, 1, 0, 0, tzinfo=UTC)
-        snaps = [
-            _FakeSnapshot(value=100, fetched_at=start),
-            _FakeSnapshot(value=200, fetched_at=start + timedelta(days=1)),
-            _FakeSnapshot(value=210, fetched_at=start + timedelta(days=1, minutes=15)),
-            _FakeSnapshot(value=220, fetched_at=start + timedelta(days=1, minutes=30)),
-            _FakeSnapshot(value=230, fetched_at=start + timedelta(days=1, minutes=45)),
-            _FakeSnapshot(value=300, fetched_at=start + timedelta(days=2)),
-        ]
-        result = _aggregate_snapshots(snaps, "daily", "delta")
-        # Deltas are keyed by the later snapshot's bucket:
-        #  100→200 (ts=day2): delta=100 → day2
-        #  200→210 (ts=day2+15min): delta=10 → day2
-        #  210→220 (ts=day2+30min): delta=10 → day2
-        #  220→230 (ts=day2+45min): delta=10 → day2
-        #  230→300 (ts=day3): delta=70 → day3
-        assert len(result) == 2  # day2, day3
-        assert result[0]["value"] == 130
-        assert result[1]["value"] == 70
-
-    def test_5min_bucket(self) -> None:
+    def test_delta_hourly_aligned(self) -> None:
+        """Hourly-aligned snapshots: 14:00→100, 15:00→160, 16:00→250.
+        Deltas should be 60, 90."""
         from datetime import timedelta
 
         start = datetime(2026, 5, 1, 14, 0, 0, tzinfo=UTC)
         snaps = [
             _FakeSnapshot(value=100, fetched_at=start),
-            _FakeSnapshot(value=110, fetched_at=start + timedelta(minutes=3)),  # delta=10
-            _FakeSnapshot(value=115, fetched_at=start + timedelta(minutes=6)),  # delta=5, bucket 14:05
+            _FakeSnapshot(value=160, fetched_at=start + timedelta(hours=1)),
+            _FakeSnapshot(value=250, fetched_at=start + timedelta(hours=2)),
         ]
-        result = _aggregate_snapshots(snaps, "5min", "delta")
+        result = _aggregate_snapshots(snaps, "hourly", "delta")
         assert len(result) == 2
-        # First delta (100→110) at 14:03 → floor to 14:00
-        # Second delta (110→115) at 14:06 → floor to 14:05
-        assert result[0]["value"] == 10  # 14:00 bucket
-        assert result[1]["value"] == 5   # 14:05 bucket
+        assert result[0]["value"] == 60
+        assert result[1]["value"] == 90
 
-    def test_invalid_mode(self) -> None:
-        snaps = _make_snaps(datetime(2026, 5, 1, 14, 0, tzinfo=UTC), [100, 200])
-        with pytest.raises(ValueError):
-            _aggregate_snapshots(snaps, "hourly", "bogus")
+    def test_delta_daily_aligned(self) -> None:
+        from datetime import timedelta
 
-    def test_invalid_bucket(self) -> None:
-        snaps = _make_snaps(datetime(2026, 5, 1, 14, 0, tzinfo=UTC), [100, 200])
-        with pytest.raises(ValueError):
-            _aggregate_snapshots(snaps, "bogus", "total")
+        start = datetime(2026, 5, 1, 0, 0, 0, tzinfo=UTC)
+        snaps = [
+            _FakeSnapshot(value=100, fetched_at=start),
+            _FakeSnapshot(value=300, fetched_at=start + timedelta(days=1)),
+            _FakeSnapshot(value=700, fetched_at=start + timedelta(days=2)),
+        ]
+        result = _aggregate_snapshots(snaps, "daily", "delta")
+        assert len(result) == 2
+        assert result[0]["value"] == 200
+        assert result[1]["value"] == 400

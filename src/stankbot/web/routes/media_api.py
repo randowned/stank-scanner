@@ -84,7 +84,7 @@ async def compare_media(
     hours: int | None = Query(None, ge=1, le=48),
     align: str = Query("calendar"),
     delta: bool = Query(True),
-    aggregation: str | None = Query(None, pattern=r"^(5min|15min|hourly|daily|weekly|monthly)$"),
+    aggregation: str | None = Query(None, pattern=r"^(5min|15min|30min|hourly|daily|weekly|monthly)$"),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
     session: AsyncSession = Depends(get_db),
@@ -170,7 +170,7 @@ async def get_media_history(
     metric: str = Query("view_count"),
     days: int = Query(30, ge=1, le=365),
     hours: int | None = Query(None, ge=1, le=48),
-    aggregation: str | None = Query(None, pattern=r"^(5min|15min|hourly|daily|weekly|monthly)$"),
+    aggregation: str | None = Query(None, pattern=r"^(5min|15min|30min|hourly|daily|weekly|monthly)$"),
     mode: str = Query("total", pattern=r"^(total|delta)$"),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
@@ -221,7 +221,7 @@ async def get_media_chart(
     hours: int | None = Query(None, ge=1, le=8760),
     date: str | None = Query(None),
     mode: str = Query("total"),
-    aggregation: str | None = Query(None, pattern=r"^(5min|15min|hourly|daily|weekly|monthly)$"),
+    aggregation: str | None = Query(None, pattern=r"^(5min|15min|30min|hourly|daily|weekly|monthly)$"),
     session: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     item = await media_repo.get(session, media_id)

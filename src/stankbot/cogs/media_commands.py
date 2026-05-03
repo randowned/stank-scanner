@@ -58,6 +58,7 @@ MODE_CHOICES = [
 AGGREGATION_CHOICES = [
     app_commands.Choice(name="5 minutes", value="5min"),
     app_commands.Choice(name="15 minutes", value="15min"),
+    app_commands.Choice(name="30 minutes", value="30min"),
     app_commands.Choice(name="Hourly", value="hourly"),
     app_commands.Choice(name="Daily", value="daily"),
     app_commands.Choice(name="Weekly", value="weekly"),

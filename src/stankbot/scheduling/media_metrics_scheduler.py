@@ -1,10 +1,8 @@
-"""Media metrics scheduler — per-guild interval-based metric refreshes.
+"""Media metrics scheduler — per-guild per-provider interval-based metric refreshes.
 
-Follows SessionScheduler pattern: owns an APScheduler instance, registers
-one IntervalTrigger job per guild, and syncs when settings change.
-
-Jobs are aligned to clock boundaries: a 60-min interval fires at XX:00,
-a 10-min interval fires at XX:00, XX:10, XX:20, etc.
+One IntervalTrigger job per (guild, provider_type). Each job reads its own
+provider-specific interval from guild settings and refreshes only items of
+that type. Jobs are aligned to clock boundaries.
 """
 
 from __future__ import annotations
@@ -28,18 +26,18 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+_INTERVAL_KEYS: dict[str, str] = {
+    "youtube": Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES,
+    "spotify": Keys.MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES,
+}
 
-def _media_guild_job_id(guild_id: int) -> str:
-    return f"g{guild_id}:media-metrics"
+
+def _media_provider_job_id(guild_id: int, media_type: str) -> str:
+    return f"g{guild_id}:media-metrics:{media_type}"
 
 
 def _align_start(interval_minutes: int) -> datetime:
-    """Compute the next clock-aligned boundary after now.
-
-    e.g., interval=60, now=15:37 → 16:00
-          interval=10, now=15:07 → 15:10
-          interval=15, now=15:00:01 → 15:15
-    """
+    """Compute the next clock-aligned boundary after now."""
     now = datetime.now(UTC)
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     minutes_since_midnight = now.hour * 60 + now.minute + now.second / 60 + now.microsecond / 60_000_000
@@ -49,7 +47,7 @@ def _align_start(interval_minutes: int) -> datetime:
 
 
 class MediaMetricsScheduler:
-    """Periodically fetches metrics for all media items in each guild."""
+    """Periodically fetches metrics per-guild, per-provider."""
 
     def __init__(self, bot: StankBot, registry: MediaProviderRegistry) -> None:
         self.bot = bot
@@ -58,7 +56,6 @@ class MediaMetricsScheduler:
 
     async def start(self) -> None:
         await self.sync_all_guilds()
-        # Global chart image cache cleanup every 10 minutes
         self.scheduler.add_job(
             self._cleanup_chart_cache,
             IntervalTrigger(minutes=10, timezone=UTC),
@@ -80,45 +77,51 @@ class MediaMetricsScheduler:
         for gid in guilds:
             await self.sync_guild(gid)
 
-    async def sync_guild(self, guild_id: int) -> None:
-        self._clear_guild_jobs(guild_id)
-        async with self.bot.db() as session:
-            settings = SettingsService(session)
-            interval = await settings.get(
-                guild_id, Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES, 60
-            )
-        interval = max(1, int(interval))
-        start_date = _align_start(interval)
+    async def sync_guild(self, guild_id: int, media_type: str | None = None) -> None:
+        """Schedule per-provider jobs for a guild.
 
-        self.scheduler.add_job(
-            self._refresh_guild,
-            IntervalTrigger(minutes=interval, timezone=UTC, start_date=start_date),
-            args=[guild_id],
-            id=_media_guild_job_id(guild_id),
-            replace_existing=True,
-            misfire_grace_time=min(interval * 30, 300),
-        )
-        log.info("MediaMetrics: guild=%d interval=%dm start=%s", guild_id, interval, start_date.isoformat())
+        When media_type is None (initial sync), creates a job for every
+        enabled provider. When called with a specific type (settings change),
+        only recreates that provider's job.
+        """
+        for provider in self.registry.enabled():
+            if media_type is not None and provider.media_type != media_type:
+                continue
+            await self._sync_provider(guild_id, provider.media_type)
 
-    def _clear_guild_jobs(self, guild_id: int) -> None:
-        job_id = _media_guild_job_id(guild_id)
+    async def _sync_provider(self, guild_id: int, provider_type: str) -> None:
+        job_id = _media_provider_job_id(guild_id, provider_type)
         job = self.scheduler.get_job(job_id)
         if job is not None:
             job.remove()
 
-    async def _refresh_guild(self, guild_id: int) -> None:
+        key = _INTERVAL_KEYS.get(provider_type, Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES)
+        async with self.bot.db() as session:
+            settings = SettingsService(session)
+            interval = await settings.get(guild_id, key, 60)
+        interval = max(1, int(interval))
+        start_date = _align_start(interval)
+
+        self.scheduler.add_job(
+            self._refresh_provider,
+            IntervalTrigger(minutes=interval, timezone=UTC, start_date=start_date),
+            args=[guild_id, provider_type],
+            id=job_id,
+            replace_existing=True,
+            misfire_grace_time=min(interval * 30, 300),
+        )
+        log.info("MediaMetrics: guild=%d provider=%s interval=%dm start=%s", guild_id, provider_type, interval, start_date.isoformat())
+
+    async def _refresh_provider(self, guild_id: int, provider_type: str) -> None:
         now = datetime.now(tz=UTC)
-        log.info("MediaMetrics: refreshing guild=%d", guild_id)
+        log.info("MediaMetrics: refreshing guild=%d provider=%s", guild_id, provider_type)
         async with self.bot.db() as session:
             svc = MediaService(session=session, registry=self.registry)
-            result = await svc.refresh_all(guild_id)
+            result = await svc.refresh_all(guild_id, media_type=provider_type)
         elapsed = (datetime.now(tz=UTC) - now).total_seconds()
         log.info(
-            "MediaMetrics: guild=%d refreshed=%d failed=%d in %.1fs",
-            guild_id,
-            result.refreshed,
-            result.failed,
-            elapsed,
+            "MediaMetrics: guild=%d provider=%s refreshed=%d failed=%d in %.1fs",
+            guild_id, provider_type, result.refreshed, result.failed, elapsed,
         )
 
     async def _cleanup_chart_cache(self) -> None:

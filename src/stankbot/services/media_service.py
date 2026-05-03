@@ -11,8 +11,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from stankbot.db.models import MetricSnapshot
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.media_providers.base import MetricResult
 from stankbot.services.media_providers.registry import MediaProviderRegistry
@@ -29,7 +31,49 @@ def _slugify(text: str) -> str:
     return text.strip("-")[:50]
 
 
-_VALID_AGGREGATIONS = {"5min", "15min", "hourly", "daily", "weekly", "monthly"}
+_VALID_AGGREGATIONS = {"5min", "15min", "30min", "hourly", "daily", "weekly", "monthly"}
+
+# Alignment bitmask — each snapshot carries a mask of which calendar boundaries
+# it aligns to.  Used to select exactly-aligned snapshots for delta aggregation
+# without any client-side bucketing or summing.
+ALIGN_5MIN    = 1 << 0   # 1
+ALIGN_15MIN   = 1 << 1   # 2
+ALIGN_30MIN   = 1 << 2   # 4
+ALIGN_HOURLY  = 1 << 3   # 8
+ALIGN_DAILY   = 1 << 4   # 16
+ALIGN_WEEKLY  = 1 << 5   # 32
+ALIGN_MONTHLY = 1 << 6   # 64
+
+_ALIGN_BIT: dict[str, int] = {
+    "5min": ALIGN_5MIN, "15min": ALIGN_15MIN, "30min": ALIGN_30MIN,
+    "hourly": ALIGN_HOURLY, "daily": ALIGN_DAILY,
+    "weekly": ALIGN_WEEKLY, "monthly": ALIGN_MONTHLY,
+}
+
+
+def _compute_alignment_mask(dt: datetime) -> int:
+    """Return bitmask of calendar boundaries this timestamp aligns to.
+
+    Seconds and microseconds are ignored — API latency can drift by
+    several seconds without changing the minute-level alignment.
+    """
+    mask = 0
+    total_minutes = dt.hour * 60 + dt.minute
+    if total_minutes % 5 == 0:
+        mask |= ALIGN_5MIN
+    if total_minutes % 15 == 0:
+        mask |= ALIGN_15MIN
+    if total_minutes % 30 == 0:
+        mask |= ALIGN_30MIN
+    if dt.minute == 0:
+        mask |= ALIGN_HOURLY
+        if dt.hour == 0:
+            mask |= ALIGN_DAILY
+            if dt.weekday() == 0:
+                mask |= ALIGN_WEEKLY
+            if dt.day == 1:
+                mask |= ALIGN_MONTHLY
+    return mask
 
 
 def _floor_to_bucket(dt: datetime, bucket: str) -> datetime:
@@ -47,6 +91,10 @@ def _floor_to_bucket(dt: datetime, bucket: str) -> datetime:
     if bucket == "15min":
         total_minutes = dt.hour * 60 + dt.minute
         floored = total_minutes // 15 * 15
+        return dt.replace(hour=floored // 60, minute=floored % 60, second=0, microsecond=0)
+    if bucket == "30min":
+        total_minutes = dt.hour * 60 + dt.minute
+        floored = total_minutes // 30 * 30
         return dt.replace(hour=floored // 60, minute=floored % 60, second=0, microsecond=0)
     if bucket == "hourly":
         return dt.replace(minute=0, second=0, microsecond=0)
@@ -67,13 +115,10 @@ def _aggregate_snapshots(
 ) -> list[dict[str, Any]]:
     """Aggregate snapshots into time buckets.
 
-    Args:
-        snapshots: Raw snapshots sorted by fetched_at ascending.
-        bucket: One of '5min', '15min', 'hourly', 'daily', 'weekly', 'monthly'.
-        mode: 'total' (last value per bucket) or 'delta' (sum of per-tick deltas).
-
-    Returns:
-        List of {fetched_at: ISO str, value: int} sorted by bucket start.
+    Snaps are already filtered by alignment_bit (done at the query level),
+    so delta mode just diffs consecutive aligned snapshots — no bucketing
+    or summing required.  Total mode floors each snapshot to its bucket
+    start and takes the last value per bucket.
     """
     if bucket not in _VALID_AGGREGATIONS:
         raise ValueError(f"Invalid aggregation bucket: {bucket}")
@@ -82,7 +127,6 @@ def _aggregate_snapshots(
     if not snapshots:
         return []
 
-    # Normalize timezone: older rows may have naive datetimes
     normalized: list[tuple[datetime, int]] = []
     for s in snapshots:
         dt = s.fetched_at
@@ -103,25 +147,19 @@ def _aggregate_snapshots(
             for key in bucket_order
         ]
 
-    # delta mode: compute per-tick deltas, sum into buckets
+    # delta mode: snapshots are already alignment-filtered — just diff
     if len(normalized) < 2:
         return []
 
-    delta_buckets: dict[datetime, int] = {}
-    delta_order: list[datetime] = []
+    result: list[dict[str, Any]] = []
     for i in range(1, len(normalized)):
-        _prev_dt, prev_val = normalized[i - 1]
         cur_dt, cur_val = normalized[i]
-        delta = cur_val - prev_val
-        key = _floor_to_bucket(cur_dt, bucket)
-        if key not in delta_buckets:
-            delta_order.append(key)
-        delta_buckets[key] = delta_buckets.get(key, 0) + delta
-
-    return [
-        {"fetched_at": key.isoformat(), "value": delta_buckets[key]}
-        for key in delta_order
-    ]
+        _prev_dt, prev_val = normalized[i - 1]
+        result.append({
+            "fetched_at": cur_dt.isoformat(),
+            "value": cur_val - prev_val,
+        })
+    return result
 
 
 @dataclass(slots=True)
@@ -320,8 +358,12 @@ class MediaService:
             since = datetime.now(UTC) - timedelta(hours=window_hours)
         elif window_days > 0:
             since = datetime.now(UTC) - timedelta(days=window_days)
+
+        alignment_bit: int | None = _ALIGN_BIT.get(aggregation) if aggregation else None
+
         snapshots = await media_repo.get_metric_snapshots(
-            self.session, media_item_id, metric_key, since
+            self.session, media_item_id, metric_key, since,
+            alignment_bit=alignment_bit,
         )
         if aggregation:
             return _aggregate_snapshots(snapshots, aggregation, mode)
@@ -349,8 +391,11 @@ class MediaService:
         elif window_days > 0:
             since = datetime.now(UTC) - timedelta(days=window_days)
 
+        alignment_bit: int | None = _ALIGN_BIT.get(aggregation) if aggregation else None
+
         snapshots_by_id = await media_repo.get_comparison_snapshots(
-            self.session, media_item_ids, metric_key, since
+            self.session, media_item_ids, metric_key, since,
+            alignment_bit=alignment_bit,
         )
 
         agg_mode = "delta" if delta else "total"
@@ -388,6 +433,7 @@ class MediaService:
                 "media_item_id": mid,
                 "media_type": item.media_type,
                 "title": item.title,
+                "name": item.name,
                 "points": raw_points,
             })
 
@@ -446,6 +492,7 @@ class MediaService:
                     "media_item_id": mid,
                     "media_type": item.media_type,
                     "title": item.title,
+                    "name": item.name,
                     "points": points,
                 })
 
@@ -463,9 +510,12 @@ class MediaService:
     # Refresh
     # ------------------------------------------------------------------
 
-    async def refresh_all(self, guild_id: int) -> RefreshResult:
+    async def refresh_all(self, guild_id: int, media_type: str | None = None) -> RefreshResult:
+        """Refresh metrics for all media items, optionally scoped to one provider type."""
         result = RefreshResult()
         for provider in self.registry.enabled():
+            if media_type is not None and provider.media_type != media_type:
+                continue
             items = await media_repo.list_all(self.session, guild_id, provider.media_type)
             if not items:
                 continue
@@ -486,7 +536,8 @@ class MediaService:
                         self.session, item.id, metric_key, value, now
                     )
                     await media_repo.insert_metric_snapshot(
-                        self.session, item.id, metric_key, value, now
+                        self.session, item.id, metric_key, value, now,
+                        alignment_mask=_compute_alignment_mask(now),
                     )
                 item.metrics_last_fetched_at = now
                 result.refreshed += 1
@@ -510,16 +561,39 @@ class MediaService:
             return mr
 
         now = datetime.now(UTC)
+        mask = _compute_alignment_mask(now)
         for metric_key, value in mr.values.items():
             await media_repo.upsert_metric_cache(
                 self.session, item.id, metric_key, value, now
             )
             await media_repo.insert_metric_snapshot(
-                self.session, item.id, metric_key, value, now
+                self.session, item.id, metric_key, value, now,
+                alignment_mask=mask,
             )
 
         item.metrics_last_fetched_at = now
         return mr
+
+    async def backfill_alignment_masks(self) -> int:
+        """Compute and set alignment_mask on all snapshots where it is NULL.
+
+        Returns the number of rows updated.
+        """
+        from sqlalchemy import update
+
+        stmt = (
+            select(MetricSnapshot.id, MetricSnapshot.fetched_at)
+            .where(MetricSnapshot.alignment_mask.is_(None))
+        )
+        rows = (await self.session.execute(stmt)).all()
+        for row_id, fetched_at in rows:
+            mask = _compute_alignment_mask(fetched_at)
+            await self.session.execute(
+                update(MetricSnapshot)
+                .where(MetricSnapshot.id == row_id)
+                .values(alignment_mask=mask)
+            )
+        return len(rows)
 
     # ------------------------------------------------------------------
     # Serialization

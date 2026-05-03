@@ -305,7 +305,8 @@ async def refresh_all(
 
 
 class MediaSettingsPayload(BaseModel):
-    update_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
+    youtube_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
+    spotify_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
     replies_ephemeral: bool | None = None
     admin_only: bool | None = None
     providers_enabled: list[str] | None = None
@@ -321,9 +322,20 @@ async def update_media_settings(
 ) -> MsgPackResponse:
     svc = SettingsService(session)
     audit_payload: dict[str, Any] = {}
-    if payload.update_interval_minutes is not None:
-        await svc.set(guild_id, Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES, payload.update_interval_minutes)
-        audit_payload["update_interval_minutes"] = payload.update_interval_minutes
+    if payload.youtube_interval_minutes is not None:
+        await svc.set(guild_id, Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES, payload.youtube_interval_minutes)
+        audit_payload["youtube_interval"] = payload.youtube_interval_minutes
+    if payload.spotify_interval_minutes is not None:
+        await svc.set(guild_id, Keys.MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES, payload.spotify_interval_minutes)
+        audit_payload["spotify_interval"] = payload.spotify_interval_minutes
+
+    # Resync scheduler so the new intervals take effect immediately
+    bot = getattr(request.app.state, "bot", None)
+    if bot is not None and hasattr(bot, "media_scheduler"):
+        if payload.youtube_interval_minutes is not None:
+            await bot.media_scheduler.sync_guild(guild_id, "youtube")
+        if payload.spotify_interval_minutes is not None:
+            await bot.media_scheduler.sync_guild(guild_id, "spotify")
     if payload.replies_ephemeral is not None:
         await svc.set(guild_id, Keys.MEDIA_REPLIES_EPHEMERAL, payload.replies_ephemeral)
         audit_payload["replies_ephemeral"] = payload.replies_ephemeral
@@ -343,3 +355,17 @@ async def update_media_settings(
             payload=audit_payload,
         )
     return _ok(request)
+
+
+@router.post("/backfill-alignment-mask")
+async def backfill_alignment_mask(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    _user: dict[str, Any] = Depends(require_guild_admin),
+) -> MsgPackResponse:
+    """One-time backfill: compute alignment_mask for all NULL snapshots."""
+    from stankbot.services.media_service import MediaService
+    registry = request.app.state.media_registry
+    svc = MediaService(session=session, registry=registry)
+    updated = await svc.backfill_alignment_masks()
+    return MsgPackResponse({"updated": updated}, request)

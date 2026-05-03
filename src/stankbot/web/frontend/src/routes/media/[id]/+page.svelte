@@ -91,6 +91,7 @@
 			{ value: 'minutely', label: 'Min', icon: '🕐' },
 			{ value: '5min', label: '5 Min', icon: '🕐' },
 			{ value: '15min', label: '15 Min', icon: '🕐' },
+			{ value: '30min', label: '30 Min', icon: '🕐' },
 			{ value: 'hourly', label: 'Hour', icon: '⏱️' },
 			{ value: 'daily', label: 'Day', icon: '📅' },
 			{ value: 'weekly', label: 'Week', icon: '📆' },
@@ -100,6 +101,7 @@
 			minutely: 1 / 60,
 			'5min': 5 / 60,
 			'15min': 15 / 60,
+			'30min': 0.5,
 			hourly: 1,
 			daily: 24,
 			weekly: 24 * 7,
@@ -135,6 +137,7 @@
 			: selectedAggregation === 'minutely' ? 'minute'
 			: selectedAggregation === '5min' ? 'minute'
 			: selectedAggregation === '15min' ? 'minute'
+			: selectedAggregation === '30min' ? 'minute'
 			: selectedAggregation === 'hourly' ? 'hour'
 			: selectedAggregation === 'daily' ? 'day'
 			: selectedAggregation === 'weekly' ? 'week'
@@ -167,6 +170,7 @@
 				minutely: 60_000,
 				'5min': 300_000,
 				'15min': 900_000,
+				'30min': 1_800_000,
 				hourly: 3_600_000,
 				daily: 86_400_000,
 				weekly: 604_800_000,
@@ -236,7 +240,7 @@
 		return item?.metrics?.[key]?.value ?? 0;
 	}
 
-	const serverAggregations = new Set(['5min', '15min', 'hourly', 'daily', 'weekly', 'monthly']);
+	const serverAggregations = new Set(['5min', '15min', '30min', 'hourly', 'daily', 'weekly', 'monthly']);
 	const useServerAggregation = $derived(serverAggregations.has(selectedAggregation));
 
 	$effect(() => {
@@ -321,7 +325,7 @@
 			return compareData.series
 				.filter((s) => s.media_type === item.media_type)
 				.map((s) => ({
-					label: s.media_item_id === item.id ? (item.name || s.title) : s.title,
+					label: s.media_item_id === item.id ? (item.name || s.title) : (s.name || s.title),
 					data: s.points.map((p) => ({
 						x: new Date(String(p.x)).getTime(),
 						y: p.y
@@ -415,7 +419,7 @@
 					grid: { display: false }
 				},
 				y: {
-					title: { display: true, text: metricLabel(selectedMetric), color: '#9aa4b2' },
+					title: { display: false },
 					...(isPercentage ? { min: 0, max: 100 } : { beginAtZero: false }),
 					ticks: {
 						callback: yTickCallback,
@@ -458,17 +462,6 @@
 				>
 					● {freshness.label}
 				</span>
-				{#if externalUrl()}
-					<a
-						href={externalUrl()}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="text-xs px-3 py-1 rounded border border-border hover:border-accent text-text no-underline"
-						data-testid="media-external-link"
-					>
-						Open on {provider?.label ?? item.media_type} ↗
-					</a>
-				{/if}
 			</div>
 		</div>
 
@@ -499,6 +492,17 @@
 					<div class="text-muted">
 						Type: <span class="text-text capitalize">{provider?.label ?? item.media_type}</span>
 					</div>
+					{#if externalUrl()}
+						<a
+							href={externalUrl()}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="text-accent hover:underline"
+							data-testid="media-external-link"
+						>
+							Open on {provider?.label ?? item.media_type} ↗
+						</a>
+					{/if}
 				</div>
 			</div>
 
@@ -513,6 +517,7 @@
 							label={opt.label}
 							testId="media-detail-{opt.value}"
 							valueTestId="media-detail-{opt.value}-value"
+							fontSize="md"
 						/>
 					{/each}
 				</div>

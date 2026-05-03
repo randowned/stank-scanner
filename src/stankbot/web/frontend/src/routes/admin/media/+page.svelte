@@ -20,7 +20,8 @@
 	let activeType = $state<string>('');
 
 	let settingsOpen = $state(false);
-	let updateInterval = $state(60);
+	let youtubeInterval = $state(60);
+	let spotifyInterval = $state(60);
 	let ephemeralEnabled = $state(true);
 	let adminOnly = $state(false);
 	let enabledProviders = $state<string[]>(['youtube', 'spotify']);
@@ -78,10 +79,13 @@
 	async function loadSettings() {
 		try {
 			const res = await apiFetch<{ values: Record<string, unknown> }>('/api/admin/settings');
-			const val = res.values?.['media_metrics_update_interval_minutes'];
-			if (typeof val === 'number') {
-				// Clamp to nearest valid option
-				updateInterval = VALID_INTERVALS.find(iv => iv >= val) ?? 60;
+			const ytVal = res.values?.['media_youtube_update_interval_minutes'];
+			if (typeof ytVal === 'number') {
+				youtubeInterval = VALID_INTERVALS.find(iv => iv >= ytVal) ?? 60;
+			}
+			const spVal = res.values?.['media_spotify_update_interval_minutes'];
+			if (typeof spVal === 'number') {
+				spotifyInterval = VALID_INTERVALS.find(iv => iv >= spVal) ?? 60;
 			}
 			if (typeof res.values?.['media_replies_ephemeral'] === 'boolean') {
 				ephemeralEnabled = res.values?.['media_replies_ephemeral'] as boolean;
@@ -103,7 +107,8 @@
 		settingsError = null;
 		try {
 			await apiPost('/api/admin/media/settings', {
-				update_interval_minutes: updateInterval,
+				youtube_interval_minutes: youtubeInterval,
+				spotify_interval_minutes: spotifyInterval,
 				replies_ephemeral: ephemeralEnabled,
 				admin_only: adminOnly,
 				providers_enabled: enabledProviders
@@ -151,6 +156,15 @@
 		deletingId = id;
 		deletingTitle = title;
 		deleteOpen = true;
+	}
+
+	async function handleBackfill() {
+		try {
+			const res = await apiPost<{ updated: number }>('/api/admin/media/backfill-alignment-mask');
+			alert(`Backfilled ${res.updated} snapshots.`);
+		} catch (err) {
+			alert(`Backfill failed: ${toErrorMessage(err, 'Unknown error')}`);
+		}
 	}
 
 	$effect(() => {
@@ -231,7 +245,7 @@
 {:else}
 	<div class="space-y-2">
 		{#each filteredItems as item (item.id)}
-			{@const freshness = formatFreshness(item.metrics_last_fetched_at, updateInterval)}
+			{@const freshness = formatFreshness(item.metrics_last_fetched_at, item.media_type === 'spotify' ? spotifyInterval : youtubeInterval)}
 			{@const primary = primaryMetric(item)}
 			<div class="bg-panel border border-border rounded-lg overflow-hidden flex flex-col md:flex-row md:items-stretch" data-testid="media-admin-row">
 				{#if item.thumbnail_url}
@@ -269,9 +283,16 @@
 <Modal bind:open={settingsOpen} title="Media Settings">
 	<div class="space-y-4">
 		<div>
-			<span class="block text-sm font-medium mb-2">Metrics update interval</span>
-			<SelectDropdown options={intervalOptions} bind:value={updateInterval} disabled={savingSettings} testId="media-interval-dropdown" />
-			<div class="text-xs text-muted mt-1">How often the scheduler fetches fresh metrics. Fetches are aligned to clock boundaries.</div>
+			<span class="block text-sm font-medium mb-2">Update intervals</span>
+			<div class="flex items-center justify-between gap-3 py-1.5 border-b border-border">
+				<span class="text-sm text-text whitespace-nowrap">YouTube</span>
+				<SelectDropdown options={intervalOptions} bind:value={youtubeInterval} disabled={savingSettings} testId="media-interval-youtube" />
+			</div>
+			<div class="flex items-center justify-between gap-3 py-1.5">
+				<span class="text-sm text-text whitespace-nowrap">Spotify</span>
+				<SelectDropdown options={intervalOptions} bind:value={spotifyInterval} disabled={savingSettings} testId="media-interval-spotify" />
+			</div>
+			<div class="text-xs text-muted mt-1">Per-provider fetch intervals. Snapshot aggregation filters to snapshots matching the current interval. Fetches are aligned to clock boundaries.</div>
 		</div>
 		<div>
 			<Toggle bind:checked={ephemeralEnabled} label="Ephemeral /stats replies" />
@@ -292,6 +313,10 @@
 				{/each}
 			</div>
 			<div class="text-xs text-muted mt-1">Disabled providers are hidden from non-admins in the dashboard and /stats commands.</div>
+		</div>
+		<div class="pt-2 border-t border-border">
+			<Button variant="secondary" onclick={handleBackfill} testId="media-backfill-alignment">Backfill alignment masks</Button>
+			<div class="text-xs text-muted mt-1">Computes alignment masks for all existing snapshots. Run once after deploying the alignment_mask migration.</div>
 		</div>
 		{#if settingsError}
 			<div class="text-red-400 text-sm">{settingsError}</div>
