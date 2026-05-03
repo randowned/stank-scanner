@@ -169,8 +169,8 @@ All setup happens on the web dashboard (log in with Discord OAuth):
 |---|---|
 | `/stats youtube info <name>` | Rich embed with full-number metrics, day-over-day deltas, formatted dates/durations, and cover photo. |
 | `/stats spotify info <name>` | Rich embed with latest Spotify track/album metrics and day-over-day popularity change. |
-| `/stats youtube chart <name> <type> <range>` | Inline chart image (16:9 PNG) for views, likes, or comments over a time range (6h–1 year). |
-| `/stats spotify chart <name> <type> <range>` | Inline chart image for popularity over a time range. |
+| `/stats youtube chart <name> <type> <range> [aggregation] [mode]` | Inline chart image (16:9 PNG) for views, likes, or comments. `mode` toggles total (default) vs per-tick delta. |
+| `/stats spotify chart <name> <type> <range> [aggregation] [mode]` | Inline chart image for popularity. `mode` toggles total (default) vs per-tick delta. |
 
 All `/stats` commands support autocomplete on the `name` parameter. Admin guilds can restrict access via the media settings panel (`admin-only` toggle).
 

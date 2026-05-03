@@ -55,7 +55,7 @@
 	let compareIds = $state<string[]>([]);
 	let compareData = $state<CompareData | null>(null);
 	let loadingCompare = $state(false);
-	let comparisonMode = $state<'delta' | 'total'>('delta');
+	let comparisonMode = $state<'delta' | 'total'>('total');
 	let selectedAggregation = $state<string>('auto');
 
 	const metricOptions = $derived(
@@ -128,6 +128,17 @@
 		const raw = $page.url.searchParams.get('compare');
 		if (raw) {
 			compareIds = raw.split(',').map((s) => s.trim()).filter(Boolean);
+		}
+	});
+
+	// Auto-default Δ/Σ when entering/leaving compare mode. User toggles still stick
+	// within a given mode because we only flip on the transition.
+	let prevHasCompare = $state(false);
+	$effect(() => {
+		const now = compareIds.length > 0;
+		if (now !== prevHasCompare) {
+			comparisonMode = now ? 'delta' : 'total';
+			prevHasCompare = now;
 		}
 	});
 
@@ -220,26 +231,27 @@
 	}
 
 	function buildChartDatasets() {
-		const datasets = [{
+		// In compare mode the API already includes the host item in compareData.series
+		// (and applies delta/total transformation). Render those exclusively to avoid
+		// duplicating the host as a separate raw-totals overlay.
+		if (hasCompare && compareData && item) {
+			return compareData.series
+				.filter((s) => s.media_type === item.media_type)
+				.map((s) => ({
+					label: s.media_item_id === item.id ? (item.name || s.title) : s.title,
+					data: s.points.map((p) => ({
+						x: new Date(String(p.x)).getTime(),
+						y: p.y
+					}))
+				}));
+		}
+		return [{
 			label: item?.name || metricLabel(selectedMetric),
 			data: history.map((h) => ({
 				x: new Date(h.fetched_at).getTime(),
 				y: h.value
 			}))
 		}];
-		if (compareData && item) {
-			const compareSets = compareData.series
-				.filter((s) => s.media_type === item.media_type)
-				.map((s) => ({
-					label: s.title,
-					data: s.points.map((p) => ({
-						x: new Date(String(p.x)).getTime(),
-						y: p.y
-					}))
-				}));
-			datasets.push(...compareSets);
-		}
-		return datasets;
 	}
 
 	function timeDisplayFormats() {
@@ -404,7 +416,7 @@
 						{metricLabel(selectedMetric)} over time
 						{#if dataStartLabel} <span class="text-xs text-muted font-normal">(data since {dataStartLabel})</span>{/if}
 						{#if hasCompare && compareData}
-							— comparing {buildChartDatasets().length - 1} items
+							— comparing {buildChartDatasets().length} items
 						{/if}
 					</h3>
 					{#if graphs}

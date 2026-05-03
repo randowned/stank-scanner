@@ -203,6 +203,7 @@ async def get_media_chart(
     hours: int | None = Query(None, ge=1, le=8760),
     date: str | None = Query(None),
     agg: str | None = Query(None),
+    mode: str = Query("total"),
     session: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     item = await media_repo.get(session, media_id)
@@ -271,7 +272,8 @@ async def get_media_chart(
     agg_val = agg or "auto"
     cache_dir = CHART_CACHE_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = cache_dir / f"{media_id}_{metric}_{range_key}_{cache_ts}_{agg_val}.png"
+    mode_val = mode if mode in ("total", "delta") else "total"
+    cache_path = cache_dir / f"{media_id}_{metric}_{range_key}_{cache_ts}_{agg_val}_{mode_val}.png"
 
     if cache_path.exists():
         return FileResponse(
@@ -292,6 +294,7 @@ async def get_media_chart(
         metric_label=metric_label,
         duration_hours=duration_hours,
         aggregation=agg,
+        mode=mode_val,
     )
     cache_path.write_bytes(buf)
 
