@@ -65,6 +65,35 @@ AGGREGATION_CHOICES = [
     app_commands.Choice(name="Monthly", value="monthly"),
 ]
 
+# Bucket size in minutes for each aggregation value
+_BUCKET_MINUTES: dict[str, int] = {
+    "5min": 5,
+    "15min": 15,
+    "30min": 30,
+    "hourly": 60,
+    "daily": 1440,
+    "weekly": 10080,
+    "monthly": 43200,
+}
+
+# Range choice value → hours (0 = "all time")
+_RANGE_HOURS: dict[str, float] = {
+    "1h": 1,
+    "6h": 6,
+    "12h": 12,
+    "24h": 24,
+    "7d": 168,
+    "30d": 720,
+    "90d": 2160,
+    "365d": 8760,
+    "all": 0,
+}
+
+_PROVIDER_INTERVAL_KEYS_COG: dict[str, str] = {
+    "youtube": Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES,
+    "spotify": Keys.MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES,
+}
+
 
 class StatsCommands(commands.GroupCog, name="stats"):
     """``/stats`` commands — show metrics for tracked YouTube / Spotify items."""
@@ -106,6 +135,39 @@ class StatsCommands(commands.GroupCog, name="stats"):
                 )
                 if len(choices) >= 25:
                     break
+        return choices
+
+    async def _aggregation_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+        media_type: str,
+    ) -> list[app_commands.Choice[str]]:
+        interval_minutes = 60
+        if interaction.guild is not None:
+            interval_key = _PROVIDER_INTERVAL_KEYS_COG.get(media_type)
+            if interval_key:
+                async with self.bot.db() as session:
+                    interval_minutes = await SettingsService(session).get(
+                        interaction.guild.id, interval_key, 60
+                    )
+
+        # Read currently selected range from namespace if present
+        range_val: str | None = getattr(interaction.namespace, "range", None)
+        range_hours = _RANGE_HOURS.get(range_val, 0) if range_val else 0
+
+        choices: list[app_commands.Choice[str]] = []
+        for choice in AGGREGATION_CHOICES:
+            bucket_min = _BUCKET_MINUTES.get(choice.value, 0)
+            # Hide resolutions finer than the provider's configured poll interval
+            if bucket_min < interval_minutes:
+                continue
+            # Hide resolutions that don't fit within the selected range (skip if "all" or unset)
+            if range_hours > 0 and bucket_min * 60 >= range_hours * 3600:
+                continue
+            if current and current.lower() not in choice.name.lower():
+                continue
+            choices.append(choice)
         return choices
 
     # ------------------------------------------------------------------
@@ -290,7 +352,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
 
     @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
     @app_commands.describe(name="The video's name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for aggregation.")
-    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES, aggregation=AGGREGATION_CHOICES)
+    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
     @app_commands.rename(metric="type", range_="range")
     @requires_stats_access()
     async def youtube_chart(
@@ -310,13 +372,19 @@ class StatsCommands(commands.GroupCog, name="stats"):
     ) -> list[app_commands.Choice[str]]:
         return await self._name_autocomplete(interaction, current, "youtube")
 
+    @youtube_chart.autocomplete("aggregation")
+    async def _youtube_chart_aggregation_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._aggregation_autocomplete(interaction, current, "youtube")
+
     # ------------------------------------------------------------------
     # Spotify chart
     # ------------------------------------------------------------------
 
     @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
     @app_commands.describe(name="The track or album name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for aggregation.")
-    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES, aggregation=AGGREGATION_CHOICES)
+    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
     @app_commands.rename(metric="type", range_="range")
     @requires_stats_access()
     async def spotify_chart(
@@ -335,6 +403,12 @@ class StatsCommands(commands.GroupCog, name="stats"):
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         return await self._name_autocomplete(interaction, current, "spotify")
+
+    @spotify_chart.autocomplete("aggregation")
+    async def _spotify_chart_aggregation_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._aggregation_autocomplete(interaction, current, "spotify")
 
 
 async def setup(bot: StankBot) -> None:

@@ -320,14 +320,15 @@ async def get_media_chart(
         if not effective_aggregation and eligible:
             effective_aggregation = eligible[-1][1]
 
-    # Apply server-side aggregation (reuses the same logic as history endpoint)
+    # Apply server-side aggregation (reuses the same logic as history endpoint).
+    # Always bucket as "total" first (floor + last-value-per-bucket) so we get
+    # exactly one data point per boundary.  The renderer then handles delta by
+    # diffing consecutive bucketed totals — this is correct even on raw data.
     render_snaps: list[Any] = snaps
     render_mode = mode if mode in ("total", "delta") else "total"
     if effective_aggregation:
-        agg_mode = render_mode
-        aggregated = _aggregate_snapshots(snaps, effective_aggregation, agg_mode)
+        aggregated = _aggregate_snapshots(snaps, effective_aggregation, "total")
         render_snaps = [_SnapshotStub(value=d["value"], fetched_at=datetime.fromisoformat(d["fetched_at"])) for d in aggregated]
-        render_mode = "total"  # delta already applied by _aggregate_snapshots
 
     # Determine cache key from the latest snapshot timestamp
     if snaps:
