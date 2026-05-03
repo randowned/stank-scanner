@@ -181,3 +181,45 @@ class TestRenderMediaChart:
             duration_hours=144,
         )
         assert isinstance(buf, bytes)
+
+
+class TestRenderMediaChartMode:
+    def test_delta_with_multiple_snapshots(self) -> None:
+        """mode='delta' with several snapshots should render valid PNG."""
+        snaps = _make_snapshots(count=5, interval_hours=1)
+        buf = render_media_chart(
+            snapshots=snaps,
+            title="Delta",
+            metric_label="Views",
+            duration_hours=4,
+            mode="delta",
+        )
+        img = Image.open(BytesIO(buf))
+        assert img.size == (1200, 675)
+
+    def test_delta_with_single_snapshot(self) -> None:
+        """mode='delta' with one snapshot drops the only point and emits placeholder."""
+        snaps = _make_snapshots(count=1)
+        buf = render_media_chart(
+            snapshots=snaps,
+            title="Delta-1",
+            metric_label="Views",
+            duration_hours=0,
+            mode="delta",
+        )
+        # Should not crash and should still be a valid PNG (placeholder image).
+        img = Image.open(BytesIO(buf))
+        assert img.size == (1200, 675)
+
+    def test_total_matches_default(self) -> None:
+        """Explicit mode='total' produces same output dimensions as default."""
+        snaps = _make_snapshots(count=5, interval_hours=1)
+        buf = render_media_chart(
+            snapshots=snaps,
+            title="Total",
+            metric_label="Views",
+            duration_hours=4,
+            mode="total",
+        )
+        img = Image.open(BytesIO(buf))
+        assert img.size == (1200, 675)

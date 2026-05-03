@@ -128,6 +128,7 @@ Environment (see `.env.example`):
 | `WEB_SECRET_KEY` | Cookie signing secret for the dashboard |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key for media metrics |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify Web API credentials for media metrics |
+| `CHART_CACHE_DIR` | Directory for cached `/api/media/{id}/chart` PNGs (default `/data/media/chart`); cleaned every 10 minutes by the media scheduler. |
 
 **Dev-only mocks** (`.env.dev`, no secrets needed):
 
@@ -169,8 +170,10 @@ All setup happens on the web dashboard (log in with Discord OAuth):
 |---|---|
 | `/stats youtube info <name>` | Rich embed with full-number metrics, day-over-day deltas, formatted dates/durations, and cover photo. |
 | `/stats spotify info <name>` | Rich embed with latest Spotify track/album metrics and day-over-day popularity change. |
-| `/stats youtube chart <name> <type> <range> [aggregation] [mode]` | Inline chart image (16:9 PNG) for views, likes, or comments. `mode` toggles total (default) vs per-tick delta. |
-| `/stats spotify chart <name> <type> <range> [aggregation] [mode]` | Inline chart image for popularity. `mode` toggles total (default) vs per-tick delta. |
+| `/stats youtube chart <name> <type> <range> [mode]` | Inline chart image (16:9 PNG) for views, likes, or comments. `mode` toggles total (default) vs per-tick delta. |
+| `/stats spotify chart <name> <type> <range> [mode]` | Inline chart image for popularity. `mode` toggles total (default) vs per-tick delta. |
+
+Admins can disable individual media providers per-guild from the media settings panel; non-admins won't see disabled-provider items, while admins always see everything (so they can re-enable). The dashboard detail page exposes an `aggregation` dropdown (Auto / Min / Hour / Day / Week / Month) that controls Chart.js tick density; the Discord chart-image endpoint plots one tick per snapshot and does not take an aggregation parameter.
 
 All `/stats` commands support autocomplete on the `name` parameter. Admin guilds can restrict access via the media settings panel (`admin-only` toggle).
 

@@ -49,15 +49,6 @@ RANGE_CHOICES = [
     app_commands.Choice(name="All time", value="all"),
 ]
 
-AGGREGATION_CHOICES = [
-    app_commands.Choice(name="Auto", value="auto"),
-    app_commands.Choice(name="Minutely", value="minutely"),
-    app_commands.Choice(name="Hourly", value="hourly"),
-    app_commands.Choice(name="Daily", value="daily"),
-    app_commands.Choice(name="Weekly", value="weekly"),
-    app_commands.Choice(name="Monthly", value="monthly"),
-]
-
 MODE_CHOICES = [
     app_commands.Choice(name="Total (cumulative)", value="total"),
     app_commands.Choice(name="Delta (per-tick change)", value="delta"),
@@ -82,7 +73,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # Autocomplete helper
     # ------------------------------------------------------------------
 
-    async def _slug_autocomplete(
+    async def _name_autocomplete(
         self,
         interaction: discord.Interaction,
         current: str,
@@ -114,7 +105,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
         self,
         interaction: discord.Interaction,
         media_type: str,
-        slug: str,
+        name: str,
     ) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -145,11 +136,11 @@ class StatsCommands(commands.GroupCog, name="stats"):
             await interaction.response.defer(thinking=True, ephemeral=ephemeral)
 
             item = await media_repo.get_by_name(
-                session, interaction.guild.id, media_type, slug
+                session, interaction.guild.id, media_type, name
             )
             if item is None:
                 await interaction.followup.send(
-                    f"No {media_type} item found with name `{slug}`.",
+                    f"No {media_type} item found with name `{name}`.",
                     ephemeral=True,
                 )
                 return
@@ -188,10 +179,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
         self,
         interaction: discord.Interaction,
         media_type: str,
-        slug: str,
+        name: str,
         metric: str,
         range_value: str,
-        aggregation: str = "auto",
         mode: str = "total",
     ) -> None:
         if interaction.guild is None:
@@ -204,11 +194,11 @@ class StatsCommands(commands.GroupCog, name="stats"):
 
         async with self.bot.db() as session:
             item = await media_repo.get_by_name(
-                session, interaction.guild.id, media_type, slug
+                session, interaction.guild.id, media_type, name
             )
             if item is None:
                 await interaction.followup.send(
-                    f"No {media_type} item found with name `{slug}`.",
+                    f"No {media_type} item found with name `{name}`.",
                     ephemeral=True,
                 )
                 return
@@ -227,9 +217,6 @@ class StatsCommands(commands.GroupCog, name="stats"):
             else:
                 url += f"&days={range_value[:-1]}"
 
-            if aggregation != "auto":
-                url += f"&agg={aggregation}"
-
             if mode != "total":
                 url += f"&mode={mode}"
 
@@ -247,94 +234,90 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @youtube.command(name="info", description="Show stats for a tracked YouTube video.")
-    @app_commands.describe(slug="The video's slug (short name).")
-    @app_commands.rename(slug="name")
+    @app_commands.describe(name="The video's name.")
     @requires_stats_access()
     async def youtube_info(
         self,
         interaction: discord.Interaction,
-        slug: str,
+        name: str,
     ) -> None:
-        await self._send_info_embed(interaction, "youtube", slug)
+        await self._send_info_embed(interaction, "youtube", name)
 
-    @youtube_info.autocomplete("slug")
+    @youtube_info.autocomplete("name")
     async def _youtube_info_name_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._slug_autocomplete(interaction, current, "youtube")
+        return await self._name_autocomplete(interaction, current, "youtube")
 
     # ------------------------------------------------------------------
     # Spotify info
     # ------------------------------------------------------------------
 
     @spotify.command(name="info", description="Show stats for a tracked Spotify item.")
-    @app_commands.describe(slug="The track or album slug.")
-    @app_commands.rename(slug="name")
+    @app_commands.describe(name="The track or album name.")
     @requires_stats_access()
     async def spotify_info(
         self,
         interaction: discord.Interaction,
-        slug: str,
+        name: str,
     ) -> None:
-        await self._send_info_embed(interaction, "spotify", slug)
+        await self._send_info_embed(interaction, "spotify", name)
 
-    @spotify_info.autocomplete("slug")
+    @spotify_info.autocomplete("name")
     async def _spotify_info_name_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._slug_autocomplete(interaction, current, "spotify")
+        return await self._name_autocomplete(interaction, current, "spotify")
 
     # ------------------------------------------------------------------
     # YouTube chart
     # ------------------------------------------------------------------
 
     @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
-    @app_commands.describe(slug="The video's slug.", metric="Which metric to chart.", range_="Time range to show.", aggregation="Tick grouping.", mode="Total values or per-tick delta.")
-    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, aggregation=AGGREGATION_CHOICES, mode=MODE_CHOICES)
-    @app_commands.rename(slug="name", metric="type", range_="range", aggregation="aggregation", mode="mode")
+    @app_commands.describe(name="The video's name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.")
+    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
+    @app_commands.rename(metric="type", range_="range")
     @requires_stats_access()
     async def youtube_chart(
         self,
         interaction: discord.Interaction,
-        slug: str,
+        name: str,
         metric: str,
         range_: str,
-        aggregation: str = "auto",
         mode: str = "total",
     ) -> None:
-        await self._send_chart_embed(interaction, "youtube", slug, metric, range_, aggregation, mode)
+        await self._send_chart_embed(interaction, "youtube", name, metric, range_, mode)
 
-    @youtube_chart.autocomplete("slug")
+    @youtube_chart.autocomplete("name")
     async def _youtube_chart_name_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._slug_autocomplete(interaction, current, "youtube")
+        return await self._name_autocomplete(interaction, current, "youtube")
 
     # ------------------------------------------------------------------
     # Spotify chart
     # ------------------------------------------------------------------
 
     @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
-    @app_commands.describe(slug="The track or album slug.", metric="Which metric to chart.", range_="Time range to show.", aggregation="Tick grouping.", mode="Total values or per-tick delta.")
-    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, aggregation=AGGREGATION_CHOICES, mode=MODE_CHOICES)
-    @app_commands.rename(slug="name", metric="type", range_="range", aggregation="aggregation", mode="mode")
+    @app_commands.describe(name="The track or album name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.")
+    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
+    @app_commands.rename(metric="type", range_="range")
     @requires_stats_access()
     async def spotify_chart(
         self,
         interaction: discord.Interaction,
-        slug: str,
+        name: str,
         metric: str,
         range_: str,
-        aggregation: str = "auto",
         mode: str = "total",
     ) -> None:
-        await self._send_chart_embed(interaction, "spotify", slug, metric, range_, aggregation, mode)
+        await self._send_chart_embed(interaction, "spotify", name, metric, range_, mode)
 
-    @spotify_chart.autocomplete("slug")
+    @spotify_chart.autocomplete("name")
     async def _spotify_chart_name_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._slug_autocomplete(interaction, current, "spotify")
+        return await self._name_autocomplete(interaction, current, "spotify")
 
 
 async def setup(bot: StankBot) -> None:

@@ -28,8 +28,6 @@ def _slugify(text: str) -> str:
     text = re.sub(r"-+", "-", text)
     return text.strip("-")[:50]
 
-log = logging.getLogger(__name__)
-
 
 @dataclass(slots=True)
 class RefreshResult:
@@ -138,7 +136,7 @@ class MediaService:
             published_at=resolved.published_at,
             duration_seconds=resolved.duration_seconds,
             added_by=added_by,
-            slug=name_final,
+            name=name_final,
         )
         return self._serialize_item(item)
 

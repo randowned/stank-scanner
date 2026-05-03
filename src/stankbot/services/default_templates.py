@@ -204,7 +204,7 @@ YOUTUBE_MEDIA_EMBED: dict[str, Any] = {
         {"name": "\U0001f4c5 Published", "value": "{published_at}", "inline": True},
         {"name": "\u23f1 Duration", "value": "{duration}", "inline": True},
     ],
-    "footer": "\U0001f3ac YouTube \u00b7 {slug} \u00b7 Updated {last_fetched_at}",
+    "footer": "\U0001f3ac YouTube \u00b7 {name} \u00b7 Updated {last_fetched_at}",
 }
 
 
@@ -223,7 +223,7 @@ SPOTIFY_MEDIA_EMBED: dict[str, Any] = {
         {"name": "\U0001f4c5 Released", "value": "{published_at}", "inline": True},
         {"name": "\U0001f3b5 Type", "value": "{spotify_type}", "inline": True},
     ],
-    "footer": "\U0001f3b5 Spotify \u00b7 {slug} \u00b7 Updated {last_fetched_at}",
+    "footer": "\U0001f3b5 Spotify \u00b7 {name} \u00b7 Updated {last_fetched_at}",
 }
 
 

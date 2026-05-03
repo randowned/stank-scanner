@@ -127,7 +127,7 @@ async def add_media(
         media_type=payload.media_type,
         resolved=resolved,
         added_by=int(user["id"]),
-        slug=payload.name,
+        name=payload.name,
     )
     if item is None:
         raise HTTPException(status_code=409, detail="This media item has already been added (duplicate URL/ID).")

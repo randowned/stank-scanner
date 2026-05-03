@@ -115,7 +115,6 @@ def render_media_chart(
     title: str,
     metric_label: str,
     duration_hours: float,
-    aggregation: str | None = None,
     mode: str = "total",
     width: int = WIDTH,
     height: int = HEIGHT,
@@ -127,11 +126,6 @@ def render_media_chart(
     # ------------------------------------------------------------------
     # Data mapping
     # ------------------------------------------------------------------
-    if not snapshots:
-        draw.text((width / 2 - 80, height / 2), "No data available", fill=LABEL_COLOR, font=_FONT_LABEL)
-        buf = _save_bytes(img)
-        return buf
-
     raw_values = [s.value for s in snapshots]
     if mode == "delta" and len(raw_values) >= 2:
         values = [raw_values[i] - raw_values[i - 1] for i in range(1, len(raw_values))]
@@ -141,6 +135,10 @@ def render_media_chart(
         snapshots = []
     else:
         values = raw_values
+
+    if not snapshots:
+        draw.text((width / 2 - 80, height / 2), "No data available", fill=LABEL_COLOR, font=_FONT_LABEL)
+        return _save_bytes(img)
     times = [(s.fetched_at.astimezone(UTC) if isinstance(s.fetched_at, datetime) else s.fetched_at) for s in snapshots]
     times_dt = [t if isinstance(t, datetime) else datetime.fromisoformat(str(t).replace("Z", "+00:00")) for t in times]
 

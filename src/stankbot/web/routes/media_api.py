@@ -202,7 +202,6 @@ async def get_media_chart(
     days: int | None = Query(None, ge=0, le=365),
     hours: int | None = Query(None, ge=1, le=8760),
     date: str | None = Query(None),
-    agg: str | None = Query(None),
     mode: str = Query("total"),
     session: AsyncSession = Depends(get_db),
 ) -> FileResponse:
@@ -267,13 +266,12 @@ async def get_media_chart(
     else:
         cache_ts = int(reference_date.timestamp())
 
-    # Determine cache key — includes all params so different metric/range/agg combos don't collide
+    # Determine cache key — includes all params so different metric/range/mode combos don't collide
     range_key = f"h{hours}" if hours is not None else f"d{days}" if days is not None else "all"
-    agg_val = agg or "auto"
+    mode_val = mode if mode in ("total", "delta") else "total"
     cache_dir = CHART_CACHE_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
-    mode_val = mode if mode in ("total", "delta") else "total"
-    cache_path = cache_dir / f"{media_id}_{metric}_{range_key}_{cache_ts}_{agg_val}_{mode_val}.png"
+    cache_path = cache_dir / f"{media_id}_{metric}_{range_key}_{cache_ts}_{mode_val}.png"
 
     if cache_path.exists():
         return FileResponse(
@@ -293,7 +291,6 @@ async def get_media_chart(
         title=item.title,
         metric_label=metric_label,
         duration_hours=duration_hours,
-        aggregation=agg,
         mode=mode_val,
     )
     cache_path.write_bytes(buf)
@@ -322,14 +319,12 @@ def cleanup_chart_cache(now: datetime | None = None) -> int:
         if not f.is_file() or f.suffix != ".png":
             continue
         try:
-            # Filename format: {media_id}_{metric}_{range}_{snapshot_ts}{_agg}.png
+            # Filename format: {media_id}_{metric}_{range}_{snapshot_ts}_{mode}.png
+            # Find the longest digit-only segment that looks like an epoch timestamp.
             parts = f.stem.split("_")
-            # The snapshot timestamp is the third-to-last or second-to-last part
-            # depending on whether an aggregation suffix is present
-            for i in range(len(parts) - 1, -1, -1):
-                if parts[i].isdigit() and len(parts[i]) >= 10:  # epoch timestamp
-                    ts = int(parts[i])
-                    if ts < cutoff:
+            for part in reversed(parts):
+                if part.isdigit() and len(part) >= 10:
+                    if int(part) < cutoff:
                         f.unlink()
                         deleted += 1
                     break

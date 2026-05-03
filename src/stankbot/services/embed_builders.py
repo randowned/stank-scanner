@@ -327,12 +327,14 @@ async def build_media_embed(
     """Build a media item embed from the guild's per-provider template.
 
     Variables available in templates:
-        {title}, {channel_name}, {slug}, {url}, {image_url},
+        {title}, {channel_name}, {name}, {url}, {image_url},
         {published_at}, {duration}, {last_fetched_at},
         {view_count}, {view_count_delta},
         {like_count}, {like_count_delta},
         {comment_count}, {comment_count_delta},
         {popularity}, {popularity_delta}, {spotify_type}
+
+    {slug} is a legacy alias for {name} (preserved for user-customized templates).
     """
 
     def _fmt_num(n: int) -> str:
@@ -401,7 +403,8 @@ async def build_media_embed(
     variables: dict[str, Any] = {
         "title": title or "",
         "channel_name": channel_name or "",
-        "slug": name or "",
+        "name": name or "",
+        "slug": name or "",  # legacy alias
         "image_url": thumbnail_url or "",
         "published_at": _fmt_date(published_at),
         "duration": _fmt_duration(duration_seconds),

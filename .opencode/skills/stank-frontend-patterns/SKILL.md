@@ -49,8 +49,7 @@ Always check existing components before creating new ones:
 | `NavSkeleton` | Full-page nav loading | `isAdminRoute` |
 | `Sparkline` | Mini line chart | `values`, `ariaLabel` |
 | `LeaderboardRow` | Single leaderboard row | `rank`, `row`, `isMe`, `context` |
-| `Chart` | Chart.js wrapper (line/bar) — dark-theme aware | `type`, `data`, `options` |
-| `ComparisonChart` | Multi-series media metric overlay | `series`, `metric`, `days` |
+| `Chart` | Chart.js wrapper (line/bar) — dark-theme aware; also handles media compare overlays via stacked datasets | `type`, `data`, `options` |
 | `RelativeTime` | Live "N min ago" label that auto-ticks | `iso`, `fallback` |
 | `SelectDropdown` | Icon-prefixed select (interval / metric pickers) | `options`, `bind:value` |
 | `Tooltip` | Hover tooltip primitive — accepts `useNativeTooltip` to opt out of custom rendering | `text`, `useNativeTooltip` |

@@ -23,7 +23,7 @@ async def add(
     published_at: datetime | None = None,
     duration_seconds: int | None = None,
     added_by: int,
-    slug: str | None = None,
+    name: str | None = None,
 ) -> MediaItem:
     item = MediaItem(
         guild_id=guild_id,
@@ -36,7 +36,7 @@ async def add(
         published_at=published_at,
         duration_seconds=duration_seconds,
         added_by=added_by,
-        name=slug,
+        name=name,
     )
     session.add(item)
     await session.flush()
