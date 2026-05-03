@@ -69,6 +69,7 @@
 	);
 
 	const rangeOptions = [
+		{ value: 1, label: '1 hour', icon: '⏱️' },
 		{ value: 6, label: '6 hours', icon: '⏱️' },
 		{ value: 12, label: '12 hours', icon: '⏱️' },
 		{ value: 24, label: '1 day', icon: '📅' },
@@ -277,10 +278,17 @@
 		loadingCompare = true;
 		try {
 			const allIds = [item.id, ...compareIds.map(Number)];
-			const days = Math.max(1, Math.round(selectedHours / 24));
 			const deltaParam = comparisonMode === 'delta' ? '&delta=true' : '&delta=false';
+			const aggParam = useServerAggregation ? `&aggregation=${selectedAggregation}` : '';
+			let rangeParam: string;
+			if (selectedHours < 24) {
+				rangeParam = `&hours=${selectedHours}`;
+			} else {
+				const days = Math.max(1, Math.round(selectedHours / 24));
+				rangeParam = `&days=${days}`;
+			}
 			const res = await apiFetch<CompareData>(
-				`/api/media/compare?ids=${allIds.join(',')}&metric=${selectedMetric}&days=${days}&align=calendar${deltaParam}`
+				`/api/media/compare?ids=${allIds.join(',')}&metric=${selectedMetric}${rangeParam}&align=calendar${deltaParam}${aggParam}`
 			);
 			compareData = res;
 		} catch {

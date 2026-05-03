@@ -50,7 +50,7 @@
 			>
 				<span class="text-base leading-none">{selectedIcon}</span>
 				{#if showLabel && selectedLabel}
-					<span class="text-xs ml-1 whitespace-nowrap">{selectedLabel}</span>
+					<span class="hidden sm:inline text-xs ml-1 whitespace-nowrap">{selectedLabel}</span>
 				{/if}
 				<span class="text-muted text-[8px] leading-none ml-0.5">{open ? '▲' : '▼'}</span>
 			</button>
@@ -69,8 +69,7 @@
 		{/each}
 	</Dropdown>
 	{#snippet tooltip()}
-		{#if !showLabel}
-			{name ? `${name}: ${selectedLabel}` : selectedLabel}
-		{/if}
+		<span class="hidden sm:inline">{name ?? selectedLabel}</span>
+		<span class="inline sm:hidden">{name ? `${name}: ${selectedLabel}` : selectedLabel}</span>
 	{/snippet}
 </Tooltip>

@@ -335,19 +335,25 @@ class MediaService:
         media_item_ids: list[int],
         metric_key: str,
         window_days: int = 30,
+        window_hours: int | None = None,
         align_release: bool = False,
         delta: bool = True,
+        aggregation: str | None = None,
     ) -> dict[str, Any]:
         if align_release:
-            return await self._comparison_aligned(media_item_ids, metric_key, window_days, delta=delta)
+            return await self._comparison_aligned(media_item_ids, metric_key, window_days, delta=delta, aggregation=aggregation)
 
         since = None
-        if window_days > 0:
+        if window_hours is not None and window_hours > 0:
+            since = datetime.now(UTC) - timedelta(hours=window_hours)
+        elif window_days > 0:
             since = datetime.now(UTC) - timedelta(days=window_days)
 
         snapshots_by_id = await media_repo.get_comparison_snapshots(
             self.session, media_item_ids, metric_key, since
         )
+
+        agg_mode = "delta" if delta else "total"
 
         items: list[dict[str, Any]] = []
         metric_def = None
@@ -356,19 +362,27 @@ class MediaService:
             if item is None:
                 continue
             snaps = snapshots_by_id.get(mid, [])
-            raw_points = [
-                {"x": s.fetched_at.isoformat(), "y": s.value}
-                for s in snaps
-            ]
-            if delta and len(raw_points) >= 2:
-                prev = raw_points[0]["y"]
-                for _i, pt in enumerate(raw_points):
-                    cur = pt["y"]
-                    pt["y"] = cur - prev  # type: ignore[operator]
-                    prev = cur
-                raw_points = raw_points[1:]
-            elif delta:
-                raw_points = []
+
+            if aggregation and snaps:
+                aggregated = _aggregate_snapshots(snaps, aggregation, agg_mode)
+                raw_points = [
+                    {"x": p["fetched_at"], "y": p["value"]}
+                    for p in aggregated
+                ]
+            else:
+                raw_points = [
+                    {"x": s.fetched_at.isoformat(), "y": s.value}
+                    for s in snaps
+                ]
+                if delta and len(raw_points) >= 2:
+                    prev = raw_points[0]["y"]
+                    for _i, pt in enumerate(raw_points):
+                        cur = pt["y"]
+                        pt["y"] = cur - prev  # type: ignore[operator]
+                        prev = cur
+                    raw_points = raw_points[1:]
+                elif delta:
+                    raw_points = []
 
             items.append({
                 "media_item_id": mid,
@@ -393,6 +407,7 @@ class MediaService:
         metric_key: str,
         window_days: int = 90,
         delta: bool = True,
+        aggregation: str | None = None,  # not used — release-aligned x-axis is day-offset
     ) -> dict[str, Any]:
         snapshots_by_id = await media_repo.get_comparison_snapshots(
             self.session, media_item_ids, metric_key, None

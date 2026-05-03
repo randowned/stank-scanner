@@ -52,7 +52,7 @@
 
 	{#if open}
 		<div
-			class="absolute top-full mt-2 z-50 min-w-[14rem] bg-panel border border-border rounded-lg shadow-xl py-1
+			class="absolute top-full mt-2 z-50 w-max bg-panel border border-border rounded-lg shadow-xl py-1
 				{align === 'right' ? 'right-0' : 'left-0'}"
 			role="menu"
 			data-testid="dropdown-menu"

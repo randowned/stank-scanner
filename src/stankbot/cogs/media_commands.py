@@ -39,6 +39,7 @@ SPOTIFY_TYPE_CHOICES = [
 ]
 
 RANGE_CHOICES = [
+    app_commands.Choice(name="1 hour", value="1h"),
     app_commands.Choice(name="6 hours", value="6h"),
     app_commands.Choice(name="12 hours", value="12h"),
     app_commands.Choice(name="1 day", value="24h"),
