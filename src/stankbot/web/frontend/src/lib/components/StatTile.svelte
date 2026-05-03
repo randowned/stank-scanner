@@ -14,6 +14,6 @@
 </script>
 
 <div class="text-center cursor-default" {title} data-testid={testId}>
-	<div class={`text-{fontSize} font-bold {color} {flash ? 'row-flash' : ''}`} data-testid={valueTestId}>{value}</div>
+	<div class={`text-${fontSize} font-bold ${color} ${flash ? 'row-flash' : ''}`} data-testid={valueTestId}>{value}</div>
 	<div class="text-xs text-muted uppercase">{label}</div>
 </div>
