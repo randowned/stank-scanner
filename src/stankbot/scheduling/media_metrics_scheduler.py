@@ -21,6 +21,7 @@ from stankbot.db.models import Guild
 from stankbot.services.media_providers.registry import MediaProviderRegistry
 from stankbot.services.media_service import MediaService
 from stankbot.services.settings_service import Keys, SettingsService
+from stankbot.web.routes.media_api import cleanup_chart_cache
 
 if TYPE_CHECKING:
     from stankbot.bot import StankBot
@@ -57,6 +58,14 @@ class MediaMetricsScheduler:
 
     async def start(self) -> None:
         await self.sync_all_guilds()
+        # Global chart image cache cleanup every 10 minutes
+        self.scheduler.add_job(
+            self._cleanup_chart_cache,
+            IntervalTrigger(minutes=10, timezone=UTC),
+            id="media:cleanup-chart-cache",
+            replace_existing=True,
+            misfire_grace_time=60,
+        )
         if not self.scheduler.running:
             self.scheduler.start()
         log.info("MediaMetricsScheduler started")
@@ -111,3 +120,8 @@ class MediaMetricsScheduler:
             result.failed,
             elapsed,
         )
+
+    async def _cleanup_chart_cache(self) -> None:
+        deleted = cleanup_chart_cache()
+        if deleted:
+            log.info("Chart cache cleanup: deleted %d files", deleted)

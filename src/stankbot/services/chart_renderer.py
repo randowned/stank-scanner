@@ -8,6 +8,7 @@ so images look consistent in Discord embeds.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw, ImageFont
@@ -16,15 +17,41 @@ if TYPE_CHECKING:
     from stankbot.db.models import MetricSnapshot
 
 # ---------------------------------------------------------------------------
+# Font loading — try system TTF, fall back to default bitmap
+# ---------------------------------------------------------------------------
+
+_FONT_PATHS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Debian/Ubuntu
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",            # Alpine
+    "C:/Windows/Fonts/arial.ttf",                        # Windows
+    "/System/Library/Fonts/Helvetica.ttc",               # macOS
+]
+
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    for path in _FONT_PATHS:
+        if Path(path).exists():
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
+
+
+_FONT_TITLE = _load_font(36)
+_FONT_LABEL = _load_font(18)
+_FONT_TICK = _load_font(14)
+
+# Pre-compute average char widths for text measurement
+_FONT_LABEL_AVG_W = _FONT_LABEL.getlength("0") if hasattr(_FONT_LABEL, "getlength") else 8
+_FONT_TICK_AVG_W = _FONT_TICK.getlength("0") if hasattr(_FONT_TICK, "getlength") else 6
+
+# ---------------------------------------------------------------------------
 # Layout constants (16:9 canvas)
 # ---------------------------------------------------------------------------
 
 WIDTH = 1200
 HEIGHT = 675
-PAD_LEFT = 80
-PAD_RIGHT = 20
-PAD_TOP = 50
-PAD_BOTTOM = 65
+PAD_LEFT = 110
+PAD_RIGHT = 30
+PAD_TOP = 60
+PAD_BOTTOM = 80
 
 CHART_LEFT = PAD_LEFT
 CHART_RIGHT = WIDTH - PAD_RIGHT
@@ -88,6 +115,7 @@ def render_media_chart(
     title: str,
     metric_label: str,
     duration_hours: float,
+    aggregation: str | None = None,
     width: int = WIDTH,
     height: int = HEIGHT,
 ) -> bytes:
@@ -95,16 +123,11 @@ def render_media_chart(
     img = Image.new("RGB", (width, height), BG)
     draw = ImageDraw.Draw(img)
 
-    # Fonts — default bitmap is small; we use default for labels and
-    # a scaled version via ImageFont.truetype is not available without
-    # a .ttf file. Fall back to default bitmap and keep text short.
-    font = ImageFont.load_default()
-
     # ------------------------------------------------------------------
     # Data mapping
     # ------------------------------------------------------------------
     if not snapshots:
-        draw.text((width / 2 - 60, height / 2), "No data available", fill=LABEL_COLOR, font=font)
+        draw.text((width / 2 - 80, height / 2), "No data available", fill=LABEL_COLOR, font=_FONT_LABEL)
         buf = _save_bytes(img)
         return buf
 
@@ -142,8 +165,8 @@ def render_media_chart(
         y = px_y(int(val))
         draw.line([(CHART_LEFT, y), (CHART_RIGHT, y)], fill=GRID, width=1)
         label = _format_number(val)
-        tw = len(label) * 6  # rough estimate for default font
-        draw.text((CHART_LEFT - tw - 8, y - 4), label, fill=LABEL_COLOR, font=font)
+        tw = _FONT_LABEL_AVG_W * len(label)
+        draw.text((CHART_LEFT - tw - 8, y - _FONT_LABEL_AVG_W * 0.6), label, fill=LABEL_COLOR, font=_FONT_LABEL)
 
     # ------------------------------------------------------------------
     # Vertical day-boundary lines + X labels
@@ -159,8 +182,8 @@ def render_media_chart(
             if CHART_LEFT <= cx <= CHART_RIGHT:
                 draw.line([(int(cx), CHART_TOP), (int(cx), CHART_BOTTOM)], fill=GRID, width=1)
                 lbl = day.strftime("%b %d")
-                tw = len(lbl) * 6
-                draw.text((int(cx) - tw // 2, CHART_BOTTOM + 4), lbl, fill=LABEL_COLOR, font=font)
+                tw = _FONT_TICK_AVG_W * len(lbl)
+                draw.text((int(cx) - tw // 2, CHART_BOTTOM + 4), lbl, fill=LABEL_COLOR, font=_FONT_TICK)
             day += td(days=1)
 
     # Smaller hour ticks when spanning a day or less
@@ -171,8 +194,8 @@ def render_media_chart(
             cx = px_x(tick_dt)
             if CHART_LEFT <= cx <= CHART_RIGHT:
                 lbl = tick_dt.strftime("%b %d %H:%M" if show_date else "%H:%M")
-                tw = len(lbl) * 6
-                draw.text((int(cx) - tw // 2, CHART_BOTTOM + 18), lbl, fill=LABEL_COLOR, font=font)
+                tw = _FONT_TICK_AVG_W * len(lbl)
+                draw.text((int(cx) - tw // 2, CHART_BOTTOM + 18), lbl, fill=LABEL_COLOR, font=_FONT_TICK)
             tick_dt += td(hours=2) if t_span > 43200 else td(hours=1)
 
     # ------------------------------------------------------------------
@@ -195,11 +218,10 @@ def render_media_chart(
     # ------------------------------------------------------------------
     # Title
     # ------------------------------------------------------------------
-    draw.text((PAD_LEFT, 12), title, fill=TITLE_COLOR, font=font)
+    draw.text((PAD_LEFT, 12), title, fill=TITLE_COLOR, font=_FONT_TITLE)
 
-    # Y-axis label (rotated text not available in default font, use
-    # a short vertical label instead)
-    draw.text((4, CHART_TOP + CHART_H // 2 - 4), metric_label, fill=LABEL_COLOR, font=font)
+    # Y-axis label
+    draw.text((4, CHART_TOP + CHART_H // 2 - 8), metric_label, fill=LABEL_COLOR, font=_FONT_LABEL)
 
     return _save_bytes(img)
 

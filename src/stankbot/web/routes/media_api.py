@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.chart_renderer import render_media_chart
 from stankbot.services.media_service import MediaService
+from stankbot.services.permission_service import PermissionService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_member
 from stankbot.web.transport import MsgPackResponse
@@ -35,6 +36,17 @@ async def _get_enabled_providers(
     return await SettingsService(session).get(
         guild_id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
     )
+
+
+async def _is_admin(
+    session: AsyncSession,
+    guild_id: int,
+    user: dict[str, Any],
+    request: Request,
+) -> bool:
+    config = request.app.state.config
+    svc = PermissionService(session, owner_id=config.owner_id)
+    return await svc.is_admin(guild_id, int(user["id"]), [], has_manage_guild=False)
 
 
 async def _media_service(
@@ -55,9 +67,9 @@ async def list_media(
 ) -> MsgPackResponse:
     svc = await _media_service(request, session)
     items = await svc.list_media(guild_id, media_type)
-    # Filter disabled providers for non-admins
-    enabled = await _get_enabled_providers(session, guild_id)
-    items = [i for i in items if i["media_type"] in enabled]
+    if not await _is_admin(session, guild_id, _user, request):
+        enabled = await _get_enabled_providers(session, guild_id)
+        items = [i for i in items if i["media_type"] in enabled]
     return MsgPackResponse({"items": items}, request)
 
 
@@ -109,7 +121,10 @@ async def list_providers(
     session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
     registry = request.app.state.media_registry
-    enabled = await _get_enabled_providers(session, guild_id)
+    if not await _is_admin(session, guild_id, _user, request):
+        enabled = await _get_enabled_providers(session, guild_id)
+    else:
+        enabled = None
     providers = [
         {
             "type": d.type,
@@ -121,7 +136,7 @@ async def list_providers(
             ],
         }
         for d in registry.all_defs()
-        if d.type in enabled
+        if enabled is None or d.type in enabled
     ]
     return MsgPackResponse({"providers": providers}, request)
 
@@ -136,7 +151,9 @@ async def get_media_detail(
 ) -> MsgPackResponse:
     svc = await _media_service(request, session)
     item = await svc.get_media_item(media_id)
-    if item is None or item["media_type"] not in await _get_enabled_providers(session, guild_id):
+    if item is None:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    if not await _is_admin(session, guild_id, _user, request) and item["media_type"] not in await _get_enabled_providers(session, guild_id):
         raise HTTPException(status_code=404, detail="Media item not found")
     return MsgPackResponse(item, request)
 
@@ -152,6 +169,11 @@ async def get_media_history(
     _user: dict[str, Any] = Depends(require_guild_member),
     session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
+    item = await media_repo.get(session, media_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    if not await _is_admin(session, guild_id, _user, request) and item.media_type not in await _get_enabled_providers(session, guild_id):
+        raise HTTPException(status_code=404, detail="Media item not found")
     svc = await _media_service(request, session)
     history = await svc.get_metrics_history(
         media_id, metric, window_days=days, window_hours=hours
@@ -180,6 +202,7 @@ async def get_media_chart(
     days: int | None = Query(None, ge=0, le=365),
     hours: int | None = Query(None, ge=1, le=8760),
     date: str | None = Query(None),
+    agg: str | None = Query(None),
     session: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     item = await media_repo.get(session, media_id)
@@ -198,7 +221,9 @@ async def get_media_chart(
     # Resolve reference date
     if date:
         try:
-            reference_date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            # Handle URL-encoded + (becomes space) and Z suffix
+            normalized = date.replace(" ", "+").replace("Z", "+00:00")
+            reference_date = datetime.fromisoformat(normalized)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"Invalid date format: {date}") from exc
     else:
@@ -241,9 +266,12 @@ async def get_media_chart(
     else:
         cache_ts = int(reference_date.timestamp())
 
+    # Determine cache key — includes all params so different metric/range/agg combos don't collide
+    range_key = f"h{hours}" if hours is not None else f"d{days}" if days is not None else "all"
+    agg_val = agg or "auto"
     cache_dir = CHART_CACHE_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = cache_dir / f"{media_id}_{cache_ts}.png"
+    cache_path = cache_dir / f"{media_id}_{metric}_{range_key}_{cache_ts}_{agg_val}.png"
 
     if cache_path.exists():
         return FileResponse(
@@ -263,6 +291,7 @@ async def get_media_chart(
         title=item.title,
         metric_label=metric_label,
         duration_hours=duration_hours,
+        aggregation=agg,
     )
     cache_path.write_bytes(buf)
 
@@ -270,3 +299,37 @@ async def get_media_chart(
         cache_path, media_type="image/png",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+def cleanup_chart_cache(now: datetime | None = None) -> int:
+    """Delete cached chart images whose snapshot data is older than 24 hours.
+
+    Returns the number of files deleted.
+    """
+    if now is None:
+        now = datetime.now(UTC)
+    cutoff = now.timestamp() - 86400  # 24 hours ago
+
+    cache_dir = CHART_CACHE_DIR
+    if not cache_dir.exists():
+        return 0
+
+    deleted = 0
+    for f in cache_dir.iterdir():
+        if not f.is_file() or f.suffix != ".png":
+            continue
+        try:
+            # Filename format: {media_id}_{metric}_{range}_{snapshot_ts}{_agg}.png
+            parts = f.stem.split("_")
+            # The snapshot timestamp is the third-to-last or second-to-last part
+            # depending on whether an aggregation suffix is present
+            for i in range(len(parts) - 1, -1, -1):
+                if parts[i].isdigit() and len(parts[i]) >= 10:  # epoch timestamp
+                    ts = int(parts[i])
+                    if ts < cutoff:
+                        f.unlink()
+                        deleted += 1
+                    break
+        except (ValueError, OSError):
+            continue
+    return deleted

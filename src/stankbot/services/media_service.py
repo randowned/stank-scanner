@@ -194,7 +194,6 @@ class MediaService:
             name_final = f"{base_name}-{counter}"[:50]
 
         item.name = name_final
-        await self.session.flush()
         return self._serialize_item(item)
 
     async def delete_media(self, media_item_id: int) -> bool:

@@ -18,7 +18,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from stankbot.cogs._checks import requires_stats_access
+from stankbot.cogs._checks import is_interaction_admin, requires_stats_access
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.embed_builders import build_media_embed
 from stankbot.services.settings_service import Keys, SettingsService
@@ -47,6 +47,15 @@ RANGE_CHOICES = [
     app_commands.Choice(name="90 days", value="90d"),
     app_commands.Choice(name="1 year", value="365d"),
     app_commands.Choice(name="All time", value="all"),
+]
+
+AGGREGATION_CHOICES = [
+    app_commands.Choice(name="Auto", value="auto"),
+    app_commands.Choice(name="Minutely", value="minutely"),
+    app_commands.Choice(name="Hourly", value="hourly"),
+    app_commands.Choice(name="Daily", value="daily"),
+    app_commands.Choice(name="Weekly", value="weekly"),
+    app_commands.Choice(name="Monthly", value="monthly"),
 ]
 
 
@@ -113,7 +122,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
             enabled = await settings.get(
                 interaction.guild.id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
             )
-            if media_type not in enabled:
+            is_admin = await is_interaction_admin(interaction)
+            if media_type not in enabled and not is_admin:
                 await interaction.response.send_message(
                     f"{media_type.capitalize()} stats are currently disabled.", ephemeral=True
                 )
@@ -176,6 +186,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
         slug: str,
         metric: str,
         range_value: str,
+        aggregation: str = "auto",
     ) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -197,7 +208,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
                 return
 
             base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
-            date_param = datetime.now(UTC).isoformat()
+            date_param = datetime.now(UTC).isoformat().replace("+", "%2B")
             url = (
                 f"{base_url}/api/media/{item.id}/chart"
                 f"?metric={metric}&date={date_param}"
@@ -209,6 +220,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
                 url += f"&hours={range_value[:-1]}"
             else:
                 url += f"&days={range_value[:-1]}"
+
+            if aggregation != "auto":
+                url += f"&agg={aggregation}"
 
             embed = discord.Embed(
                 title=item.title,
@@ -266,9 +280,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
-    @app_commands.describe(slug="The video's slug.", metric="Which metric to chart.", range_="Time range to show.")
-    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES)
-    @app_commands.rename(slug="name", metric="type_", range_="range_")
+    @app_commands.describe(slug="The video's slug.", metric="Which metric to chart.", range_="Time range to show.", aggregation="Tick grouping.")
+    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, aggregation=AGGREGATION_CHOICES)
+    @app_commands.rename(slug="name", metric="type", range_="range", aggregation="aggregation")
     @requires_stats_access()
     async def youtube_chart(
         self,
@@ -276,8 +290,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
         slug: str,
         metric: str,
         range_: str,
+        aggregation: str = "auto",
     ) -> None:
-        await self._send_chart_embed(interaction, "youtube", slug, metric, range_)
+        await self._send_chart_embed(interaction, "youtube", slug, metric, range_, aggregation)
 
     @youtube_chart.autocomplete("slug")
     async def _youtube_chart_name_ac(
@@ -290,9 +305,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
-    @app_commands.describe(slug="The track or album slug.", metric="Which metric to chart.", range_="Time range to show.")
-    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES)
-    @app_commands.rename(slug="name", metric="type_", range_="range_")
+    @app_commands.describe(slug="The track or album slug.", metric="Which metric to chart.", range_="Time range to show.", aggregation="Tick grouping.")
+    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, aggregation=AGGREGATION_CHOICES)
+    @app_commands.rename(slug="name", metric="type", range_="range", aggregation="aggregation")
     @requires_stats_access()
     async def spotify_chart(
         self,
@@ -300,8 +315,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
         slug: str,
         metric: str,
         range_: str,
+        aggregation: str = "auto",
     ) -> None:
-        await self._send_chart_embed(interaction, "spotify", slug, metric, range_)
+        await self._send_chart_embed(interaction, "spotify", slug, metric, range_, aggregation)
 
     @spotify_chart.autocomplete("slug")
     async def _spotify_chart_name_ac(
