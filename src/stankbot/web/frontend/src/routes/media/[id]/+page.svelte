@@ -165,6 +165,21 @@
 			.sort((a, b) => a.x - b.x);
 	}
 
+	// For cumulative data take the last (highest) value per bucket — not a sum.
+	function bucketCumulative(points: { x: number; y: number }[], bucketMs: number): { x: number; y: number }[] {
+		if (points.length === 0 || bucketMs <= 0) return points;
+		const buckets: Record<number, number> = {};
+		for (const p of points) {
+			const bucketStart = Math.floor(p.x / bucketMs) * bucketMs;
+			if (buckets[bucketStart] === undefined || p.y > buckets[bucketStart]) {
+				buckets[bucketStart] = p.y;
+			}
+		}
+		return Object.entries(buckets)
+			.map(([k, v]) => ({ x: Number(k), y: v }))
+			.sort((a, b) => a.x - b.x);
+	}
+
 	const _AGG_BUCKET_MS: Record<string, number> = {
 		minutely: 60_000,
 		'5min': 300_000,
@@ -366,6 +381,9 @@
 			}
 		} else if (comparisonMode === 'delta') {
 			points.length = 0;
+		} else if (resolutionBucketMs !== null) {
+			// Cumulative: downsample by keeping the last (highest) value per bucket.
+			points = bucketCumulative(points, resolutionBucketMs);
 		}
 		return [{
 			label: item?.name || metricLabel(selectedMetric),
