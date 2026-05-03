@@ -8,6 +8,7 @@ that type. Jobs are aligned to clock boundaries.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -72,6 +73,13 @@ class MediaMetricsScheduler:
             self.scheduler.shutdown(wait=False)
 
     async def sync_all_guilds(self) -> None:
+        # Remove pre-v2.44 single-job-per-guild entries (no provider suffix).
+        stale_pattern = re.compile(r'^g\d+:media-metrics$')
+        for job in self.scheduler.get_jobs():
+            if stale_pattern.match(job.id):
+                job.remove()
+                log.info("MediaMetrics: removed stale job %s", job.id)
+
         async with self.bot.db() as session:
             guilds = list((await session.execute(select(Guild.id))).scalars())
         for gid in guilds:
@@ -95,7 +103,10 @@ class MediaMetricsScheduler:
         if job is not None:
             job.remove()
 
-        key = _INTERVAL_KEYS.get(provider_type, Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES)
+        key = _INTERVAL_KEYS.get(provider_type)
+        if key is None:
+            log.warning("MediaMetrics: no interval key for provider %r — defaulting to 60 min", provider_type)
+            key = Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES
         async with self.bot.db() as session:
             settings = SettingsService(session)
             interval = await settings.get(guild_id, key, 60)

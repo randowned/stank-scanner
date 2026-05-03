@@ -84,8 +84,11 @@
 		{ value: 'total', label: 'Cumulative', icon: 'Σ' }
 	];
 
+	const providerIntervalMs = $derived((provider?.interval_minutes ?? 1) * 60_000);
+
 	const aggregationOptions = $derived.by(() => {
 		const rangeHours = selectedHours;
+		const minMs = providerIntervalMs;
 		const all: Array<{ value: string; label: string; icon: string }> = [
 			{ value: 'auto', label: 'Auto', icon: '🤖' },
 			{ value: 'minutely', label: 'Min', icon: '🕐' },
@@ -97,17 +100,22 @@
 			{ value: 'weekly', label: 'Week', icon: '📆' },
 			{ value: 'monthly', label: 'Month', icon: '🗓️' },
 		];
-		const bucketHours: Record<string, number> = {
-			minutely: 1 / 60,
-			'5min': 5 / 60,
-			'15min': 15 / 60,
-			'30min': 0.5,
-			hourly: 1,
-			daily: 24,
-			weekly: 24 * 7,
-			monthly: 24 * 30,
+		const bucketMs: Record<string, number> = {
+			minutely: 60_000,
+			'5min': 300_000,
+			'15min': 900_000,
+			'30min': 1_800_000,
+			hourly: 3_600_000,
+			daily: 86_400_000,
+			weekly: 604_800_000,
+			monthly: 2_592_000_000,
 		};
-		return all.filter((o) => o.value === 'auto' || (bucketHours[o.value] ?? 0) < rangeHours);
+		return all.filter(
+			(o) =>
+				o.value === 'auto' ||
+				((bucketMs[o.value] ?? 0) < rangeHours * 3_600_000 &&
+					(bucketMs[o.value] ?? 0) >= minMs)
+		);
 	});
 
 	const hasCompare = $derived(compareIds.length > 0);
@@ -128,22 +136,15 @@
 			: ''
 	);
 
-	const chartMinUnit = $derived<'minute' | 'hour' | 'day' | 'week' | 'month' | undefined>(
-		selectedAggregation === 'auto'
-			? (dataSpanMs < 7_200_000 ? 'minute' :
-			   dataSpanMs < 172_800_000 ? 'hour' :
-			   dataSpanMs < 1_209_600_000 ? 'hour' :
-			   undefined)
-			: selectedAggregation === 'minutely' ? 'minute'
-			: selectedAggregation === '5min' ? 'minute'
-			: selectedAggregation === '15min' ? 'minute'
-			: selectedAggregation === '30min' ? 'minute'
-			: selectedAggregation === 'hourly' ? 'hour'
-			: selectedAggregation === 'daily' ? 'day'
-			: selectedAggregation === 'weekly' ? 'week'
-			: selectedAggregation === 'monthly' ? 'month'
-			: undefined
-	);
+	const chartMinUnit = $derived.by<'minute' | 'hour' | 'day' | 'week' | 'month' | undefined>(() => {
+		const bms = resolutionBucketMs;
+		if (bms === null) return undefined;
+		if (bms < 3_600_000) return 'minute';
+		if (bms < 86_400_000) return 'hour';
+		if (bms < 604_800_000) return 'day';
+		if (bms < 2_592_000_000) return 'week';
+		return 'month';
+	});
 
 	$effect(() => {
 		const raw = $page.url.searchParams.get('compare');
@@ -164,36 +165,30 @@
 			.sort((a, b) => a.x - b.x);
 	}
 
-	function computeResolutionBucketMs(agg: string, hist: MetricSnapshot[]): number | null {
-		if (agg !== 'auto') {
-			const map: Record<string, number> = {
-				minutely: 60_000,
-				'5min': 300_000,
-				'15min': 900_000,
-				'30min': 1_800_000,
-				hourly: 3_600_000,
-				daily: 86_400_000,
-				weekly: 604_800_000,
-				monthly: 2_592_000_000
-			};
-			return map[agg] ?? null;
-		}
-		if (hist.length < 2) return null;
-		const times = hist.map((h) => new Date(h.fetched_at).getTime()).sort((a, b) => a - b);
-		const intervals: number[] = [];
-		for (let i = 1; i < times.length; i++) intervals.push(times[i] - times[i - 1]);
-		intervals.sort((a, b) => a - b);
-		const median = intervals[Math.floor(intervals.length / 2)];
-		const FIVE_MIN = 300_000;
-		const THIRTY_MIN = 1_800_000;
-		const THREE_HOURS = 10_800_000;
-		if (median < FIVE_MIN) return null;
-		if (median < THIRTY_MIN) return 3_600_000;
-		if (median < THREE_HOURS) return 86_400_000;
-		return 604_800_000;
+	const _AGG_BUCKET_MS: Record<string, number> = {
+		minutely: 60_000,
+		'5min': 300_000,
+		'15min': 900_000,
+		'30min': 1_800_000,
+		hourly: 3_600_000,
+		daily: 86_400_000,
+		weekly: 604_800_000,
+		monthly: 2_592_000_000,
+	};
+
+	function autoResolutionMs(rangeHours: number, minIntervalMs: number): number | null {
+		if (rangeHours <= 0) return null;
+		const idealBucketMs = (rangeHours * 3_600_000) / 24;
+		const buckets = [60_000, 300_000, 900_000, 1_800_000, 3_600_000, 86_400_000, 604_800_000, 2_592_000_000];
+		const eligible = buckets.filter((b) => b >= minIntervalMs);
+		return eligible.find((b) => b >= idealBucketMs) ?? eligible[eligible.length - 1] ?? null;
 	}
 
-	const resolutionBucketMs = $derived(computeResolutionBucketMs(selectedAggregation, history));
+	const resolutionBucketMs = $derived(
+		selectedAggregation === 'auto'
+			? autoResolutionMs(selectedHours, providerIntervalMs)
+			: (_AGG_BUCKET_MS[selectedAggregation] ?? null)
+	);
 
 	// Auto-default Δ/Σ when entering/leaving compare mode. User toggles still stick
 	// within a given mode because we only flip on the transition.
@@ -243,11 +238,6 @@
 	const serverAggregations = new Set(['5min', '15min', '30min', 'hourly', 'daily', 'weekly', 'monthly']);
 	const useServerAggregation = $derived(serverAggregations.has(selectedAggregation));
 
-	$effect(() => {
-		if (!aggregationOptions.some((o) => o.value === selectedAggregation)) {
-			selectedAggregation = 'auto';
-		}
-	});
 
 	function buildHistoryUrl(): string {
 		if (!item) return '';
@@ -302,11 +292,25 @@
 		}
 	}
 
+	let _initialFetchSkipped = false;
 	$effect(() => {
 		void selectedMetric;
 		void selectedHours;
 		void comparisonMode;
 		void selectedAggregation;
+
+		// Validate aggregation against current range; reset without an extra effect run.
+		if (!aggregationOptions.some((o) => o.value === selectedAggregation)) {
+			untrack(() => { selectedAggregation = 'auto'; });
+		}
+
+		// Skip the very first run when SSR already provided history data.
+		if (!_initialFetchSkipped && history.length > 0) {
+			_initialFetchSkipped = true;
+			return;
+		}
+		_initialFetchSkipped = true;
+
 		void loadHistory();
 		if (hasCompare) void loadComparison();
 	});

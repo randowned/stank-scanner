@@ -579,19 +579,27 @@ class MediaService:
 
         Returns the number of rows updated.
         """
-        from sqlalchemy import update
+        from sqlalchemy import case, update
 
         stmt = (
             select(MetricSnapshot.id, MetricSnapshot.fetched_at)
             .where(MetricSnapshot.alignment_mask.is_(None))
         )
         rows = (await self.session.execute(stmt)).all()
-        for row_id, fetched_at in rows:
-            mask = _compute_alignment_mask(fetched_at)
+        if not rows:
+            return 0
+
+        batch_size = 500
+        for i in range(0, len(rows), batch_size):
+            batch = rows[i : i + batch_size]
+            case_expr = case(
+                {row_id: _compute_alignment_mask(fetched_at) for row_id, fetched_at in batch},
+                value=MetricSnapshot.id,
+            )
             await self.session.execute(
                 update(MetricSnapshot)
-                .where(MetricSnapshot.id == row_id)
-                .values(alignment_mask=mask)
+                .where(MetricSnapshot.id.in_([r[0] for r in batch]))
+                .values(alignment_mask=case_expr)
             )
         return len(rows)
 

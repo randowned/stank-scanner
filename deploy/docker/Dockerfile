@@ -22,7 +22,7 @@ RUN useradd --create-home --uid 10001 stankbot
 
 # su-exec drops privileges from the root entrypoint to the stankbot user
 # after we've fixed ownership on the (root-owned) Railway volume mount.
-RUN apt-get update && apt-get install -y --no-install-recommends gosu fonts-dejavu-core \
+RUN apt-get update && apt-get install -y --no-install-recommends gosu fonts-dejavu-core fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

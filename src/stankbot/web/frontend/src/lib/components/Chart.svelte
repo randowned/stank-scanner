@@ -1,6 +1,7 @@
 <script lang="ts" module>
 	import ChartJS from 'chart.js/auto';
 	import 'chartjs-adapter-date-fns';
+	ChartJS.defaults.font.family = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 </script>
 
 <script lang="ts">
@@ -104,7 +105,10 @@
 		const merged = { ...defaultOptions, ...(options ?? {}) };
 
 		if (chart) {
-			chart.destroy();
+			chart.data = data as never;
+			chart.options = merged as never;
+			chart.update('none');
+			return;
 		}
 		chart = new ChartJS(canvasEl, { type, data: data as never, options: merged as never });
 	});

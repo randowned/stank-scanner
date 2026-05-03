@@ -222,6 +222,7 @@ export interface ProviderDef {
 	label: string;
 	icon: string;
 	metrics: MetricDef[];
+	interval_minutes?: number;
 }
 
 export interface CompareSeries {

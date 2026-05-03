@@ -17,19 +17,26 @@ if TYPE_CHECKING:
     from stankbot.db.models import MetricSnapshot
 
 # ---------------------------------------------------------------------------
-# Font loading — try system TTF, fall back to default bitmap
+# Font loading — prefer Liberation Sans (clean, Arial-family); fall back to
+# DejaVu and OS defaults.  Set CHART_FONT_PATH env var to override entirely.
 # ---------------------------------------------------------------------------
 
+import os as _os
+
 _FONT_PATHS = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Debian/Ubuntu
-    "/usr/share/fonts/dejavu/DejaVuSans.ttf",            # Alpine
-    "C:/Windows/Fonts/arial.ttf",                        # Windows
-    "/System/Library/Fonts/Helvetica.ttc",               # macOS
+    _os.environ.get("CHART_FONT_PATH", ""),          # explicit override
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",   # Debian fonts-liberation
+    "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",            # Alpine variant
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",                   # Debian/Ubuntu fallback
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",                            # Alpine fallback
+    "C:/Windows/Fonts/arial.ttf",                                        # Windows
+    "/System/Library/Fonts/Helvetica.ttc",                               # macOS
 ]
+
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     for path in _FONT_PATHS:
-        if Path(path).exists():
+        if path and Path(path).exists():
             return ImageFont.truetype(path, size)
     return ImageFont.load_default()
 
@@ -114,7 +121,6 @@ def render_media_chart(
     snapshots: list[MetricSnapshot],
     title: str,
     metric_label: str,
-    duration_hours: float,
     mode: str = "total",
     width: int = WIDTH,
     height: int = HEIGHT,
@@ -139,8 +145,15 @@ def render_media_chart(
     if not snapshots:
         draw.text((width / 2 - 80, height / 2), "No data available", fill=LABEL_COLOR, font=_FONT_LABEL)
         return _save_bytes(img)
-    times = [(s.fetched_at.astimezone(UTC) if isinstance(s.fetched_at, datetime) else s.fetched_at) for s in snapshots]
-    times_dt = [t if isinstance(t, datetime) else datetime.fromisoformat(str(t).replace("Z", "+00:00")) for t in times]
+
+    times = [
+        s.fetched_at.astimezone(UTC) if isinstance(s.fetched_at, datetime) else s.fetched_at
+        for s in snapshots
+    ]
+    times_dt = [
+        t if isinstance(t, datetime) else datetime.fromisoformat(str(t).replace("Z", "+00:00"))
+        for t in times
+    ]
 
     vmin = min(values)
     vmax = max(values)
@@ -160,7 +173,7 @@ def render_media_chart(
         frac = (dt - tmin).total_seconds() / t_span
         return CHART_LEFT + frac * CHART_W
 
-    def px_y(val: int) -> float:
+    def px_y(val: int | float) -> float:
         return CHART_BOTTOM - float(val - y_floor) / y_span * CHART_H
 
     # ------------------------------------------------------------------
@@ -169,7 +182,7 @@ def render_media_chart(
     step = y_span / num_grid if num_grid > 0 else y_span
     for i in range(num_grid + 1):
         val = y_floor + i * step
-        y = px_y(int(val))
+        y = px_y(val)
         draw.line([(CHART_LEFT, y), (CHART_RIGHT, y)], fill=GRID, width=1)
         label = _format_number(val)
         tw = _FONT_LABEL_AVG_W * len(label)
@@ -178,10 +191,9 @@ def render_media_chart(
     # ------------------------------------------------------------------
     # Vertical day-boundary lines + X labels
     # ------------------------------------------------------------------
-    show_date = (t_span >= 86400)  # multi-day: show date
+    show_date = t_span >= 86400  # multi-day: show date
 
     if show_date:
-        # Draw midnight vertical lines for each day in range
         from datetime import timedelta as td
         day = datetime(tmin.year, tmin.month, tmin.day, tzinfo=tmin.tzinfo)
         while day <= tmax:
@@ -193,7 +205,7 @@ def render_media_chart(
                 draw.text((int(cx) - tw // 2, CHART_BOTTOM + 4), lbl, fill=LABEL_COLOR, font=_FONT_TICK)
             day += td(days=1)
 
-    # Smaller hour ticks when spanning a day or less
+    # Smaller hour ticks when spanning two days or less
     if t_span <= 86400 * 2:
         from datetime import timedelta as td
         tick_dt = tmin.replace(minute=0, second=0, microsecond=0)
@@ -206,28 +218,22 @@ def render_media_chart(
             tick_dt += td(hours=2) if t_span > 43200 else td(hours=1)
 
     # ------------------------------------------------------------------
-    # Data line
+    # Data line — use the computed `values` list, not raw snapshot values
     # ------------------------------------------------------------------
-    if len(snapshots) >= 2:
-        pts = [(px_x(dt), px_y(snap.value)) for snap, dt in zip(snapshots, times_dt, strict=True)]
+    pts = [(px_x(dt), px_y(val)) for dt, val in zip(times_dt, values, strict=True)]
+    if len(pts) >= 2:
         for i in range(len(pts) - 1):
             draw.line([pts[i], pts[i + 1]], fill=LINE, width=2)
 
-    # ------------------------------------------------------------------
     # Data dots
-    # ------------------------------------------------------------------
-    for _i, (snap, dt) in enumerate(zip(snapshots, times_dt, strict=True)):
-        cx = px_x(dt)
-        cy = px_y(snap.value)
+    for cx, cy in pts:
         r = 3
         draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=LINE)
 
     # ------------------------------------------------------------------
-    # Title
+    # Title + Y-axis label
     # ------------------------------------------------------------------
     draw.text((PAD_LEFT, 12), title, fill=TITLE_COLOR, font=_FONT_TITLE)
-
-    # Y-axis label
     draw.text((4, CHART_TOP + CHART_H // 2 - 8), metric_label, fill=LABEL_COLOR, font=_FONT_LABEL)
 
     return _save_bytes(img)

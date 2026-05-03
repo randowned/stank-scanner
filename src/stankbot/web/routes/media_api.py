@@ -118,6 +118,12 @@ async def compare_media(
     return MsgPackResponse(data, request)
 
 
+_PROVIDER_INTERVAL_KEYS: dict[str, str] = {
+    "youtube": Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES,
+    "spotify": Keys.MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES,
+}
+
+
 @router.get("/providers")
 async def list_providers(
     request: Request,
@@ -126,12 +132,20 @@ async def list_providers(
     session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
     registry = request.app.state.media_registry
+    settings = SettingsService(session)
     if not await _is_admin(session, guild_id, _user, request):
         enabled = await _get_enabled_providers(session, guild_id)
     else:
         enabled = None
-    providers = [
-        {
+    providers = []
+    for d in registry.all_defs():
+        if enabled is not None and d.type not in enabled:
+            continue
+        interval_key = _PROVIDER_INTERVAL_KEYS.get(d.type)
+        interval_minutes: int = (
+            await settings.get(guild_id, interval_key, 60) if interval_key else 60
+        )
+        providers.append({
             "type": d.type,
             "label": d.label,
             "icon": d.icon,
@@ -139,10 +153,8 @@ async def list_providers(
                 {"key": m.key, "label": m.label, "format": m.format, "icon": m.icon}
                 for m in d.metrics
             ],
-        }
-        for d in registry.all_defs()
-        if enabled is None or d.type in enabled
-    ]
+            "interval_minutes": interval_minutes,
+        })
     return MsgPackResponse({"providers": providers}, request)
 
 
@@ -278,12 +290,42 @@ async def get_media_chart(
     # Filter snapshots at or before reference_date
     snaps = [s for s in snaps if _ensure_utc(s.fetched_at) <= reference_date]
 
+    # Auto-select aggregation when not explicitly requested.
+    # Same logic as the frontend autoResolutionMs: target ~24 data points per chart,
+    # floored by the minimum snapshot interval actually present in the data.
+    effective_aggregation = aggregation
+    if not effective_aggregation and len(snaps) >= 2:
+        times_sorted = sorted(_ensure_utc(s.fetched_at) for s in snaps)
+        intervals_ms = [
+            (times_sorted[i + 1] - times_sorted[i]).total_seconds() * 1000
+            for i in range(len(times_sorted) - 1)
+        ]
+        min_interval_ms = max(60_000.0, min(intervals_ms))
+        range_hours = float(window_hours or (window_days or 7) * 24)
+        ideal_ms = (range_hours * 3_600_000) / 24
+        _BUCKETS = [
+            (300_000, "5min"),
+            (900_000, "15min"),
+            (1_800_000, "30min"),
+            (3_600_000, "hourly"),
+            (86_400_000, "daily"),
+            (604_800_000, "weekly"),
+            (2_592_000_000, "monthly"),
+        ]
+        eligible = [(ms, name) for ms, name in _BUCKETS if ms >= min_interval_ms]
+        for bucket_ms, bucket_name in eligible:
+            if bucket_ms >= ideal_ms:
+                effective_aggregation = bucket_name
+                break
+        if not effective_aggregation and eligible:
+            effective_aggregation = eligible[-1][1]
+
     # Apply server-side aggregation (reuses the same logic as history endpoint)
     render_snaps: list[Any] = snaps
     render_mode = mode if mode in ("total", "delta") else "total"
-    if aggregation:
+    if effective_aggregation:
         agg_mode = render_mode
-        aggregated = _aggregate_snapshots(snaps, aggregation, agg_mode)
+        aggregated = _aggregate_snapshots(snaps, effective_aggregation, agg_mode)
         render_snaps = [_SnapshotStub(value=d["value"], fetched_at=datetime.fromisoformat(d["fetched_at"])) for d in aggregated]
         render_mode = "total"  # delta already applied by _aggregate_snapshots
 
@@ -297,7 +339,7 @@ async def get_media_chart(
     # Determine cache key — includes all params so different metric/range/mode combos don't collide
     range_key = f"h{hours}" if hours is not None else f"d{days}" if days is not None else "all"
     mode_val = mode if mode in ("total", "delta") else "total"
-    agg_key = f"_{aggregation}" if aggregation else ""
+    agg_key = f"_{effective_aggregation}" if effective_aggregation else ""
     cache_dir = CHART_CACHE_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{media_id}_{metric}_{range_key}{agg_key}_{cache_ts}_{mode_val}.png"
@@ -308,18 +350,10 @@ async def get_media_chart(
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
-    # Compute actual duration for chart title context
-    if render_snaps:
-        utc_snaps = [_ensure_utc(s.fetched_at) for s in render_snaps]
-        duration_hours = (max(utc_snaps) - min(utc_snaps)).total_seconds() / 3600
-    else:
-        duration_hours = 0.0
-
     buf = render_media_chart(
         snapshots=render_snaps,
         title=item.title,
         metric_label=metric_label,
-        duration_hours=duration_hours,
         mode=render_mode,
     )
     cache_path.write_bytes(buf)

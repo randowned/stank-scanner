@@ -556,6 +556,7 @@ class MetricSnapshot(Base):
     __tablename__ = "metric_snapshots"
     __table_args__ = (
         Index("ix_metric_snapshots_item_key_time", "media_item_id", "metric_key", "fetched_at"),
+        Index("ix_metric_snapshots_item_key_align_time", "media_item_id", "metric_key", "alignment_mask", "fetched_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
