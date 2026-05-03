@@ -179,7 +179,7 @@ def render_media_chart(
     # Data line
     # ------------------------------------------------------------------
     if len(snapshots) >= 2:
-        pts = [(px_x(dt), px_y(snaps[_i].value)) for _i, (snaps, dt) in enumerate(zip(snapshots, times_dt, strict=True))]
+        pts = [(px_x(dt), px_y(snap.value)) for snap, dt in zip(snapshots, times_dt, strict=True)]
         for i in range(len(pts) - 1):
             draw.line([pts[i], pts[i + 1]], fill=LINE, width=2)
 

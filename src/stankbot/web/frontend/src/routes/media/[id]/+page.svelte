@@ -94,14 +94,6 @@
 
 	const hasCompare = $derived(compareIds.length > 0);
 
-	const matchingSeriesCount = $derived(
-		compareData && item
-			? compareData.series.filter((s) => s.media_type === item.media_type).length
-			: 0
-	);
-
-	const showCompareChart = $derived(hasCompare && compareData && matchingSeriesCount >= 2);
-
 	const dataStart = $derived(history.length > 0 ? new Date(history[0].fetched_at).getTime() : 0);
 	const rangeStart = $derived(Date.now() - selectedHours * 3600 * 1000);
 	const dataShorter = $derived(dataStart > 0 && dataStart > rangeStart);
@@ -228,13 +220,26 @@
 	}
 
 	function buildChartDatasets() {
-		return [{
-			label: metricLabel(selectedMetric),
+		const datasets = [{
+			label: item?.name || metricLabel(selectedMetric),
 			data: history.map((h) => ({
 				x: new Date(h.fetched_at).getTime(),
 				y: h.value
 			}))
 		}];
+		if (compareData && item) {
+			const compareSets = compareData.series
+				.filter((s) => s.media_type === item.media_type)
+				.map((s) => ({
+					label: s.title,
+					data: s.points.map((p) => ({
+						x: new Date(String(p.x)).getTime(),
+						y: p.y
+					}))
+				}));
+			datasets.push(...compareSets);
+		}
+		return datasets;
 	}
 
 	function timeDisplayFormats() {
@@ -293,54 +298,7 @@
 				}
 			},
 			plugins: {
-				legend: { display: false }
-			}
-		};
-	}
-
-	function buildCompareDatasets(cd: CompareData) {
-		if (!cd || !item) return [];
-		return cd.series
-			.filter((s) => s.media_type === item.media_type)
-			.map((s) => ({
-				label: s.title,
-				data: s.points.map((p) => ({
-					x: new Date(String(p.x)).getTime(),
-					y: p.y
-				}))
-			}));
-	}
-
-	function buildCompareOptions(cd: CompareData): Record<string, unknown> {
-		return {
-			scales: {
-				x: {
-					type: 'time',
-					time: {
-						tooltipFormat: 'MMM d, yyyy HH:mm',
-						displayFormats: timeDisplayFormats()
-					},
-					ticks: { maxTicksLimit: 8, color: '#9aa4b2', font: { size: 10 } },
-					grid: { display: false }
-				},
-				y: {
-					title: { display: true, text: cd.metric?.label ?? '', color: '#9aa4b2' },
-					ticks: { color: '#9aa4b2', font: { size: 10 } },
-					grid: { color: '#262a33', drawBorder: false }
-				}
-			},
-			plugins: {
-				legend: {
-					display: true,
-					position: 'bottom',
-					labels: {
-						color: '#9aa4b2',
-						font: { size: 11 },
-						padding: 12,
-						boxWidth: 10,
-						boxHeight: 10
-					}
-				}
+				legend: { display: compareData !== null && hasCompare }
 			}
 		};
 	}
@@ -435,19 +393,22 @@
 					<SelectDropdown options={metricOptions} bind:value={selectedMetric} testId="media-detail-metric" />
 					<SelectDropdown options={rangeOptions} bind:value={selectedHours} testId="media-detail-range" />
 					<SelectDropdown options={aggregationOptions} bind:value={selectedAggregation} testId="media-detail-aggregation" />
-					{#if dataStartLabel}
-						<span class="text-xs text-muted whitespace-nowrap" data-testid="media-detail-data-start">Data since {dataStartLabel}</span>
-					{/if}
+					<SelectDropdown options={viewOptions} bind:value={comparisonMode} testId="media-detail-view" />
 					{#if hasCompare}
-						<SelectDropdown options={viewOptions} bind:value={comparisonMode} testId="media-detail-view" />
 						<Button variant="ghost" onclick={clearComparison} size="sm" testId="media-clear-compare">Clear comparison</Button>
 					{/if}
 				</div>
 
 				<div class="panel mb-4">
-					<h3 class="text-sm font-semibold mb-2">{metricLabel(selectedMetric)} over time</h3>
+					<h3 class="text-sm font-semibold mb-2">
+						{metricLabel(selectedMetric)} over time
+						{#if dataStartLabel} <span class="text-xs text-muted font-normal">(data since {dataStartLabel})</span>{/if}
+						{#if hasCompare && compareData}
+							— comparing {buildChartDatasets().length - 1} items
+						{/if}
+					</h3>
 					{#if graphs}
-						<div class={loadingHistory ? 'opacity-60 transition-opacity' : ''} data-testid="media-detail-chart">
+						<div class={loadingHistory || loadingCompare ? 'opacity-60 transition-opacity' : ''} data-testid="media-detail-chart">
 							<Chart datasets={buildChartDatasets()} options={buildChartOptions()} height={220} />
 						</div>
 						{#if sparseHint}
@@ -459,22 +420,6 @@
 						<div class="text-muted text-sm py-4 text-center" data-testid="media-detail-no-history">No history data yet — waiting for the next scheduled poll.</div>
 					{/if}
 				</div>
-
-				{#if showCompareChart}
-					{@const cd = compareData!}
-					<div class="panel mb-4">
-						<h3 class="text-sm font-semibold mb-2">
-							{metricLabel(selectedMetric)} — comparing {matchingSeriesCount} items
-						</h3>
-						<div class={loadingCompare ? 'opacity-60 transition-opacity' : ''}>
-							<Chart datasets={buildCompareDatasets(cd)} options={buildCompareOptions(cd)} height={220} />
-						</div>
-					</div>
-				{:else if hasCompare && !compareData && !loadingCompare}
-					<div class="panel mb-4">
-						<div class="text-muted text-sm py-4 text-center">No comparison data available</div>
-					</div>
-				{/if}
 			</div>
 		</div>
 	</div>
