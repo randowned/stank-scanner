@@ -258,9 +258,9 @@
 				p.y = cur - prev;
 				prev = cur;
 			}
-			points[0].y = 0;
+			points.shift();
 		} else if (comparisonMode === 'delta') {
-			for (const p of points) p.y = 0;
+			points.length = 0;
 		}
 		return [{
 			label: item?.name || metricLabel(selectedMetric),

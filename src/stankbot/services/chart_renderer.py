@@ -134,9 +134,11 @@ def render_media_chart(
 
     raw_values = [s.value for s in snapshots]
     if mode == "delta" and len(raw_values) >= 2:
-        values = [0] + [raw_values[i] - raw_values[i - 1] for i in range(1, len(raw_values))]
+        values = [raw_values[i] - raw_values[i - 1] for i in range(1, len(raw_values))]
+        snapshots = snapshots[1:]
     elif mode == "delta":
-        values = [0 for _ in raw_values]
+        values = []
+        snapshots = []
     else:
         values = raw_values
     times = [(s.fetched_at.astimezone(UTC) if isinstance(s.fetched_at, datetime) else s.fetched_at) for s in snapshots]

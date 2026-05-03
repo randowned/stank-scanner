@@ -259,10 +259,9 @@ class MediaService:
                     cur = pt["y"]
                     pt["y"] = cur - prev  # type: ignore[operator]
                     prev = cur
-                raw_points[0]["y"] = 0
+                raw_points = raw_points[1:]
             elif delta:
-                for pt in raw_points:
-                    pt["y"] = 0
+                raw_points = []
 
             items.append({
                 "media_item_id": mid,
@@ -317,10 +316,9 @@ class MediaService:
                         cur = pt["y"]
                         pt["y"] = cur - prev  # type: ignore[operator]
                         prev = cur
-                    points[0]["y"] = 0
+                    points = points[1:]
                 elif delta:
-                    for pt in points:
-                        pt["y"] = 0
+                    points = []
 
                 items.append({
                     "media_item_id": mid,
