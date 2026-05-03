@@ -16,6 +16,7 @@
 		position?: 'left' | 'right';
 		class?: string;
 		testId?: string;
+		name?: string;
 	}
 
 	let {
@@ -24,7 +25,8 @@
 		disabled = false,
 		position = 'left',
 		class: klass = '',
-		testId
+		testId,
+		name
 	}: Props = $props();
 
 	let selected = $derived(options.find((o) => o.value === value));
@@ -62,6 +64,6 @@
 		{/each}
 	</Dropdown>
 	{#snippet tooltip()}
-		{selectedLabel}
+		{name ? `${name}: ${selectedLabel}` : selectedLabel}
 	{/snippet}
 </Tooltip>

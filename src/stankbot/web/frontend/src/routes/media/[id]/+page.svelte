@@ -79,8 +79,8 @@
 	];
 
 	const viewOptions = [
-		{ value: 'delta', label: 'Delta', icon: 'Δ' },
-		{ value: 'total', label: 'Total', icon: 'Σ' }
+		{ value: 'delta', label: 'Change', icon: 'Δ' },
+		{ value: 'total', label: 'Cumulative', icon: 'Σ' }
 	];
 
 	const aggregationOptions = [
@@ -130,6 +130,46 @@
 			compareIds = raw.split(',').map((s) => s.trim()).filter(Boolean);
 		}
 	});
+
+	function bucketDeltas(points: { x: number; y: number }[], bucketMs: number): { x: number; y: number }[] {
+		if (points.length === 0 || bucketMs <= 0) return points;
+		const buckets = new Map<number, number>();
+		for (const p of points) {
+			const bucketStart = Math.floor(p.x / bucketMs) * bucketMs;
+			buckets.set(bucketStart, (buckets.get(bucketStart) ?? 0) + p.y);
+		}
+		return Array.from(buckets.entries())
+			.sort(([a], [b]) => a - b)
+			.map(([x, y]) => ({ x, y }));
+	}
+
+	function computeResolutionBucketMs(agg: string, hist: MetricSnapshot[]): number | null {
+		if (agg !== 'auto') {
+			const map: Record<string, number> = {
+				minutely: 60_000,
+				hourly: 3_600_000,
+				daily: 86_400_000,
+				weekly: 604_800_000,
+				monthly: 2_592_000_000
+			};
+			return map[agg] ?? null;
+		}
+		if (hist.length < 2) return null;
+		const times = hist.map((h) => new Date(h.fetched_at).getTime()).sort((a, b) => a - b);
+		const intervals: number[] = [];
+		for (let i = 1; i < times.length; i++) intervals.push(times[i] - times[i - 1]);
+		intervals.sort((a, b) => a - b);
+		const median = intervals[Math.floor(intervals.length / 2)];
+		const FIVE_MIN = 300_000;
+		const THIRTY_MIN = 1_800_000;
+		const THREE_HOURS = 10_800_000;
+		if (median < FIVE_MIN) return null;
+		if (median < THIRTY_MIN) return 3_600_000;
+		if (median < THREE_HOURS) return 86_400_000;
+		return 604_800_000;
+	}
+
+	const resolutionBucketMs = $derived(computeResolutionBucketMs(selectedAggregation, history));
 
 	// Auto-default Δ/Σ when entering/leaving compare mode. User toggles still stick
 	// within a given mode because we only flip on the transition.
@@ -247,7 +287,7 @@
 		}
 		// Single-item view: /api/media/{id}/history always returns raw totals,
 		// so apply per-tick delta transformation client-side when requested.
-		const points = history.map((h) => ({
+		let points = history.map((h) => ({
 			x: new Date(h.fetched_at).getTime(),
 			y: h.value
 		}));
@@ -259,6 +299,9 @@
 				prev = cur;
 			}
 			points.shift();
+			if (resolutionBucketMs !== null) {
+				points = bucketDeltas(points, resolutionBucketMs);
+			}
 		} else if (comparisonMode === 'delta') {
 			points.length = 0;
 		}
@@ -300,6 +343,11 @@
 			timeScaleOpts.minUnit = chartMinUnit;
 		}
 		return {
+			datasets: {
+				line: {
+					spanGaps: true
+				}
+			},
 			scales: {
 				x: {
 					type: 'time',
@@ -416,10 +464,10 @@
 				</div>
 
 				<div class="flex items-center gap-2 mb-3 flex-nowrap">
-					<SelectDropdown options={metricOptions} bind:value={selectedMetric} testId="media-detail-metric" />
-					<SelectDropdown options={rangeOptions} bind:value={selectedHours} testId="media-detail-range" />
-					<SelectDropdown options={aggregationOptions} bind:value={selectedAggregation} testId="media-detail-aggregation" />
-					<SelectDropdown options={viewOptions} bind:value={comparisonMode} testId="media-detail-view" />
+					<SelectDropdown options={metricOptions} bind:value={selectedMetric} testId="media-detail-metric" name="Metric" />
+					<SelectDropdown options={rangeOptions} bind:value={selectedHours} testId="media-detail-range" name="Range" />
+					<SelectDropdown options={aggregationOptions} bind:value={selectedAggregation} testId="media-detail-resolution" name="Resolution" />
+					<SelectDropdown options={viewOptions} bind:value={comparisonMode} testId="media-detail-view" name="Mode" />
 					{#if hasCompare}
 						<Button variant="ghost" onclick={clearComparison} size="sm" testId="media-clear-compare">Clear comparison</Button>
 					{/if}
