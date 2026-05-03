@@ -83,14 +83,29 @@
 		{ value: 'total', label: 'Cumulative', icon: 'Σ' }
 	];
 
-	const aggregationOptions = [
-		{ value: 'auto', label: 'Auto', icon: '🤖' },
-		{ value: 'minutely', label: 'Min', icon: '🕐' },
-		{ value: 'hourly', label: 'Hour', icon: '⏱️' },
-		{ value: 'daily', label: 'Day', icon: '📅' },
-		{ value: 'weekly', label: 'Week', icon: '📆' },
-		{ value: 'monthly', label: 'Month', icon: '🗓️' },
-	];
+	const aggregationOptions = $derived.by(() => {
+		const rangeHours = selectedHours;
+		const all: Array<{ value: string; label: string; icon: string }> = [
+			{ value: 'auto', label: 'Auto', icon: '🤖' },
+			{ value: 'minutely', label: 'Min', icon: '🕐' },
+			{ value: '5min', label: '5 Min', icon: '🕐' },
+			{ value: '15min', label: '15 Min', icon: '🕐' },
+			{ value: 'hourly', label: 'Hour', icon: '⏱️' },
+			{ value: 'daily', label: 'Day', icon: '📅' },
+			{ value: 'weekly', label: 'Week', icon: '📆' },
+			{ value: 'monthly', label: 'Month', icon: '🗓️' },
+		];
+		const bucketHours: Record<string, number> = {
+			minutely: 1 / 60,
+			'5min': 5 / 60,
+			'15min': 15 / 60,
+			hourly: 1,
+			daily: 24,
+			weekly: 24 * 7,
+			monthly: 24 * 30,
+		};
+		return all.filter((o) => o.value === 'auto' || (bucketHours[o.value] ?? 0) < rangeHours);
+	});
 
 	const hasCompare = $derived(compareIds.length > 0);
 
@@ -117,6 +132,8 @@
 			   dataSpanMs < 1_209_600_000 ? 'hour' :
 			   undefined)
 			: selectedAggregation === 'minutely' ? 'minute'
+			: selectedAggregation === '5min' ? 'minute'
+			: selectedAggregation === '15min' ? 'minute'
 			: selectedAggregation === 'hourly' ? 'hour'
 			: selectedAggregation === 'daily' ? 'day'
 			: selectedAggregation === 'weekly' ? 'week'
@@ -133,20 +150,22 @@
 
 	function bucketDeltas(points: { x: number; y: number }[], bucketMs: number): { x: number; y: number }[] {
 		if (points.length === 0 || bucketMs <= 0) return points;
-		const buckets = new Map<number, number>();
+		const buckets: Record<number, number> = {};
 		for (const p of points) {
 			const bucketStart = Math.floor(p.x / bucketMs) * bucketMs;
-			buckets.set(bucketStart, (buckets.get(bucketStart) ?? 0) + p.y);
+			buckets[bucketStart] = (buckets[bucketStart] ?? 0) + p.y;
 		}
-		return Array.from(buckets.entries())
-			.sort(([a], [b]) => a - b)
-			.map(([x, y]) => ({ x, y }));
+		return Object.entries(buckets)
+			.map(([k, v]) => ({ x: Number(k), y: v }))
+			.sort((a, b) => a.x - b.x);
 	}
 
 	function computeResolutionBucketMs(agg: string, hist: MetricSnapshot[]): number | null {
 		if (agg !== 'auto') {
 			const map: Record<string, number> = {
 				minutely: 60_000,
+				'5min': 300_000,
+				'15min': 900_000,
 				hourly: 3_600_000,
 				daily: 86_400_000,
 				weekly: 604_800_000,
@@ -216,13 +235,28 @@
 		return item?.metrics?.[key]?.value ?? 0;
 	}
 
+	const serverAggregations = new Set(['5min', '15min', 'hourly', 'daily', 'weekly', 'monthly']);
+	const useServerAggregation = $derived(serverAggregations.has(selectedAggregation));
+
+	$effect(() => {
+		if (!aggregationOptions.some((o) => o.value === selectedAggregation)) {
+			selectedAggregation = 'auto';
+		}
+	});
+
 	function buildHistoryUrl(): string {
 		if (!item) return '';
+		let url: string;
 		if (selectedHours < 24) {
-			return `/api/media/${item.id}/history?metric=${selectedMetric}&hours=${selectedHours}`;
+			url = `/api/media/${item.id}/history?metric=${selectedMetric}&hours=${selectedHours}`;
+		} else {
+			const days = Math.max(1, Math.round(selectedHours / 24));
+			url = `/api/media/${item.id}/history?metric=${selectedMetric}&days=${days}`;
 		}
-		const days = Math.max(1, Math.round(selectedHours / 24));
-		return `/api/media/${item.id}/history?metric=${selectedMetric}&days=${days}`;
+		if (useServerAggregation) {
+			url += `&aggregation=${selectedAggregation}&mode=${comparisonMode}`;
+		}
+		return url;
 	}
 
 	async function loadHistory() {
@@ -260,6 +294,7 @@
 		void selectedMetric;
 		void selectedHours;
 		void comparisonMode;
+		void selectedAggregation;
 		void loadHistory();
 		if (hasCompare) void loadComparison();
 	});
@@ -287,6 +322,17 @@
 		}
 		// Single-item view: /api/media/{id}/history always returns raw totals,
 		// so apply per-tick delta transformation client-side when requested.
+		// When server-side aggregation is active the API returns pre-aggregated
+		// data (already delta'd if that mode was selected).
+		if (useServerAggregation) {
+			return [{
+				label: item?.name || metricLabel(selectedMetric),
+				data: history.map((h) => ({
+					x: new Date(h.fetched_at).getTime(),
+					y: h.value
+				}))
+			}];
+		}
 		let points = history.map((h) => ({
 			x: new Date(h.fetched_at).getTime(),
 			y: h.value

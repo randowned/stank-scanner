@@ -60,9 +60,11 @@
 		}
 	}
 
-	const VALID_INTERVALS = [15, 30, 45, 60, 120, 240, 720, 1440] as const;
+	const VALID_INTERVALS = [1, 5, 15, 30, 45, 60, 120, 240, 720, 1440] as const;
 
 	const intervalOptions = [
+		{ value: 1, label: '1 minute', icon: '⏱️' },
+		{ value: 5, label: '5 minutes', icon: '⏱️' },
 		{ value: 15, label: '15 minutes', icon: '⏱️' },
 		{ value: 30, label: '30 minutes', icon: '⏱️' },
 		{ value: 45, label: '45 minutes', icon: '⏱️' },

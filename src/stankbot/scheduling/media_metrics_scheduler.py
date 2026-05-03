@@ -87,7 +87,7 @@ class MediaMetricsScheduler:
             interval = await settings.get(
                 guild_id, Keys.MEDIA_METRICS_UPDATE_INTERVAL_MINUTES, 60
             )
-        interval = max(5, int(interval))
+        interval = max(1, int(interval))
         start_date = _align_start(interval)
 
         self.scheduler.add_job(

@@ -17,6 +17,7 @@
 		class?: string;
 		testId?: string;
 		name?: string;
+		showLabel?: boolean;
 	}
 
 	let {
@@ -26,7 +27,8 @@
 		position = 'left',
 		class: klass = '',
 		testId,
-		name
+		name,
+		showLabel = true
 	}: Props = $props();
 
 	let selected = $derived(options.find((o) => o.value === value));
@@ -47,6 +49,9 @@
 				aria-label={selectedLabel}
 			>
 				<span class="text-base leading-none">{selectedIcon}</span>
+				{#if showLabel && selectedLabel}
+					<span class="text-xs ml-1 whitespace-nowrap">{selectedLabel}</span>
+				{/if}
 				<span class="text-muted text-[8px] leading-none ml-0.5">{open ? '▲' : '▼'}</span>
 			</button>
 		{/snippet}
@@ -64,6 +69,8 @@
 		{/each}
 	</Dropdown>
 	{#snippet tooltip()}
-		{name ? `${name}: ${selectedLabel}` : selectedLabel}
+		{#if !showLabel}
+			{name ? `${name}: ${selectedLabel}` : selectedLabel}
+		{/if}
 	{/snippet}
 </Tooltip>

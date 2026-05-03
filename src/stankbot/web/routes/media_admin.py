@@ -305,7 +305,7 @@ async def refresh_all(
 
 
 class MediaSettingsPayload(BaseModel):
-    update_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
+    update_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
     replies_ephemeral: bool | None = None
     admin_only: bool | None = None
     providers_enabled: list[str] | None = None

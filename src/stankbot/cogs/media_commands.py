@@ -54,6 +54,15 @@ MODE_CHOICES = [
     app_commands.Choice(name="Delta (per-tick change)", value="delta"),
 ]
 
+AGGREGATION_CHOICES = [
+    app_commands.Choice(name="5 minutes", value="5min"),
+    app_commands.Choice(name="15 minutes", value="15min"),
+    app_commands.Choice(name="Hourly", value="hourly"),
+    app_commands.Choice(name="Daily", value="daily"),
+    app_commands.Choice(name="Weekly", value="weekly"),
+    app_commands.Choice(name="Monthly", value="monthly"),
+]
+
 
 class StatsCommands(commands.GroupCog, name="stats"):
     """``/stats`` commands — show metrics for tracked YouTube / Spotify items."""
@@ -183,6 +192,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
         metric: str,
         range_value: str,
         mode: str = "total",
+        aggregation: str | None = None,
     ) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -219,10 +229,13 @@ class StatsCommands(commands.GroupCog, name="stats"):
 
             if mode != "total":
                 url += f"&mode={mode}"
+            if aggregation:
+                url += f"&aggregation={aggregation}"
 
             embed = discord.Embed(
                 title=item.title,
-                description=f"{media_type.capitalize()} · {metric} · {range_value} · {mode}",
+                description=f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
+                + (f" · {aggregation}" if aggregation else ""),
                 color=discord.Color.blurple(),
             )
             embed.set_image(url=url)
@@ -274,8 +287,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
-    @app_commands.describe(name="The video's name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.")
-    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
+    @app_commands.describe(name="The video's name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for aggregation.")
+    @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES, aggregation=AGGREGATION_CHOICES)
     @app_commands.rename(metric="type", range_="range")
     @requires_stats_access()
     async def youtube_chart(
@@ -285,8 +298,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
         metric: str,
         range_: str,
         mode: str = "total",
+        aggregation: str | None = None,
     ) -> None:
-        await self._send_chart_embed(interaction, "youtube", name, metric, range_, mode)
+        await self._send_chart_embed(interaction, "youtube", name, metric, range_, mode, aggregation)
 
     @youtube_chart.autocomplete("name")
     async def _youtube_chart_name_ac(
@@ -299,8 +313,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
-    @app_commands.describe(name="The track or album name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.")
-    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
+    @app_commands.describe(name="The track or album name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for aggregation.")
+    @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES, aggregation=AGGREGATION_CHOICES)
     @app_commands.rename(metric="type", range_="range")
     @requires_stats_access()
     async def spotify_chart(
@@ -310,8 +324,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
         metric: str,
         range_: str,
         mode: str = "total",
+        aggregation: str | None = None,
     ) -> None:
-        await self._send_chart_embed(interaction, "spotify", name, metric, range_, mode)
+        await self._send_chart_embed(interaction, "spotify", name, metric, range_, mode, aggregation)
 
     @spotify_chart.autocomplete("name")
     async def _spotify_chart_name_ac(

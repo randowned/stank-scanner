@@ -283,6 +283,8 @@ async def get_metric_snapshots_pivoted(
     by_time: dict[str, dict[str, int]] = {}
     order: list[str] = []
     for fetched_at, metric_key, value in rows:
+        if fetched_at.tzinfo is None:
+            fetched_at = fetched_at.replace(tzinfo=UTC)
         ts = fetched_at.isoformat()
         if ts not in by_time:
             by_time[ts] = {}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.chart_renderer import render_media_chart
-from stankbot.services.media_service import MediaService
+from stankbot.services.media_service import MediaService, _aggregate_snapshots
 from stankbot.services.permission_service import PermissionService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_member
@@ -165,6 +166,8 @@ async def get_media_history(
     metric: str = Query("view_count"),
     days: int = Query(30, ge=1, le=365),
     hours: int | None = Query(None, ge=1, le=48),
+    aggregation: str | None = Query(None, pattern=r"^(5min|15min|hourly|daily|weekly|monthly)$"),
+    mode: str = Query("total", pattern=r"^(total|delta)$"),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
     session: AsyncSession = Depends(get_db),
@@ -176,11 +179,16 @@ async def get_media_history(
         raise HTTPException(status_code=404, detail="Media item not found")
     svc = await _media_service(request, session)
     history = await svc.get_metrics_history(
-        media_id, metric, window_days=days, window_hours=hours
+        media_id, metric, window_days=days, window_hours=hours,
+        aggregation=aggregation, mode=mode,
     )
     payload: dict[str, Any] = {"metric": metric, "days": days, "history": history}
     if hours is not None:
         payload["hours"] = hours
+    if aggregation:
+        payload["aggregation"] = aggregation
+    if mode != "total":
+        payload["mode"] = mode
     return MsgPackResponse(payload, request)
 
 
@@ -194,6 +202,12 @@ CHART_CACHE_DIR = Path(
 )
 
 
+@dataclass(slots=True)
+class _SnapshotStub:
+    value: int
+    fetched_at: datetime
+
+
 @router.get("/{media_id}/chart", include_in_schema=False)
 async def get_media_chart(
     request: Request,
@@ -203,6 +217,7 @@ async def get_media_chart(
     hours: int | None = Query(None, ge=1, le=8760),
     date: str | None = Query(None),
     mode: str = Query("total"),
+    aggregation: str | None = Query(None, pattern=r"^(5min|15min|hourly|daily|weekly|monthly)$"),
     session: AsyncSession = Depends(get_db),
 ) -> FileResponse:
     item = await media_repo.get(session, media_id)
@@ -259,6 +274,15 @@ async def get_media_chart(
     # Filter snapshots at or before reference_date
     snaps = [s for s in snaps if _ensure_utc(s.fetched_at) <= reference_date]
 
+    # Apply server-side aggregation (reuses the same logic as history endpoint)
+    render_snaps: list[Any] = snaps
+    render_mode = mode if mode in ("total", "delta") else "total"
+    if aggregation:
+        agg_mode = render_mode
+        aggregated = _aggregate_snapshots(snaps, aggregation, agg_mode)
+        render_snaps = [_SnapshotStub(value=d["value"], fetched_at=datetime.fromisoformat(d["fetched_at"])) for d in aggregated]
+        render_mode = "total"  # delta already applied by _aggregate_snapshots
+
     # Determine cache key from the latest snapshot timestamp
     if snaps:
         latest_snap = snaps[-1]
@@ -269,9 +293,10 @@ async def get_media_chart(
     # Determine cache key — includes all params so different metric/range/mode combos don't collide
     range_key = f"h{hours}" if hours is not None else f"d{days}" if days is not None else "all"
     mode_val = mode if mode in ("total", "delta") else "total"
+    agg_key = f"_{aggregation}" if aggregation else ""
     cache_dir = CHART_CACHE_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = cache_dir / f"{media_id}_{metric}_{range_key}_{cache_ts}_{mode_val}.png"
+    cache_path = cache_dir / f"{media_id}_{metric}_{range_key}{agg_key}_{cache_ts}_{mode_val}.png"
 
     if cache_path.exists():
         return FileResponse(
@@ -280,18 +305,18 @@ async def get_media_chart(
         )
 
     # Compute actual duration for chart title context
-    if snaps:
-        utc_snaps = [_ensure_utc(s.fetched_at) for s in snaps]
+    if render_snaps:
+        utc_snaps = [_ensure_utc(s.fetched_at) for s in render_snaps]
         duration_hours = (max(utc_snaps) - min(utc_snaps)).total_seconds() / 3600
     else:
         duration_hours = 0.0
 
     buf = render_media_chart(
-        snapshots=snaps,
+        snapshots=render_snaps,
         title=item.title,
         metric_label=metric_label,
         duration_hours=duration_hours,
-        mode=mode_val,
+        mode=render_mode,
     )
     cache_path.write_bytes(buf)
 

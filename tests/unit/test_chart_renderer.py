@@ -223,3 +223,16 @@ class TestRenderMediaChartMode:
         )
         img = Image.open(BytesIO(buf))
         assert img.size == (1200, 675)
+
+    def test_aggregated_stub_snapshots(self) -> None:
+        """render_media_chart should accept duck-typed stubs (from aggregation)."""
+        aggregated = _make_snapshots(count=3, interval_hours=6)
+        buf = render_media_chart(
+            snapshots=aggregated,
+            title="Aggregated",
+            metric_label="Views",
+            duration_hours=18,
+            mode="total",
+        )
+        img = Image.open(BytesIO(buf))
+        assert img.size == (1200, 675)

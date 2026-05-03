@@ -29,6 +29,101 @@ def _slugify(text: str) -> str:
     return text.strip("-")[:50]
 
 
+_VALID_AGGREGATIONS = {"5min", "15min", "hourly", "daily", "weekly", "monthly"}
+
+
+def _floor_to_bucket(dt: datetime, bucket: str) -> datetime:
+    """Floor a datetime to the start of its calendar bucket (UTC).
+
+    Calendar-aligned: 5min/15min/hourly snap to clock boundaries,
+    daily snaps to midnight, weekly to Monday midnight, monthly to 1st.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    if bucket == "5min":
+        total_minutes = dt.hour * 60 + dt.minute
+        floored = total_minutes // 5 * 5
+        return dt.replace(hour=floored // 60, minute=floored % 60, second=0, microsecond=0)
+    if bucket == "15min":
+        total_minutes = dt.hour * 60 + dt.minute
+        floored = total_minutes // 15 * 15
+        return dt.replace(hour=floored // 60, minute=floored % 60, second=0, microsecond=0)
+    if bucket == "hourly":
+        return dt.replace(minute=0, second=0, microsecond=0)
+    if bucket == "daily":
+        return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    if bucket == "weekly":
+        days_since_monday = dt.weekday()
+        return (dt - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+    if bucket == "monthly":
+        return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    raise ValueError(f"Unknown aggregation bucket: {bucket}")
+
+
+def _aggregate_snapshots(
+    snapshots: list[Any],  # MetricSnapshot-like with .value and .fetched_at
+    bucket: str,
+    mode: str,
+) -> list[dict[str, Any]]:
+    """Aggregate snapshots into time buckets.
+
+    Args:
+        snapshots: Raw snapshots sorted by fetched_at ascending.
+        bucket: One of '5min', '15min', 'hourly', 'daily', 'weekly', 'monthly'.
+        mode: 'total' (last value per bucket) or 'delta' (sum of per-tick deltas).
+
+    Returns:
+        List of {fetched_at: ISO str, value: int} sorted by bucket start.
+    """
+    if bucket not in _VALID_AGGREGATIONS:
+        raise ValueError(f"Invalid aggregation bucket: {bucket}")
+    if mode not in ("total", "delta"):
+        raise ValueError(f"Invalid mode: {mode}")
+    if not snapshots:
+        return []
+
+    # Normalize timezone: older rows may have naive datetimes
+    normalized: list[tuple[datetime, int]] = []
+    for s in snapshots:
+        dt = s.fetched_at
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        normalized.append((dt, s.value))
+
+    if mode == "total":
+        buckets: dict[datetime, int] = {}
+        bucket_order: list[datetime] = []
+        for dt, val in normalized:
+            key = _floor_to_bucket(dt, bucket)
+            if key not in buckets:
+                bucket_order.append(key)
+            buckets[key] = val  # last value in bucket wins (cumulative)
+        return [
+            {"fetched_at": key.isoformat(), "value": buckets[key]}
+            for key in bucket_order
+        ]
+
+    # delta mode: compute per-tick deltas, sum into buckets
+    if len(normalized) < 2:
+        return []
+
+    delta_buckets: dict[datetime, int] = {}
+    delta_order: list[datetime] = []
+    for i in range(1, len(normalized)):
+        _prev_dt, prev_val = normalized[i - 1]
+        cur_dt, cur_val = normalized[i]
+        delta = cur_val - prev_val
+        key = _floor_to_bucket(cur_dt, bucket)
+        if key not in delta_buckets:
+            delta_order.append(key)
+        delta_buckets[key] = delta_buckets.get(key, 0) + delta
+
+    return [
+        {"fetched_at": key.isoformat(), "value": delta_buckets[key]}
+        for key in delta_order
+    ]
+
+
 @dataclass(slots=True)
 class RefreshResult:
     refreshed: int = 0
@@ -65,6 +160,16 @@ class MediaService:
         if dt.tzinfo is None and s[-1] != "Z":
             s += "+00:00"
         return s
+
+    @staticmethod
+    def _serialize_ts(dt: datetime) -> str:
+        """Serialize a non-null datetime to an ISO-8601 string guaranteed UTC.
+
+        Same normalisation as _iso but for the non-optional timestamp case.
+        """
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.isoformat()
 
     # ------------------------------------------------------------------
     # CRUD
@@ -207,6 +312,8 @@ class MediaService:
         metric_key: str,
         window_days: int = 30,
         window_hours: int | None = None,
+        aggregation: str | None = None,
+        mode: str = "total",
     ) -> list[dict[str, Any]]:
         since = None
         if window_hours is not None and window_hours > 0:
@@ -216,8 +323,10 @@ class MediaService:
         snapshots = await media_repo.get_metric_snapshots(
             self.session, media_item_id, metric_key, since
         )
+        if aggregation:
+            return _aggregate_snapshots(snapshots, aggregation, mode)
         return [
-            {"fetched_at": s.fetched_at.isoformat(), "value": s.value}
+            {"fetched_at": self._serialize_ts(s.fetched_at), "value": s.value}
             for s in snapshots
         ]
 
