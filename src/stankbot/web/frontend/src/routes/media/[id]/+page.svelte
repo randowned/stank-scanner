@@ -245,12 +245,26 @@
 					}))
 				}));
 		}
+		// Single-item view: /api/media/{id}/history always returns raw totals,
+		// so apply per-tick delta transformation client-side when requested.
+		const points = history.map((h) => ({
+			x: new Date(h.fetched_at).getTime(),
+			y: h.value
+		}));
+		if (comparisonMode === 'delta' && points.length >= 2) {
+			let prev = points[0].y;
+			for (const p of points) {
+				const cur = p.y;
+				p.y = cur - prev;
+				prev = cur;
+			}
+			points[0].y = 0;
+		} else if (comparisonMode === 'delta') {
+			for (const p of points) p.y = 0;
+		}
 		return [{
 			label: item?.name || metricLabel(selectedMetric),
-			data: history.map((h) => ({
-				x: new Date(h.fetched_at).getTime(),
-				y: h.value
-			}))
+			data: points
 		}];
 	}
 
