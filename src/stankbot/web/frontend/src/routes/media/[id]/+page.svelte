@@ -364,15 +364,26 @@
 		// (and applies delta/total transformation). Render those exclusively to avoid
 		// duplicating the host as a separate raw-totals overlay.
 		if (hasCompare && compareData && item) {
+			const bms = !useServerAggregation ? resolutionBucketMs : null;
 			return compareData.series
 				.filter((s) => s.media_type === item.media_type)
-				.map((s) => ({
-					label: s.media_item_id === item.id ? (item.name || s.title) : (s.name || s.title),
-					data: s.points.map((p) => ({
+				.map((s) => {
+					let points = s.points.map((p) => ({
 						x: new Date(String(p.x)).getTime(),
 						y: p.y
-					}))
-				}));
+					}));
+					if (bms !== null) {
+						// Compare API already delta'd the points; just bucket them the same
+						// way as the single-item auto-resolution path.
+						points = comparisonMode === 'delta'
+							? bucketDeltas(points, bms)
+							: bucketCumulative(points, bms);
+					}
+					return {
+						label: s.media_item_id === item.id ? (item.name || s.title) : (s.name || s.title),
+						data: points
+					};
+				});
 		}
 		// When settings have changed but the fetch hasn't completed yet, return the
 		// last good datasets so the old chart stays visible (dimmed by loadingHistory)
