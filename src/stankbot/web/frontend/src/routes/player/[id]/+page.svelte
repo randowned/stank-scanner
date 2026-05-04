@@ -38,6 +38,12 @@
 
 	import { formatDateTime } from '$lib/datetime';
 	import { formatNumber } from '$lib/format';
+
+	let containerWidth = $state(0);
+
+	function getContainerWidthForCharts() {
+		return containerWidth >= 574 ? containerWidth >= 702 ? 702 / 3 : (containerWidth / 3) : containerWidth;
+	}
 </script>
 
 <div class="p-4 space-y-4">
@@ -102,23 +108,24 @@
 		<div class="panel">
 			<h2 class="text-lg font-semibold mb-3">Last 30 days</h2>
 			{#if history.length}
-				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4" bind:clientWidth={containerWidth}>
 					<div>
 						<div class="text-xs text-muted uppercase mb-1">SP / day</div>
 						<div class="text-accent">
-							<Sparkline values={spSeries} ariaLabel="SP per day" />
+							
+							<Sparkline values={spSeries} width={getContainerWidthForCharts()} height={getContainerWidthForCharts() / 4} ariaLabel="SP per day" />
 						</div>
 					</div>
 					<div>
 						<div class="text-xs text-muted uppercase mb-1">PP / day</div>
 						<div class="text-danger">
-							<Sparkline values={ppSeries} ariaLabel="PP per day" />
+							<Sparkline values={ppSeries} width={getContainerWidthForCharts()} height={getContainerWidthForCharts() / 4} ariaLabel="PP per day" />
 						</div>
 					</div>
 					<div>
 						<div class="text-xs text-muted uppercase mb-1">Net</div>
 						<div class="text-ok">
-							<Sparkline values={netSeries} ariaLabel="Net per day" />
+							<Sparkline values={netSeries} width={getContainerWidthForCharts()} height={getContainerWidthForCharts() / 4} ariaLabel="Net per day" />
 						</div>
 					</div>
 				</div>
@@ -156,14 +163,14 @@
 				<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
 					{#each achievements as a (a.key)}
 						<div
-							class="flex items-start gap-2 p-2 rounded-md border border-border
+							class="flex items-start gap-1 p-2 rounded-md border border-border
 								{a.unlocked ? 'bg-panel' : 'bg-bg opacity-50'}"
 							title={a.description}
 						>
 							<span class="text-2xl leading-none">{a.icon}</span>
 							<div class="min-w-0">
-								<div class="font-medium text-sm truncate">{a.name}</div>
-								<div class="text-xs text-muted line-clamp-2">{a.description}</div>
+								<div class="font-medium text-sm">{a.name}</div>
+								<div class="text-xs text-muted">{a.description}</div>
 							</div>
 						</div>
 					{/each}

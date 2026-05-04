@@ -243,7 +243,7 @@
 {:else if filteredItems.length === 0}
 	<EmptyState icon="🎬" title="No media" message="Add your first media item to start tracking metrics." />
 {:else}
-	<div class="space-y-2">
+	<div class="space-y-4">
 		{#each filteredItems as item (item.id)}
 			{@const freshness = formatFreshness(item.metrics_last_fetched_at, item.media_type === 'spotify' ? spotifyInterval : youtubeInterval)}
 			{@const primary = primaryMetric(item)}
