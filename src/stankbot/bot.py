@@ -65,10 +65,11 @@ class StankBot(commands.Bot):
         yt_key = config.youtube_api_key.get_secret_value() if config.youtube_api_key else None
         spot_id = config.spotify_client_id.get_secret_value() if config.spotify_client_id else None
         spot_secret = config.spotify_client_secret.get_secret_value() if config.spotify_client_secret else None
+        spot_ct = config.spotify_client_token
 
         self.media_registry = MediaProviderRegistry()
         self.media_registry.register(YouTubeProvider(api_key=yt_key))
-        self.media_registry.register(SpotifyProvider(client_id=spot_id, client_secret=spot_secret))
+        self.media_registry.register(SpotifyProvider(client_id=spot_id, client_secret=spot_secret, client_token=spot_ct))
         self.media_scheduler = MediaMetricsScheduler(self, self.media_registry)
 
         self._bot_guilds = []

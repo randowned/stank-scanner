@@ -48,9 +48,12 @@ class SpotifyProvider(MediaProvider):
         self,
         client_id: str | None = None,
         client_secret: str | None = None,
+        client_token: str | None = None,
     ) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
+        # Pre-set client-token from env var (avoids scraping Spotify's web player)
+        self._client_token: str | None = client_token
         self._public_client: httpx.AsyncClient | None = None
         self._partner_client: httpx.AsyncClient | None = None
         # Public API token (client credentials — for resolve only)
@@ -59,8 +62,6 @@ class SpotifyProvider(MediaProvider):
         # User token (from OAuth refresh_token — for Partner API)
         self._user_token: str | None = None
         self._user_token_expires_at: float = 0.0
-        # Partner API client-token (extracted from web player JS)
-        self._client_token: str | None = None
         self._app_version: str = "896000000"
         self._client_token_lock = asyncio.Lock()
         # Session context injected by MediaService before fetch_metrics
