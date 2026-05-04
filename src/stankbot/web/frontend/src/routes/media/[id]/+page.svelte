@@ -209,9 +209,10 @@
 
 	function autoResolutionMs(rangeHours: number, minIntervalMs: number): number | null {
 		if (rangeHours <= 0) return null;
-		const idealBucketMs = (rangeHours * 3_600_000) / 24;
+		const rangeMs = rangeHours * 3_600_000;
+		const idealBucketMs = rangeMs / 24;
 		const buckets = [60_000, 300_000, 900_000, 1_800_000, 3_600_000, 86_400_000, 604_800_000, 2_592_000_000];
-		const eligible = buckets.filter((b) => b >= minIntervalMs);
+		const eligible = buckets.filter((b) => b >= minIntervalMs && b * 2 < rangeMs);
 		return eligible.find((b) => b >= idealBucketMs) ?? eligible[eligible.length - 1] ?? null;
 	}
 
