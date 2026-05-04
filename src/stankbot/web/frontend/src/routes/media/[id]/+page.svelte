@@ -31,7 +31,9 @@
 
 	void loadProviders();
 
-	const provider = $derived(item ? $providersByType[item.media_type] : undefined);
+	const provider = $derived(
+		item ? (providers.find(p => p.type === item.media_type) ?? $providersByType[item.media_type]) : undefined
+	);
 	const providerMetrics = $derived<MetricDef[]>(provider?.metrics ?? []);
 
 	const initialMetric = $derived(item?.media_type === 'spotify' ? 'popularity' : 'view_count');
@@ -78,7 +80,8 @@
 		{ value: 1, label: '1 hour', icon: '⏱️' },
 		{ value: 6, label: '6 hours', icon: '⏱️' },
 		{ value: 12, label: '12 hours', icon: '⏱️' },
-		{ value: 24, label: '1 day', icon: '📅' },
+		{ value: 24, label: '24h', icon: '📅' },
+		{ value: 48, label: '48h', icon: '📅' },
 		{ value: 24 * 7, label: '7 days', icon: '📅' },
 		{ value: 24 * 30, label: '30 days', icon: '📅' },
 		{ value: 24 * 90, label: '90 days', icon: '📅' },
@@ -101,7 +104,7 @@
 			{ value: '5min', label: '5 Min', icon: '🕐' },
 			{ value: '15min', label: '15 Min', icon: '🕐' },
 			{ value: '30min', label: '30 Min', icon: '🕐' },
-			{ value: 'hourly', label: 'Hour', icon: '⏱️' },
+			{ value: 'hourly', label: 'Hourly', icon: '⏱️' },
 			{ value: 'daily', label: 'Day', icon: '📅' },
 			{ value: 'weekly', label: 'Week', icon: '📆' },
 			{ value: 'monthly', label: 'Month', icon: '🗓️' },
@@ -128,7 +131,9 @@
 
 	const dataStart = $derived(history.length > 0 ? new Date(history[0].fetched_at).getTime() : 0);
 	const rangeStart = $derived(Date.now() - selectedHours * 3600 * 1000);
-	const dataShorter = $derived(dataStart > 0 && dataStart > rangeStart);
+	const dataShorter = $derived(
+		dataStart > 0 && dataStart > rangeStart + selectedHours * 3_600_000 * 0.1
+	);
 
 	const dataSpanMs = $derived(
 		history.length >= 2
@@ -334,9 +339,12 @@
 		}
 
 		// Skip the very first run when SSR already provided history data.
+		// Still load comparison if compareIds were already in the URL (reads hasCompare
+		// so this effect subscribes to compareIds changes even on the skip path).
 		if (!_initialFetchSkipped && history.length > 0) {
 			_initialFetchSkipped = true;
 			currentHistoryUrl = buildHistoryUrl();
+			if (hasCompare) void loadComparison();
 			return;
 		}
 		_initialFetchSkipped = true;
@@ -575,7 +583,7 @@
 					<SelectDropdown options={aggregationOptions} bind:value={selectedAggregation} testId="media-detail-resolution" name="Resolution" />
 					<SelectDropdown options={viewOptions} bind:value={comparisonMode} testId="media-detail-view" name="Mode" />
 					{#if hasCompare}
-						<Button variant="ghost" onclick={clearComparison} size="sm" testId="media-clear-compare">Clear comparison</Button>
+						<Button variant="ghost" onclick={clearComparison} size="sm" testId="media-clear-compare" title="Clear comparison">✕</Button>
 					{/if}
 				</div>
 

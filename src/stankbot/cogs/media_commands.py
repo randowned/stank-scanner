@@ -42,7 +42,8 @@ RANGE_CHOICES = [
     app_commands.Choice(name="1 hour", value="1h"),
     app_commands.Choice(name="6 hours", value="6h"),
     app_commands.Choice(name="12 hours", value="12h"),
-    app_commands.Choice(name="1 day", value="24h"),
+    app_commands.Choice(name="24 hours", value="24h"),
+    app_commands.Choice(name="48 hours", value="48h"),
     app_commands.Choice(name="1 week", value="7d"),
     app_commands.Choice(name="1 month", value="30d"),
     app_commands.Choice(name="90 days", value="90d"),
@@ -82,6 +83,7 @@ _RANGE_HOURS: dict[str, float] = {
     "6h": 6,
     "12h": 12,
     "24h": 24,
+    "48h": 48,
     "7d": 168,
     "30d": 720,
     "90d": 2160,
@@ -351,18 +353,18 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
-    @app_commands.describe(name="The video's name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for aggregation.")
+    @app_commands.describe(name="The video's name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for resolution.")
     @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
-    @app_commands.rename(metric="type", range_="range")
+    @app_commands.rename(metric="type", range_="range", aggregation="resolution")
     @requires_stats_access()
     async def youtube_chart(
         self,
         interaction: discord.Interaction,
         name: str,
-        metric: str,
-        range_: str,
-        mode: str = "total",
-        aggregation: str | None = None,
+        metric: str = "view_count",
+        range_: str = "24h",
+        mode: str = "delta",
+        aggregation: str | None = "hourly",
     ) -> None:
         await self._send_chart_embed(interaction, "youtube", name, metric, range_, mode, aggregation)
 
@@ -383,18 +385,18 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
-    @app_commands.describe(name="The track or album name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for aggregation.")
+    @app_commands.describe(name="The track or album name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for resolution.")
     @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
-    @app_commands.rename(metric="type", range_="range")
+    @app_commands.rename(metric="type", range_="range", aggregation="resolution")
     @requires_stats_access()
     async def spotify_chart(
         self,
         interaction: discord.Interaction,
         name: str,
-        metric: str,
-        range_: str,
-        mode: str = "total",
-        aggregation: str | None = None,
+        metric: str = "popularity",
+        range_: str = "24h",
+        mode: str = "delta",
+        aggregation: str | None = "hourly",
     ) -> None:
         await self._send_chart_embed(interaction, "spotify", name, metric, range_, mode, aggregation)
 
