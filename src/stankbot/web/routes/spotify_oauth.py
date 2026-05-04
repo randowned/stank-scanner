@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_config, get_db
-from stankbot.web.transport import MsgPackResponse
+from stankbot.web.transport import MsgPackResponse, msgpack_body
 
 router = APIRouter(tags=["spotify-oauth"])
 log = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def _get_provider(request: Request):
 @router.post("/api/admin/spotify/set-sp-dc")
 async def set_sp_dc(
     request: Request,
-    payload: SetSpDcPayload,
+    payload: SetSpDcPayload = msgpack_body(SetSpDcPayload),  # type: ignore[assignment]
     session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
     """Store the sp_dc cookie value for Partner API token exchange (bot owner only)."""
