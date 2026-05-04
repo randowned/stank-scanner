@@ -349,16 +349,26 @@
 			untrack(() => { selectedAggregation = 'auto'; });
 		}
 
-		// Skip the very first run when SSR already provided history data.
-		// Still load comparison if compareIds were already in the URL (reads hasCompare
-		// so this effect subscribes to compareIds changes even on the skip path).
-		if (!_initialFetchSkipped && history.length > 0) {
+		// Skip the very first run when SSR already provided usable history data.
+		// Only skip when in raw (client-side) mode — server-aggregated views need a
+		// real fetch because SSR always returns unaggregated data. Reading hasCompare
+		// before the return ensures the effect subscribes to compareIds changes.
+		if (!_initialFetchSkipped && history.length > 0 && !useServerAggregation) {
 			_initialFetchSkipped = true;
 			currentHistoryUrl = buildHistoryUrl();
 			if (hasCompare) void loadComparison();
 			return;
 		}
 		_initialFetchSkipped = true;
+
+		// Pre-seed _prevDatasets from raw SSR history so the chart shows something
+		// while the server-aggregated fetch is in-flight (avoids blank chart flash).
+		if (history.length > 0 && _prevDatasets.length === 0) {
+			_prevDatasets = [{
+				label: item?.name ?? metricLabel(selectedMetric),
+				data: history.map(h => ({ x: new Date(h.fetched_at).getTime(), y: h.value }))
+			}];
+		}
 
 		void loadHistory();
 		if (hasCompare) void loadComparison();
