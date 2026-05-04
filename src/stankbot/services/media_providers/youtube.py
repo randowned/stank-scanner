@@ -87,7 +87,7 @@ class YouTubeProvider(MediaProvider):
             return None
         return results.get(video_id)
 
-    async def fetch_metrics(self, external_ids: list[str], metadata: dict[str, dict[str, Any]] | None = None) -> list[MetricResult]:
+    async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
         results: list[MetricResult] = []
         for i in range(0, len(external_ids), 50):
             batch = list(external_ids[i : i + 50])

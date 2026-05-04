@@ -18,7 +18,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from stankbot.cogs._checks import is_interaction_admin, requires_stats_access
+from stankbot.cogs._checks import requires_stats_access
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.embed_builders import build_media_embed
 from stankbot.services.settings_service import Keys, SettingsService
@@ -124,6 +124,12 @@ class StatsCommands(commands.GroupCog, name="stats"):
         if interaction.guild is None:
             return []
         async with self.bot.db() as session:
+            settings = SettingsService(session)
+            enabled = await settings.get(
+                interaction.guild.id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
+            )
+            if media_type not in enabled:
+                return []
             items = await media_repo.list_all(
                 session, interaction.guild.id, media_type
             )
@@ -193,8 +199,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
             enabled = await settings.get(
                 interaction.guild.id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
             )
-            is_admin = await is_interaction_admin(interaction)
-            if media_type not in enabled and not is_admin:
+            if media_type not in enabled:
                 await interaction.response.send_message(
                     f"{media_type.capitalize()} stats are currently disabled.", ephemeral=True
                 )

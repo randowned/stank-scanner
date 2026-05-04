@@ -71,9 +71,7 @@ class MediaProvider(ABC):
 
     @abstractmethod
     async def fetch_metrics(
-        self,
-        external_ids: list[str],
-        metadata: dict[str, dict[str, Any]] | None = None,
+        self, external_ids: list[str]
     ) -> list[MetricResult]: ...
 
     async def can_fetch_metrics(

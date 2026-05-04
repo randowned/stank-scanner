@@ -10,13 +10,8 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import SelectDropdown from '$lib/components/SelectDropdown.svelte';
 	import Toggle from '$lib/components/Toggle.svelte';
-	import FormField from '$lib/components/FormField.svelte';
-	import Input from '$lib/components/Input.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { base } from '$app/paths';
-	import { page } from '$app/stores';
-
-	const isBotOwner = $derived($page.data.is_bot_owner ?? false);
 
 	let items = $state<MediaItem[]>([]);
 	let providers = $state<ProviderDef[]>([]);
@@ -32,12 +27,6 @@
 	let enabledProviders = $state<string[]>(['youtube', 'spotify']);
 	let savingSettings = $state(false);
 	let settingsError = $state<string | null>(null);
-
-	// Spotify auth (owner only, inside settings modal)
-	let spotifyStatus = $state<string>('not-set');
-	let spDcValue = $state('');
-	let spotifyLoading = $state(false);
-	let spotifyError = $state<string | null>(null);
 
 	let deleteOpen = $state(false);
 	let deletingId = $state<number | null>(null);
@@ -178,50 +167,10 @@
 		}
 	}
 
-	async function loadSpotifyStatus() {
-		if (!isBotOwner) return;
-		try {
-			const res = await apiFetch<{ connected: boolean; status: string }>('/api/admin/spotify/status');
-			spotifyStatus = res.status ?? 'not-set';
-		} catch {
-			spotifyStatus = 'not-set';
-		}
-	}
-
-	async function setSpotifyToken() {
-		if (!spDcValue.trim() || spotifyLoading) return;
-		spotifyLoading = true;
-		spotifyError = null;
-		try {
-			await apiPost<{ ok: boolean }>('/api/admin/spotify/set-sp-dc', { access_token: spDcValue.trim() });
-			spDcValue = '';
-			await loadSpotifyStatus();
-		} catch (err) {
-			spotifyError = toErrorMessage(err, 'Failed to set access token');
-		} finally {
-			spotifyLoading = false;
-		}
-	}
-
-	async function disconnectSpotify() {
-		if (spotifyLoading) return;
-		spotifyLoading = true;
-		spotifyError = null;
-		try {
-			const res = await apiPost<{ connected: boolean; status: string }>('/api/admin/spotify/disconnect');
-			spotifyStatus = res.status ?? 'not-set';
-		} catch (err) {
-			spotifyError = toErrorMessage(err, 'Failed to disconnect');
-		} finally {
-			spotifyLoading = false;
-		}
-	}
-
 	$effect(() => {
 		loadItems();
 		loadProviders();
 		loadSettings();
-		loadSpotifyStatus();
 	});
 
 	const providersByType = $derived(
@@ -380,39 +329,9 @@
 						<span class="text-xs text-muted">Update interval</span>
 						<SelectDropdown options={intervalOptions} bind:value={spotifyInterval} disabled={savingSettings} testId="media-interval-spotify" />
 					</div>
-
-					{#if isBotOwner}
-						<div class="pt-3 border-t border-border">
-							<div class="flex items-center gap-2 mb-2">
-								<span class="text-xs font-medium text-muted uppercase tracking-wide">Access Token</span>
-								{#if spotifyStatus === 'set'}
-									<span class="text-xs text-green-600 dark:text-green-400 font-medium">● Set</span>
-								{:else}
-									<span class="text-xs text-muted">● Not set</span>
-								{/if}
-							</div>
-							<p class="text-xs text-muted mb-2">
-								Paste your Spotify web player access token (the <code class="text-[0.65rem] bg-surface/50 px-1 rounded">Authorization: Bearer BQ...</code> header from DevTools Network tab on open.spotify.com). Expires in ~1 hour — refresh manually.
-							</p>
-							<div class="flex gap-2">
-								<div class="flex-1">
-									<Input type="password" bind:value={spDcValue} placeholder="BQC0HgcvTkPe..." />
-								</div>
-								<Button onclick={setSpotifyToken} loading={spotifyLoading} variant="primary">Set</Button>
-							</div>
-							{#if spotifyStatus !== 'not-set'}
-								<div class="mt-2">
-									<Button onclick={disconnectSpotify} loading={spotifyLoading} variant="secondary" size="sm">Disconnect</Button>
-								</div>
-							{/if}
-							{#if spotifyError}
-								<p class="text-xs text-red-500 mt-2">{spotifyError}</p>
-							{/if}
-						</div>
-					{/if}
 				</div>
 			</div>
-			<div class="text-xs text-muted mt-1">Fetches are aligned to clock boundaries. Disabled providers are hidden from non-admins.</div>
+			<div class="text-xs text-muted mt-1">Fetches are aligned to clock boundaries. Disabled providers are hidden from everyone.</div>
 		</div>
 
 		<!-- Operations -->

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 
 from stankbot.services.media_providers.base import (
     MediaProvider,
@@ -47,7 +46,7 @@ class MockYouTubeProvider(MediaProvider):
             duration_seconds=240,
         )
 
-    async def fetch_metrics(self, external_ids: list[str], metadata: dict[str, dict[str, Any]] | None = None) -> list[MetricResult]:
+    async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
         return [
             MetricResult(
                 external_id=eid,
@@ -92,7 +91,7 @@ class MockSpotifyProvider(MediaProvider):
             duration_seconds=200,
         )
 
-    async def fetch_metrics(self, external_ids: list[str], metadata: dict[str, dict[str, Any]] | None = None) -> list[MetricResult]:
+    async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
         return [
             MetricResult(external_id=eid, values={"playcount": 1000000})
             for eid in external_ids

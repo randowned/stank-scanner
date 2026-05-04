@@ -67,9 +67,14 @@ async def list_providers(
     request: Request,
     guild_id: int = Depends(get_active_guild_id),
     _admin: dict[str, Any] = Depends(require_guild_admin),
+    session: AsyncSession = Depends(get_db),
 ) -> MsgPackResponse:
+    from stankbot.services.settings_service import Keys, SettingsService
+
     registry = request.app.state.media_registry
-    defs = [d for d in registry.all_defs()]
+    settings = SettingsService(session)
+    enabled: list[str] = await settings.get(guild_id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"])
+    defs = [d for d in registry.all_defs() if d.type in enabled]
     providers = [
         {
             "type": d.type,

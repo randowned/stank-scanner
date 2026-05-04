@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.chart_renderer import render_compare_chart, render_media_chart
 from stankbot.services.media_service import MediaService, _aggregate_snapshots, _floor_to_bucket
-from stankbot.services.permission_service import PermissionService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_member
 from stankbot.web.transport import MsgPackResponse
@@ -39,15 +38,6 @@ async def _get_enabled_providers(
     )
 
 
-async def _is_admin(
-    session: AsyncSession,
-    guild_id: int,
-    user: dict[str, Any],
-    request: Request,
-) -> bool:
-    config = request.app.state.config
-    svc = PermissionService(session, owner_id=config.owner_id)
-    return await svc.is_admin(guild_id, int(user["id"]), [], has_manage_guild=False)
 
 
 async def _media_service(
@@ -68,9 +58,8 @@ async def list_media(
 ) -> MsgPackResponse:
     svc = await _media_service(request, session)
     items = await svc.list_media(guild_id, media_type)
-    if not await _is_admin(session, guild_id, _user, request):
-        enabled = await _get_enabled_providers(session, guild_id)
-        items = [i for i in items if i["media_type"] in enabled]
+    enabled = await _get_enabled_providers(session, guild_id)
+    items = [i for i in items if i["media_type"] in enabled]
     return MsgPackResponse({"items": items}, request)
 
 
@@ -269,10 +258,7 @@ async def list_providers(
 ) -> MsgPackResponse:
     registry = request.app.state.media_registry
     settings = SettingsService(session)
-    if not await _is_admin(session, guild_id, _user, request):
-        enabled = await _get_enabled_providers(session, guild_id)
-    else:
-        enabled = None
+    enabled = await _get_enabled_providers(session, guild_id)
     providers = []
     for d in registry.all_defs():
         if enabled is not None and d.type not in enabled:
@@ -306,7 +292,7 @@ async def get_media_detail(
     item = await svc.get_media_item(media_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Media item not found")
-    if not await _is_admin(session, guild_id, _user, request) and item["media_type"] not in await _get_enabled_providers(session, guild_id):
+    if item["media_type"] not in await _get_enabled_providers(session, guild_id):
         raise HTTPException(status_code=404, detail="Media item not found")
     return MsgPackResponse(item, request)
 
@@ -327,7 +313,7 @@ async def get_media_history(
     item = await media_repo.get(session, media_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Media item not found")
-    if not await _is_admin(session, guild_id, _user, request) and item.media_type not in await _get_enabled_providers(session, guild_id):
+    if item.media_type not in await _get_enabled_providers(session, guild_id):
         raise HTTPException(status_code=404, detail="Media item not found")
     svc = await _media_service(request, session)
     history = await svc.get_metrics_history(

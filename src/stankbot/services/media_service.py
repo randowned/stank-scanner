@@ -521,13 +521,7 @@ class MediaService:
                 continue
             external_ids = [i.external_id for i in items]
             id_to_item = {i.external_id: i for i in items}
-            metadata = {
-                i.external_id: {"artist_id": i.channel_id} if i.channel_id else {}
-                for i in items
-            }
-            if hasattr(provider, "set_session_context"):
-                provider.set_session_context(self.session, guild_id)
-            metrics_list = await provider.fetch_metrics(external_ids, metadata=metadata)
+            metrics_list = await provider.fetch_metrics(external_ids)
             now = datetime.now(UTC)
             for mr in metrics_list:
                 item = id_to_item.get(mr.external_id)
@@ -558,10 +552,7 @@ class MediaService:
         if provider is None:
             return MetricResult(external_id=item.external_id, error="provider_not_found")
 
-        metadata = {item.external_id: {"artist_id": item.channel_id}} if item.channel_id else None
-        if hasattr(provider, "set_session_context"):
-            provider.set_session_context(self.session, item.guild_id)
-        results = await provider.fetch_metrics([item.external_id], metadata=metadata)
+        results = await provider.fetch_metrics([item.external_id])
         if not results:
             return MetricResult(external_id=item.external_id, error="no_response")
 

@@ -1,8 +1,7 @@
-"""Spotify provider — public API for resolve, Partner API for playcount metrics."""
+"""Spotify provider — public API for resolve; playcount metric (no automatic fetching)."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 import time
@@ -22,19 +21,6 @@ _SPOTIFY_URL_RE = re.compile(
 
 _TOKEN_URL = "https://accounts.spotify.com/api/token"
 _API_BASE = "https://api.spotify.com/v1"
-_PARTNER_BASE = "https://api-partner.spotify.com/pathfinder/v2/query"
-_PARTNER_TOKEN_URL = "https://open.spotify.com/get_access_token"
-
-# Persisted query hash for queryArtistOverview (extracted from web player JS)
-_ARTIST_OVERVIEW_SHA256 = "7f86ff63e38c24973a2842b672abe44c910c1973978dc8a4a0cb648edef34527"
-
-_BROWSER_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    " (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
-)
-
-_CLIENT_TOKEN_RE = re.compile(r'(?:clientToken|client_token|client-token)\s*[=:]\s*"([A-Za-z0-9+/=]{100,})"')
-_APP_VERSION_RE = re.compile(r'"appVersion"\s*:\s*"(\d+)"')
 
 
 class SpotifyProvider(MediaProvider):
@@ -49,63 +35,32 @@ class SpotifyProvider(MediaProvider):
         self,
         client_id: str | None = None,
         client_secret: str | None = None,
-        client_token: str | None = None,
-        sp_dc: str | None = None,
     ) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
-        # Pre-set client-token from env var (avoids scraping Spotify's web player)
-        self._client_token: str | None = client_token
-        # sp_dc cookie for Partner API token exchange (can be overridden at runtime)
-        self._sp_dc: str | None = sp_dc
-        self._public_client: httpx.AsyncClient | None = None
-        self._partner_client: httpx.AsyncClient | None = None
-        # Public API token (client credentials — for resolve only)
+        self._client: httpx.AsyncClient | None = None
         self._token: str | None = None
         self._token_expires_at: float = 0.0
-        # Partner API token (from sp_dc cookie exchange)
-        self._partner_token: str | None = None
-        self._partner_token_expires_at: float = 0.0
-        self._app_version: str = "896000000"
-        self._client_token_lock = asyncio.Lock()
-        # Session context injected by MediaService before fetch_metrics
-        self._session: Any | None = None
-        self._session_guild_id: int | None = None
 
     def is_configured(self) -> bool:
         return bool(self._client_id and self._client_secret)
 
-    def set_session_context(self, session: Any, guild_id: int) -> None:
-        """Store DB session context for use by fetch_metrics."""
-        self._session = session
-        self._session_guild_id = guild_id
-
-    def set_sp_dc(self, sp_dc: str) -> None:
-        self._sp_dc = sp_dc
-        self._partner_token = None  # force re-exchange on next use
-
-    # ----------------------------------------------------------------
-    # Public API client (resolve only)
-    # ----------------------------------------------------------------
-
-    def _get_public_client(self) -> httpx.AsyncClient:
-        if self._public_client is None:
-            self._public_client = httpx.AsyncClient()
-        return self._public_client
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient()
+        return self._client
 
     async def close(self) -> None:
-        for c in (self._public_client, self._partner_client):
-            if c is not None:
-                await c.aclose()
-        self._public_client = None
-        self._partner_client = None
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def _ensure_token(self) -> str | None:
         if self._token and time.time() < self._token_expires_at - 60:
             return self._token
         if not self._client_id or not self._client_secret:
             return None
-        client = self._get_public_client()
+        client = self._get_client()
         try:
             resp = await client.post(
                 _TOKEN_URL,
@@ -149,7 +104,7 @@ class SpotifyProvider(MediaProvider):
         if not token:
             return None
 
-        client = self._get_public_client()
+        client = self._get_client()
         url = f"{_API_BASE}/{kind}s/{spotify_id}"
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -209,329 +164,18 @@ class SpotifyProvider(MediaProvider):
             log.warning("Spotify resolve HTTP error for %s/%s: %s", kind, spotify_id, exc)
             return None
 
-    # ----------------------------------------------------------------
-    # Partner API token (user access token from browser)
-    # ----------------------------------------------------------------
-
-    async def _get_access_token(
-        self,
-        session: Any,
-        guild_id: int | None,
-    ) -> str | None:
-        """Get user access token — env var first, fallback to guild_settings DB."""
-        if self._sp_dc and self._sp_dc.strip():
-            return self._sp_dc.strip()
-        if guild_id is None:
-            return None
-        from stankbot.services.settings_service import Keys, SettingsService
-
-        svc = SettingsService(session)
-        raw = await svc.get(guild_id, Keys.SPOTIFY_SP_DC, None)
-        if raw is None or (isinstance(raw, str) and not raw.strip()):
-            return None
-        self._sp_dc = str(raw).strip()
-        return self._sp_dc
-
     async def can_fetch_metrics(
         self,
         session: Any,
         guild_id: int,
     ) -> bool:
-        token = await self._get_access_token(session, guild_id)
-        return token is not None
+        return False
 
-    async def _ensure_partner_token(
-        self,
-        session: Any | None = None,
-        guild_id: int | None = None,
-    ) -> str | None:
-        if self._partner_token and time.time() < self._partner_token_expires_at - 60:
-            return self._partner_token
-
-        token = await self._get_access_token(session, guild_id)
-        if not token:
-            return None
-
-        self._partner_token = token
-        self._partner_token_expires_at = time.time() + 3600
-        return self._partner_token
-
-    # ----------------------------------------------------------------
-    # Partner API client (browser-mimicking)
-    # ----------------------------------------------------------------
-
-    def _get_partner_client(self) -> httpx.AsyncClient:
-        if self._partner_client is None:
-            self._partner_client = httpx.AsyncClient(
-                headers={
-                    "User-Agent": _BROWSER_UA,
-                    "origin": "https://open.spotify.com",
-                    "referer": "https://open.spotify.com/",
-                    "accept": "application/json",
-                    "accept-language": "en",
-                    "dnt": "1",
-                    "sec-fetch-dest": "empty",
-                    "sec-fetch-mode": "cors",
-                    "sec-fetch-site": "same-site",
-                }
-            )
-        return self._partner_client
-
-    async def _ensure_client_token(self) -> str | None:
-        """Extract the client-token from the web player JS bundle.
-
-        Fetches open.spotify.com, finds the web player <script> tag,
-        downloads the JS, and regexes out the client-token constant.
-        Falls back to searching inline scripts on the page.
-        Caches in memory; re-extracts if not yet fetched.
-        """
-        if self._client_token:
-            return self._client_token
-
-        async with self._client_token_lock:
-            if self._client_token:
-                return self._client_token
-
-            client = self._get_partner_client()
-            try:
-                # 1. Get the landing page
-                resp = await client.get("https://open.spotify.com/", timeout=15.0)
-                if resp.status_code != 200:
-                    log.warning("Failed to fetch open.spotify.com: %d", resp.status_code)
-                    return None
-
-                body = resp.text
-
-                # 2. Try to find client-token in inline scripts first
-                inline_ct = _CLIENT_TOKEN_RE.search(body)
-                if inline_ct:
-                    self._client_token = inline_ct.group(1)
-                    log.info("Spotify: extracted client-token from inline script (len=%d)", len(self._client_token))
-                    return self._client_token
-
-                # 3. Find the web player JS bundle URL — try multiple patterns
-                bundle_urls: list[str] = []
-
-                # Pattern A: open.scdn.co web-player bundles (historical)
-                for m in re.finditer(r'src="(https://open\.scdn\.co/[^"]*\.js)"', body):
-                    bundle_urls.append(m.group(1))
-
-                # Pattern B: any Spotify CDN JS bundle
-                for m in re.finditer(r'src="(https://[^"]*spotify[^"]*cdn[^"]*\.js)"', body):
-                    bundle_urls.append(m.group(1))
-
-                # Pattern C: generic <script> with crossorigin attribute on Spotify domains
-                for m in re.finditer(
-                    r'<script[^>]*src="(https://[^"]*\.spotify(?:cdn)?\.(?:com|co)[^"]*)"[^>]*>',
-                    body,
-                ):
-                    url = m.group(1)
-                    if url not in bundle_urls:
-                        bundle_urls.append(url)
-
-                if not bundle_urls:
-                    # Debug: log the first 2000 chars of script tags found
-                    script_tags = re.findall(r'<script[^>]*src="[^"]*"[^>]*>', body)
-                    log.warning(
-                        "Could not find web player JS bundle. Script srcs found: %s",
-                        script_tags[:5] if script_tags else "<none>",
-                    )
-                    return None
-
-                # 4. Try each bundle URL until we find the client-token
-                for bundle_url in bundle_urls:
-                    try:
-                        log.info("Spotify: trying bundle: %s", bundle_url[:120])
-                        bundle_resp = await client.get(bundle_url, timeout=30.0)
-                        if bundle_resp.status_code != 200:
-                            continue
-
-                        ct_match = _CLIENT_TOKEN_RE.search(bundle_resp.text)
-                        if ct_match:
-                            self._client_token = ct_match.group(1)
-                            log.info(
-                                "Spotify: extracted client-token from bundle (len=%d)",
-                                len(self._client_token),
-                            )
-
-                            # Also extract app version
-                            av_match = _APP_VERSION_RE.search(bundle_resp.text)
-                            if av_match:
-                                self._app_version = av_match.group(1)
-
-                            return self._client_token
-                    except httpx.HTTPError:
-                        continue
-
-                log.warning("Could not find clientToken in any web player bundle")
-                return None
-
-            except httpx.HTTPError as exc:
-                log.warning("Spotify client-token extraction error: %s", exc)
-                return None
-
-    async def _partner_query(
-        self,
-        operation_name: str,
-        variables: dict[str, object],
-        sha256_hash: str,
-    ) -> dict[str, Any] | None:
-        """Execute a persisted GraphQL query against api-partner.spotify.com."""
-        partner_token = await self._ensure_partner_token(self._session, self._session_guild_id)
-        if not partner_token:
-            log.warning("Spotify Partner API: no partner token available")
-            return None
-
-        client_token = self._client_token
-        if not client_token:
-            log.warning("Spotify Partner API: no client-token available")
-            return None
-
-        client = self._get_partner_client()
-        headers = {
-            "authorization": f"Bearer {partner_token}",
-            "client-token": client_token,
-            "app-platform": "WebPlayer",
-            "spotify-app-version": self._app_version,
-            "content-type": "application/json;charset=UTF-8",
-        }
-        payload = {
-            "variables": variables,
-            "operationName": operation_name,
-            "extensions": {
-                "persistedQuery": {
-                    "version": 1,
-                    "sha256Hash": sha256_hash,
-                }
-            },
-        }
-
-        try:
-            resp = await client.post(
-                _PARTNER_BASE,
-                json=payload,
-                headers=headers,
-                timeout=15.0,
-            )
-            if resp.status_code == 401:
-                self._partner_token = None
-                log.warning("Spotify Partner API: 401 — partner token may be expired")
-                return None
-            if resp.status_code != 200:
-                try:
-                    body = resp.text
-                except Exception:
-                    body = "<unreadable>"
-                log.warning(
-                    "Spotify Partner API %s failed: %d — %s",
-                    operation_name,
-                    resp.status_code,
-                    body[:300],
-                )
-                return None
-            data: dict[str, Any] = resp.json()
-            if "errors" in data:
-                log.warning("Spotify Partner API %s returned errors: %s", operation_name, data["errors"])
-                return None
-            return data
-        except httpx.HTTPError as exc:
-            log.warning("Spotify Partner API HTTP error (%s): %s", operation_name, exc)
-            return None
-
-    # ----------------------------------------------------------------
-    # Metrics (Partner API: queryArtistOverview → playcount)
-    # ----------------------------------------------------------------
-
-    async def fetch_metrics(
-        self,
-        external_ids: list[str],
-        metadata: dict[str, dict[str, object]] | None = None,
-    ) -> list[MetricResult]:
-        """Fetch playcount via Partner API queryArtistOverview.
-
-        Requires metadata mapping external_id → {"artist_id": "..."} to
-        group tracks by artist and issue one queryArtistOverview per artist.
-        Tracks without an artist_id default to playcount=0.
-        """
-        results: list[MetricResult] = []
-
-        # No session means we were called without the scheduler/DB context.
-        # Return zero playcounts — the caller must pass a session via the
-        # scheduler path (media_service uses the refresh_all session).
-        if not external_ids:
-            return results
-
-        # Group by artist_id from metadata
-        artist_tracks: dict[str, list[str]] = {}  # artist_id → [track_ids]
-        orphan_ids: list[str] = []
-
-        if metadata:
-            for eid in external_ids:
-                m = metadata.get(eid)
-                artist_id = m.get("artist_id") if m else None
-                if artist_id and isinstance(artist_id, str):
-                    artist_tracks.setdefault(artist_id, []).append(eid)
-                else:
-                    orphan_ids.append(eid)
-        else:
-            orphan_ids.extend(external_ids)
-
-        # Tracks without artist metadata → playcount 0
-        for eid in orphan_ids:
-            results.append(MetricResult(external_id=eid, values={"playcount": 0}))
-
-        if not artist_tracks:
-            return results
-
-        # We need a session for the user token. The scheduler calls
-        # refresh_all() with an active session, but fetch_metrics doesn't
-        # receive it directly. We'll attempt token refresh without a session
-        # if the cached user_token is still valid; otherwise fail gracefully.
-        # We stash the session from the caller via a context var or instance
-        # attribute. For now, try with the cached token first.
-        for artist_id, track_ids in artist_tracks.items():
-            data = await self._partner_query(
-                operation_name="queryArtistOverview",
-                variables={
-                    "uri": f"spotify:artist:{artist_id}",
-                    "locale": "",
-                    "preReleaseV2": False,
-                },
-                sha256_hash=_ARTIST_OVERVIEW_SHA256,
-            )
-
-            if data is None:
-                for eid in track_ids:
-                    results.append(MetricResult(external_id=eid, values={"playcount": 0}))
-                continue
-
-            # Parse playcount from the response
-            track_playcounts: dict[str, int] = {}
-            try:
-                top_tracks = (
-                    data.get("data", {})
-                    .get("artistUnion", {})
-                    .get("discography", {})
-                    .get("topTracks", {})
-                    .get("items", [])
-                )
-                for item in top_tracks:
-                    track = item.get("track", {})
-                    tid = track.get("id")
-                    raw_count = track.get("playcount")
-                    if tid and raw_count is not None:
-                        try:
-                            track_playcounts[tid] = int(raw_count)
-                        except (ValueError, TypeError):
-                            track_playcounts[tid] = 0
-            except Exception:
-                log.warning("Failed to parse queryArtistOverview response for artist %s", artist_id)
-
-            for eid in track_ids:
-                count = track_playcounts.get(eid, 0)
-                results.append(MetricResult(external_id=eid, values={"playcount": count}))
-
-        return results
+    async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
+        return [
+            MetricResult(external_id=eid, values={"playcount": 0})
+            for eid in external_ids
+        ]
 
     async def health_check(self) -> bool:
         token = await self._ensure_token()
