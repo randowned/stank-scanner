@@ -50,14 +50,14 @@
 	});
 
 	// Range value: number of hours; days option encoded as hours = days*24
-	let selectedHours = $state<number>(24);
+	let selectedHours = $state<number>(48);
 	let history = $state<MetricSnapshot[]>(untrack(() => initialHistory));
 	let loadingHistory = $state(false);
 
 	let compareIds = $state<string[]>([]);
 	let compareData = $state<CompareData | null>(null);
 	let loadingCompare = $state(false);
-	let comparisonMode = $state<'delta' | 'total'>('total');
+	let comparisonMode = $state<'delta' | 'total'>('delta');
 	let selectedAggregation = $state<string>('auto');
 
 	// URL that was used to fetch the current `history`. When it doesn't match
@@ -105,9 +105,9 @@
 			{ value: '15min', label: '15 Min', icon: '🕐' },
 			{ value: '30min', label: '30 Min', icon: '🕐' },
 			{ value: 'hourly', label: 'Hourly', icon: '⏱️' },
-			{ value: 'daily', label: 'Day', icon: '📅' },
-			{ value: 'weekly', label: 'Week', icon: '📆' },
-			{ value: 'monthly', label: 'Month', icon: '🗓️' },
+			{ value: 'daily', label: 'Daily', icon: '📅' },
+			{ value: 'weekly', label: 'Weekly', icon: '📆' },
+			{ value: 'monthly', label: 'Monthly', icon: '🗓️' },
 		];
 		const bucketMs: Record<string, number> = {
 			minutely: 60_000,
@@ -122,7 +122,7 @@
 		return all.filter(
 			(o) =>
 				o.value === 'auto' ||
-				((bucketMs[o.value] ?? 0) < rangeHours * 3_600_000 &&
+				((bucketMs[o.value] ?? 0) * 2 < rangeHours * 3_600_000 &&
 					(bucketMs[o.value] ?? 0) >= minMs)
 		);
 	});
@@ -227,7 +227,7 @@
 	$effect(() => {
 		const now = compareIds.length > 0;
 		if (now !== prevHasCompare) {
-			comparisonMode = now ? 'delta' : 'total';
+			comparisonMode = 'delta';
 			prevHasCompare = now;
 		}
 	});
@@ -624,7 +624,7 @@
 
 				<div class="panel mb-4">
 					<h3 class="text-sm font-semibold mb-2">
-						{metricLabel(selectedMetric)} over time
+						{metricLabel(selectedMetric)}{comparisonMode === 'total' ? ' cumulative' : ' over time'}
 						{#if dataStartLabel} <span class="text-xs text-muted font-normal">(data since {dataStartLabel})</span>{/if}
 						{#if hasCompare && compareData}
 							— comparing {buildChartDatasets().length} items
