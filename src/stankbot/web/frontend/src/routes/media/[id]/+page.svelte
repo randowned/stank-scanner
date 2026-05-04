@@ -58,6 +58,12 @@
 	let comparisonMode = $state<'delta' | 'total'>('total');
 	let selectedAggregation = $state<string>('auto');
 
+	// URL that was used to fetch the current `history`. When it doesn't match
+	// buildHistoryUrl(), the history is stale and buildChartDatasets returns
+	// the last good datasets instead of re-processing mismatched data.
+	let currentHistoryUrl = $state('');
+	let _prevDatasets: { label: string; data: { x: number; y: number }[] }[] = [];
+
 	const metricOptions = $derived(
 		providerMetrics.length > 0
 			? providerMetrics.map((m) => ({ value: m.key, label: m.label, icon: m.icon || '📊' }))
@@ -276,13 +282,15 @@
 
 	async function loadHistory() {
 		if (!item) return;
+		const url = buildHistoryUrl();
 		loadingHistory = true;
-		history = [];
 		try {
-			const res = await apiFetch<{ history: MetricSnapshot[] }>(buildHistoryUrl());
+			const res = await apiFetch<{ history: MetricSnapshot[] }>(url);
 			history = res.history;
+			currentHistoryUrl = url;
 		} catch {
 			history = [];
+			currentHistoryUrl = url;
 		} finally {
 			loadingHistory = false;
 		}
@@ -328,6 +336,7 @@
 		// Skip the very first run when SSR already provided history data.
 		if (!_initialFetchSkipped && history.length > 0) {
 			_initialFetchSkipped = true;
+			currentHistoryUrl = buildHistoryUrl();
 			return;
 		}
 		_initialFetchSkipped = true;
@@ -357,44 +366,54 @@
 					}))
 				}));
 		}
+		// When settings have changed but the fetch hasn't completed yet, return the
+		// last good datasets so the old chart stays visible (dimmed by loadingHistory)
+		// rather than briefly showing wrong data from mismatched history+settings.
+		if (buildHistoryUrl() !== currentHistoryUrl) {
+			return _prevDatasets;
+		}
 		// Single-item view: /api/media/{id}/history always returns raw totals,
 		// so apply per-tick delta transformation client-side when requested.
 		// When server-side aggregation is active the API returns pre-aggregated
 		// data (already delta'd if that mode was selected).
+		let result: { label: string; data: { x: number; y: number }[] }[];
 		if (useServerAggregation) {
-			return [{
+			result = [{
 				label: item?.name || metricLabel(selectedMetric),
 				data: history.map((h) => ({
 					x: new Date(h.fetched_at).getTime(),
 					y: h.value
 				}))
 			}];
-		}
-		let points = history.map((h) => ({
-			x: new Date(h.fetched_at).getTime(),
-			y: h.value
-		}));
-		if (comparisonMode === 'delta' && points.length >= 2) {
-			let prev = points[0].y;
-			for (const p of points) {
-				const cur = p.y;
-				p.y = cur - prev;
-				prev = cur;
+		} else {
+			let points = history.map((h) => ({
+				x: new Date(h.fetched_at).getTime(),
+				y: h.value
+			}));
+			if (comparisonMode === 'delta' && points.length >= 2) {
+				let prev = points[0].y;
+				for (const p of points) {
+					const cur = p.y;
+					p.y = cur - prev;
+					prev = cur;
+				}
+				points.shift();
+				if (resolutionBucketMs !== null) {
+					points = bucketDeltas(points, resolutionBucketMs);
+				}
+			} else if (comparisonMode === 'delta') {
+				points.length = 0;
+			} else if (resolutionBucketMs !== null) {
+				// Cumulative: downsample by keeping the last (highest) value per bucket.
+				points = bucketCumulative(points, resolutionBucketMs);
 			}
-			points.shift();
-			if (resolutionBucketMs !== null) {
-				points = bucketDeltas(points, resolutionBucketMs);
-			}
-		} else if (comparisonMode === 'delta') {
-			points.length = 0;
-		} else if (resolutionBucketMs !== null) {
-			// Cumulative: downsample by keeping the last (highest) value per bucket.
-			points = bucketCumulative(points, resolutionBucketMs);
+			result = [{
+				label: item?.name || metricLabel(selectedMetric),
+				data: points
+			}];
 		}
-		return [{
-			label: item?.name || metricLabel(selectedMetric),
-			data: points
-		}];
+		_prevDatasets = result;
+		return result;
 	}
 
 	function timeDisplayFormats() {

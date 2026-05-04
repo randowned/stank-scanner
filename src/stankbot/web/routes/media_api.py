@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.chart_renderer import render_media_chart
-from stankbot.services.media_service import MediaService, _aggregate_snapshots
+from stankbot.services.media_service import MediaService, _aggregate_snapshots, _floor_to_bucket
 from stankbot.services.permission_service import PermissionService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_member
@@ -328,6 +328,16 @@ async def get_media_chart(
     render_mode = mode if mode in ("total", "delta") else "total"
     if effective_aggregation:
         aggregated = _aggregate_snapshots(snaps, effective_aggregation, "total")
+        # In delta mode, drop the last bucket if reference_date falls within it —
+        # it's an incomplete bucket and would produce a misleadingly small delta bar.
+        if render_mode == "delta" and aggregated:
+            ref_utc = reference_date if reference_date.tzinfo else reference_date.replace(tzinfo=UTC)
+            current_bucket = _floor_to_bucket(ref_utc, effective_aggregation)
+            last_bucket = datetime.fromisoformat(aggregated[-1]["fetched_at"])
+            if last_bucket.tzinfo is None:
+                last_bucket = last_bucket.replace(tzinfo=UTC)
+            if last_bucket >= current_bucket:
+                aggregated = aggregated[:-1]
         render_snaps = [_SnapshotStub(value=d["value"], fetched_at=datetime.fromisoformat(d["fetched_at"])) for d in aggregated]
 
     # Determine cache key from the latest snapshot timestamp
