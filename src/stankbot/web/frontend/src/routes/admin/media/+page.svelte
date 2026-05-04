@@ -10,8 +10,13 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import SelectDropdown from '$lib/components/SelectDropdown.svelte';
 	import Toggle from '$lib/components/Toggle.svelte';
+	import FormField from '$lib/components/FormField.svelte';
+	import Input from '$lib/components/Input.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { base } from '$app/paths';
+	import { page } from '$app/stores';
+
+	const isBotOwner = $derived($page.data.is_bot_owner ?? false);
 
 	let items = $state<MediaItem[]>([]);
 	let providers = $state<ProviderDef[]>([]);
@@ -27,6 +32,12 @@
 	let enabledProviders = $state<string[]>(['youtube', 'spotify']);
 	let savingSettings = $state(false);
 	let settingsError = $state<string | null>(null);
+
+	// Spotify auth (owner only, inside settings modal)
+	let spotifyStatus = $state<string>('not-set');
+	let spDcValue = $state('');
+	let spotifyLoading = $state(false);
+	let spotifyError = $state<string | null>(null);
 
 	let deleteOpen = $state(false);
 	let deletingId = $state<number | null>(null);
@@ -167,10 +178,50 @@
 		}
 	}
 
+	async function loadSpotifyStatus() {
+		if (!isBotOwner) return;
+		try {
+			const res = await apiFetch<{ connected: boolean; status: string }>('/api/admin/spotify/status');
+			spotifyStatus = res.status ?? 'not-set';
+		} catch {
+			spotifyStatus = 'not-set';
+		}
+	}
+
+	async function setSpDc() {
+		if (!spDcValue.trim() || spotifyLoading) return;
+		spotifyLoading = true;
+		spotifyError = null;
+		try {
+			await apiPost<{ ok: boolean }>('/api/admin/spotify/set-sp-dc', { sp_dc: spDcValue.trim() });
+			spDcValue = '';
+			await loadSpotifyStatus();
+		} catch (err) {
+			spotifyError = toErrorMessage(err, 'Failed to set auth cookie');
+		} finally {
+			spotifyLoading = false;
+		}
+	}
+
+	async function disconnectSpotify() {
+		if (spotifyLoading) return;
+		spotifyLoading = true;
+		spotifyError = null;
+		try {
+			const res = await apiPost<{ connected: boolean; status: string }>('/api/admin/spotify/disconnect');
+			spotifyStatus = res.status ?? 'not-set';
+		} catch (err) {
+			spotifyError = toErrorMessage(err, 'Failed to disconnect');
+		} finally {
+			spotifyLoading = false;
+		}
+	}
+
 	$effect(() => {
 		loadItems();
 		loadProviders();
 		loadSettings();
+		loadSpotifyStatus();
 	});
 
 	const providersByType = $derived(
@@ -281,47 +332,102 @@
 
 <!-- Settings Modal -->
 <Modal bind:open={settingsOpen} title="Media Settings">
-	<div class="space-y-4">
+	<div class="space-y-5">
+		<!-- General -->
 		<div>
-			<span class="block text-sm font-medium mb-2">Update intervals</span>
-			<div class="flex items-center justify-between gap-3 py-1.5 border-b border-border">
-				<span class="text-sm text-text whitespace-nowrap">YouTube</span>
-				<SelectDropdown options={intervalOptions} bind:value={youtubeInterval} disabled={savingSettings} testId="media-interval-youtube" />
+			<h3 class="text-sm font-semibold mb-3">General</h3>
+			<div class="space-y-3">
+				<div>
+					<Toggle bind:checked={ephemeralEnabled} label="Ephemeral /stats replies" disabled={savingSettings} />
+					<div class="text-xs text-muted mt-1">When enabled, command responses are visible only to the caller.</div>
+				</div>
+				<div>
+					<Toggle bind:checked={adminOnly} label="Admin-only /stats commands" disabled={savingSettings} />
+					<div class="text-xs text-muted mt-1">When enabled, only admins may use /stats commands.</div>
+				</div>
 			</div>
-			<div class="flex items-center justify-between gap-3 py-1.5">
-				<span class="text-sm text-text whitespace-nowrap">Spotify</span>
-				<SelectDropdown options={intervalOptions} bind:value={spotifyInterval} disabled={savingSettings} testId="media-interval-spotify" />
+		</div>
+
+		<!-- Providers -->
+		<div>
+			<h3 class="text-sm font-semibold mb-3">Providers</h3>
+			<div class="space-y-4">
+				<!-- YouTube -->
+				<div class="bg-surface/30 rounded-lg p-3 space-y-3">
+					<div class="flex items-center justify-between">
+						<span class="text-sm font-medium">▶️ YouTube</span>
+						<label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+							<input type="checkbox" checked={enabledProviders.includes('youtube')} onchange={() => toggleProvider('youtube')} class="accent-accent" />
+							<span class="text-xs text-muted">Enabled</span>
+						</label>
+					</div>
+					<div class="flex items-center justify-between gap-3">
+						<span class="text-xs text-muted">Update interval</span>
+						<SelectDropdown options={intervalOptions} bind:value={youtubeInterval} disabled={savingSettings} testId="media-interval-youtube" />
+					</div>
+				</div>
+
+				<!-- Spotify -->
+				<div class="bg-surface/30 rounded-lg p-3 space-y-3">
+					<div class="flex items-center justify-between">
+						<span class="text-sm font-medium">🟢 Spotify</span>
+						<label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+							<input type="checkbox" checked={enabledProviders.includes('spotify')} onchange={() => toggleProvider('spotify')} class="accent-accent" />
+							<span class="text-xs text-muted">Enabled</span>
+						</label>
+					</div>
+					<div class="flex items-center justify-between gap-3">
+						<span class="text-xs text-muted">Update interval</span>
+						<SelectDropdown options={intervalOptions} bind:value={spotifyInterval} disabled={savingSettings} testId="media-interval-spotify" />
+					</div>
+
+					{#if isBotOwner}
+						<div class="pt-3 border-t border-border">
+							<div class="flex items-center gap-2 mb-2">
+								<span class="text-xs font-medium text-muted uppercase tracking-wide">Auth Cookie</span>
+								{#if spotifyStatus === 'valid'}
+									<span class="text-xs text-green-600 dark:text-green-400 font-medium">● Valid</span>
+								{:else if spotifyStatus === 'expired'}
+									<span class="text-xs text-yellow-600 dark:text-yellow-400 font-medium">● Expired</span>
+								{:else}
+									<span class="text-xs text-muted">● Not set</span>
+								{/if}
+							</div>
+							<p class="text-xs text-muted mb-2">
+								The <code class="text-[0.65rem] bg-surface/50 px-1 rounded">sp_dc</code> cookie from your open.spotify.com web player session. Find it in DevTools → Application → Cookies → open.spotify.com.
+							</p>
+							<div class="flex gap-2">
+								<div class="flex-1">
+									<Input type="password" bind:value={spDcValue} placeholder="Paste sp_dc cookie value" />
+								</div>
+								<Button onclick={setSpDc} loading={spotifyLoading} variant="primary">Set</Button>
+							</div>
+							{#if spotifyStatus !== 'not-set'}
+								<div class="mt-2">
+									<Button onclick={disconnectSpotify} loading={spotifyLoading} variant="secondary" size="sm">Disconnect</Button>
+								</div>
+							{/if}
+							{#if spotifyError}
+								<p class="text-xs text-red-500 mt-2">{spotifyError}</p>
+							{/if}
+						</div>
+					{/if}
+				</div>
 			</div>
-			<div class="text-xs text-muted mt-1">Per-provider fetch intervals. Snapshot aggregation filters to snapshots matching the current interval. Fetches are aligned to clock boundaries.</div>
+			<div class="text-xs text-muted mt-1">Fetches are aligned to clock boundaries. Disabled providers are hidden from non-admins.</div>
 		</div>
-		<div>
-			<Toggle bind:checked={ephemeralEnabled} label="Ephemeral /stats replies" />
-			<div class="text-xs text-muted mt-1">When enabled, command responses are visible only to the caller.</div>
-		</div>
-		<div>
-			<Toggle bind:checked={adminOnly} label="Admin-only /stats commands" />
-			<div class="text-xs text-muted mt-1">When enabled, only admins may use /stats commands.</div>
-		</div>
-		<div>
-			<span class="block text-sm font-medium mb-2">Enabled providers</span>
-			<div class="flex flex-wrap gap-3">
-				{#each providers as p}
-					<label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
-						<input type="checkbox" checked={enabledProviders.includes(p.type)} onchange={() => toggleProvider(p.type)} class="accent-accent" />
-						<span class="text-sm text-text">{p.label}</span>
-					</label>
-				{/each}
-			</div>
-			<div class="text-xs text-muted mt-1">Disabled providers are hidden from non-admins in the dashboard and /stats commands.</div>
-		</div>
+
+		<!-- Operations -->
 		<div class="pt-2 border-t border-border">
+			<h3 class="text-sm font-semibold mb-2">Operations</h3>
 			<Button variant="secondary" onclick={handleBackfill} testId="media-backfill-alignment">Backfill alignment masks</Button>
 			<div class="text-xs text-muted mt-1">Computes alignment masks for all existing snapshots. Run once after deploying the alignment_mask migration.</div>
 		</div>
+
 		{#if settingsError}
 			<div class="text-red-400 text-sm">{settingsError}</div>
 		{/if}
-		<div class="flex justify-end gap-2">
+		<div class="flex justify-end gap-2 pt-2">
 			<Button variant="secondary" onclick={() => (settingsOpen = false)} testId="media-settings-cancel">Cancel</Button>
 			<Button variant="primary" onclick={saveSettings} loading={savingSettings} testId="media-settings-save">Save</Button>
 		</div>

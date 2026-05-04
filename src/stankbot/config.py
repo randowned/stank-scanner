@@ -60,6 +60,7 @@ class AppConfig(BaseSettings):
     spotify_client_secret: SecretStr | None = None
     spotify_oauth_redirect_uri: str = "http://127.0.0.1:8000/auth/spotify/callback"
     spotify_client_token: str | None = None
+    spotify_sp_dc: str | None = None
 
     # --- Dev mocks (ignored unless env == "dev-mock") ---
     mock_discord: bool = False

@@ -23,6 +23,7 @@ _SPOTIFY_URL_RE = re.compile(
 _TOKEN_URL = "https://accounts.spotify.com/api/token"
 _API_BASE = "https://api.spotify.com/v1"
 _PARTNER_BASE = "https://api-partner.spotify.com/pathfinder/v2/query"
+_PARTNER_TOKEN_URL = "https://open.spotify.com/get_access_token"
 
 # Persisted query hash for queryArtistOverview (extracted from web player JS)
 _ARTIST_OVERVIEW_SHA256 = "7f86ff63e38c24973a2842b672abe44c910c1973978dc8a4a0cb648edef34527"
@@ -49,19 +50,22 @@ class SpotifyProvider(MediaProvider):
         client_id: str | None = None,
         client_secret: str | None = None,
         client_token: str | None = None,
+        sp_dc: str | None = None,
     ) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
         # Pre-set client-token from env var (avoids scraping Spotify's web player)
         self._client_token: str | None = client_token
+        # sp_dc cookie for Partner API token exchange (can be overridden at runtime)
+        self._sp_dc: str | None = sp_dc
         self._public_client: httpx.AsyncClient | None = None
         self._partner_client: httpx.AsyncClient | None = None
         # Public API token (client credentials — for resolve only)
         self._token: str | None = None
         self._token_expires_at: float = 0.0
-        # User token (from OAuth refresh_token — for Partner API)
-        self._user_token: str | None = None
-        self._user_token_expires_at: float = 0.0
+        # Partner API token (from sp_dc cookie exchange)
+        self._partner_token: str | None = None
+        self._partner_token_expires_at: float = 0.0
         self._app_version: str = "896000000"
         self._client_token_lock = asyncio.Lock()
         # Session context injected by MediaService before fetch_metrics
@@ -75,6 +79,10 @@ class SpotifyProvider(MediaProvider):
         """Store DB session context for use by fetch_metrics."""
         self._session = session
         self._session_guild_id = guild_id
+
+    def set_sp_dc(self, sp_dc: str) -> None:
+        self._sp_dc = sp_dc
+        self._partner_token = None  # force re-exchange on next use
 
     # ----------------------------------------------------------------
     # Public API client (resolve only)
@@ -202,82 +210,88 @@ class SpotifyProvider(MediaProvider):
             return None
 
     # ----------------------------------------------------------------
-    # User token (OAuth refresh_token from DB)
+    # Partner API token (sp_dc cookie exchange)
     # ----------------------------------------------------------------
 
-    async def _get_refresh_token(
+    async def _get_sp_dc(
         self,
         session: Any,
         guild_id: int | None,
     ) -> str | None:
-        """Read SPOTIFY_REFRESH_TOKEN from guild_settings in the DB."""
+        """Get sp_dc cookie — env var first, fallback to guild_settings DB."""
+        if self._sp_dc and self._sp_dc.strip():
+            return self._sp_dc.strip()
         if guild_id is None:
             return None
         from stankbot.services.settings_service import Keys, SettingsService
 
         svc = SettingsService(session)
-        raw = await svc.get(guild_id, Keys.SPOTIFY_REFRESH_TOKEN, None)
+        raw = await svc.get(guild_id, Keys.SPOTIFY_SP_DC, None)
         if raw is None or (isinstance(raw, str) and not raw.strip()):
             return None
-        return str(raw)
+        self._sp_dc = str(raw).strip()
+        return self._sp_dc
 
     async def can_fetch_metrics(
         self,
         session: Any,
         guild_id: int,
     ) -> bool:
-        token = await self._get_refresh_token(session, guild_id)
-        return token is not None
+        sp_dc = await self._get_sp_dc(session, guild_id)
+        return sp_dc is not None
 
-    async def _ensure_user_token(
+    async def _ensure_partner_token(
         self,
         session: Any | None = None,
         guild_id: int | None = None,
     ) -> str | None:
-        if self._user_token and time.time() < self._user_token_expires_at - 60:
-            return self._user_token
+        if self._partner_token and time.time() < self._partner_token_expires_at - 60:
+            return self._partner_token
 
-        if session is None or guild_id is None:
-            return None
-
-        refresh_token = await self._get_refresh_token(session, guild_id)
-        if not refresh_token:
-            return None
-
-        if not self._client_id or not self._client_secret:
+        sp_dc = await self._get_sp_dc(session, guild_id)
+        if not sp_dc:
             return None
 
         client = self._get_public_client()
         try:
-            resp = await client.post(
-                _TOKEN_URL,
-                data={
-                    "grant_type": "refresh_token",
-                    "refresh_token": refresh_token,
+            resp = await client.get(
+                _PARTNER_TOKEN_URL,
+                params={"reason": "transport", "productType": "web-player"},
+                headers={
+                    "User-Agent": _BROWSER_UA,
+                    "origin": "https://open.spotify.com",
+                    "referer": "https://open.spotify.com/",
+                    "Cookie": f"sp_dc={sp_dc}",
                 },
-                auth=(self._client_id, self._client_secret),
                 timeout=10.0,
             )
+            if resp.status_code == 403:
+                log.warning("Spotify Partner token exchange blocked (WAF); sp_dc may be expired")
+                return None
             if resp.status_code != 200:
                 try:
                     body = resp.text
                 except Exception:
                     body = "<unreadable>"
-                log.warning("Spotify user token refresh failed: %d — %s", resp.status_code, body[:200])
+                log.warning("Spotify Partner token exchange failed: %d — %s", resp.status_code, body[:200])
                 return None
-            data: dict[str, Any] = resp.json()
-            self._user_token = data.get("access_token")
-            expires_in = data.get("expires_in", 3600)
-            self._user_token_expires_at = time.time() + expires_in
-            new_refresh = data.get("refresh_token")
-            if new_refresh and session is not None and guild_id is not None:
-                from stankbot.services.settings_service import Keys, SettingsService
 
-                svc = SettingsService(session)
-                await svc.set(guild_id, Keys.SPOTIFY_REFRESH_TOKEN, new_refresh)
-            return self._user_token
+            data: dict[str, Any] = resp.json()
+            token = data.get("accessToken")
+            if not token:
+                log.warning("Spotify Partner token exchange: no accessToken in response — %s", list(data.keys()))
+                return None
+
+            self._partner_token = token
+            expires_in = data.get("accessTokenExpirationTimestampMs", 0)
+            if expires_in:
+                self._partner_token_expires_at = float(expires_in) / 1000.0
+            else:
+                self._partner_token_expires_at = time.time() + 3600
+
+            return self._partner_token
         except httpx.HTTPError as exc:
-            log.warning("Spotify user token refresh error: %s", exc)
+            log.warning("Spotify Partner token exchange error: %s", exc)
             return None
 
     # ----------------------------------------------------------------
@@ -401,19 +415,19 @@ class SpotifyProvider(MediaProvider):
         sha256_hash: str,
     ) -> dict[str, Any] | None:
         """Execute a persisted GraphQL query against api-partner.spotify.com."""
-        user_token = await self._ensure_user_token(self._session, self._session_guild_id)
-        if not user_token:
-            log.warning("Spotify Partner API: no user token available")
+        partner_token = await self._ensure_partner_token(self._session, self._session_guild_id)
+        if not partner_token:
+            log.warning("Spotify Partner API: no partner token available")
             return None
 
-        client_token = await self._ensure_client_token()
+        client_token = self._client_token
         if not client_token:
             log.warning("Spotify Partner API: no client-token available")
             return None
 
         client = self._get_partner_client()
         headers = {
-            "authorization": f"Bearer {user_token}",
+            "authorization": f"Bearer {partner_token}",
             "client-token": client_token,
             "app-platform": "WebPlayer",
             "spotify-app-version": self._app_version,
@@ -438,8 +452,8 @@ class SpotifyProvider(MediaProvider):
                 timeout=15.0,
             )
             if resp.status_code == 401:
-                self._user_token = None
-                log.warning("Spotify Partner API: 401 — user token may be invalid")
+                self._partner_token = None
+                log.warning("Spotify Partner API: 401 — partner token may be expired")
                 return None
             if resp.status_code != 200:
                 try:
