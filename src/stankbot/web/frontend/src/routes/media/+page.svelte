@@ -124,7 +124,7 @@
 				{ key: 'comment_count', label: 'Comments', icon: '💬', display: formatNumber(metricValue(item, 'comment_count')) }
 			);
 		}
-		// For Spotify (only popularity), pad with duration + release year as filler chips
+		// Pad Spotify cards with duration and release year as filler chips
 		if (item.media_type === 'spotify' && out.length < 3) {
 			if (item.duration_seconds != null) {
 				const mins = Math.floor(item.duration_seconds / 60);

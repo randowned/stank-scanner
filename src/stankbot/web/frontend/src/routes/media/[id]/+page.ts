@@ -18,7 +18,7 @@ export const load: Load = async ({ params, fetch }) => {
 
 	let history: MetricSnapshot[] = [];
 	if (item) {
-		const initialMetric = item.media_type === 'spotify' ? 'popularity' : 'view_count';
+		const initialMetric = item.media_type === 'spotify' ? 'playcount' : 'view_count';
 		history = await loadWithFallback<MetricSnapshot[]>(
 			() =>
 				apiFetch<{ history: MetricSnapshot[] }>(

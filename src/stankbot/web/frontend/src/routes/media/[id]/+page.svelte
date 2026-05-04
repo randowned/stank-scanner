@@ -36,7 +36,7 @@
 	);
 	const providerMetrics = $derived<MetricDef[]>(provider?.metrics ?? []);
 
-	const initialMetric = $derived(item?.media_type === 'spotify' ? 'popularity' : 'view_count');
+	const initialMetric = $derived(item?.media_type === 'spotify' ? 'playcount' : 'view_count');
 	let selectedMetric = $state<string>('view_count');
 	$effect(() => {
 		// align selected metric with provider once known

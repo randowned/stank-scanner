@@ -9,6 +9,7 @@ interface AuthResponse {
 	guild_name: string | null;
 	is_admin: boolean;
 	is_global_admin: boolean;
+	is_bot_owner: boolean;
 }
 
 // Module-level cache — lives for the lifetime of the SPA tab.
@@ -48,6 +49,7 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 			guild_name: auth?.guild_name ?? null,
 			is_admin: auth?.is_admin ?? false,
 			is_global_admin: auth?.is_global_admin ?? false,
+			is_bot_owner: auth?.is_bot_owner ?? false,
 			guilds: guildsCache ?? []
 		};
 	} catch (e) {
@@ -59,6 +61,7 @@ export const load: LayoutLoad = async ({ fetch, url }) => {
 			guild_name: null,
 			is_admin: false,
 			is_global_admin: false,
+			is_bot_owner: false,
 			guilds: [] as GuildInfo[]
 		};
 	}

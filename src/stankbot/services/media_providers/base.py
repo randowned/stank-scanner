@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -70,8 +71,22 @@ class MediaProvider(ABC):
 
     @abstractmethod
     async def fetch_metrics(
-        self, external_ids: list[str]
+        self,
+        external_ids: list[str],
+        metadata: dict[str, dict[str, Any]] | None = None,
     ) -> list[MetricResult]: ...
+
+    async def can_fetch_metrics(
+        self,
+        session: Any,
+        guild_id: int,
+    ) -> bool:
+        """Whether this provider can fetch metrics for a guild.
+
+        Default: same as is_configured(). Override when metrics need
+        per-guild credentials (e.g. OAuth tokens).
+        """
+        return self.is_configured()
 
     @abstractmethod
     async def health_check(self) -> bool: ...

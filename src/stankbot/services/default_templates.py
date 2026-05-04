@@ -216,8 +216,8 @@ SPOTIFY_MEDIA_EMBED: dict[str, Any] = {
     "image": "{image_url}",
     "fields": [
         {
-            "name": "\U0001f525 Popularity",
-            "value": "{popularity}\n{popularity_delta}".strip(),
+            "name": "\U0001f3a7 Plays",
+            "value": "{playcount}\n{playcount_delta}".strip(),
             "inline": True,
         },
         {"name": "\U0001f4c5 Released", "value": "{published_at}", "inline": True},

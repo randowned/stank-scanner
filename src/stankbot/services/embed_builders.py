@@ -332,7 +332,7 @@ async def build_media_embed(
         {view_count}, {view_count_delta},
         {like_count}, {like_count_delta},
         {comment_count}, {comment_count_delta},
-        {popularity}, {popularity_delta}, {spotify_type}
+        {popularity}, {popularity_delta}, {spotify_type} -> {playcount}, {playcount_delta}, {spotify_type}
 
     {slug} is a legacy alias for {name} (preserved for user-customized templates).
     """
@@ -398,7 +398,7 @@ async def build_media_embed(
     view_count = int(metrics.get("view_count", 0))
     like_count = int(metrics.get("like_count", 0))
     comment_count = int(metrics.get("comment_count", 0))
-    popularity = int(metrics.get("popularity", 0))
+    playcount = int(metrics.get("playcount", 0))
 
     variables: dict[str, Any] = {
         "title": title or "",
@@ -422,9 +422,9 @@ async def build_media_embed(
         template_key = "youtube_media_embed"
     else:
         variables["url"] = "https://open.spotify.com/" + media_type + "/" + str(metrics.get('external_id', ''))
-        variables["popularity"] = f"{popularity} / 100"
+        variables["playcount"] = _fmt_num(playcount)
         variables["spotify_type"] = media_type
-        variables["popularity_delta"] = await _delta("popularity", popularity)
+        variables["playcount_delta"] = await _delta("playcount", playcount)
         template_key = "spotify_media_embed"
 
     ctx = RenderContext(variables=variables)

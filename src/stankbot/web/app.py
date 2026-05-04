@@ -28,7 +28,7 @@ from starlette.staticfiles import StaticFiles
 from stankbot.bot import StankBot
 from stankbot.config import AppConfig
 from stankbot.web import ws
-from stankbot.web.routes import admin, api, auth, media_admin, media_api
+from stankbot.web.routes import admin, api, auth, media_admin, media_api, spotify_oauth
 from stankbot.web.tools import _LoginRedirect, _NotInGuild
 
 log = logging.getLogger(__name__)
@@ -82,6 +82,7 @@ def build_app(
     app.include_router(auth.router)
     app.include_router(media_api.router)
     app.include_router(media_admin.router)
+    app.include_router(spotify_oauth.router)
 
     # Share the media registry from the bot (if available).
     # In dev-mock mode, always use mock providers regardless.

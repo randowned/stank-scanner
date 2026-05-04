@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from stankbot.services.media_providers.base import (
     MediaProvider,
@@ -15,11 +16,11 @@ from stankbot.services.media_providers.base import (
 class MockYouTubeProvider(MediaProvider):
     media_type = "youtube"
     label = "YouTube"
-    icon = "▶️"
+    icon = "\u25b6\ufe0f"
     metrics = [
-        MetricDef("view_count", "Views", "number", "👁️"),
-        MetricDef("like_count", "Likes", "number", "👍"),
-        MetricDef("comment_count", "Comments", "number", "💬"),
+        MetricDef("view_count", "Views", "number", "\U0001f441\ufe0f"),
+        MetricDef("like_count", "Likes", "number", "\U0001f44d"),
+        MetricDef("comment_count", "Comments", "number", "\U0001f4ac"),
     ]
 
     def is_configured(self) -> bool:
@@ -42,11 +43,11 @@ class MockYouTubeProvider(MediaProvider):
             channel_name="Mock Channel",
             channel_id="UC_mock",
             thumbnail_url="",
-            published_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
+            published_at=datetime(2026, 1, 15, tzinfo=UTC),
             duration_seconds=240,
         )
 
-    async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
+    async def fetch_metrics(self, external_ids: list[str], metadata: dict[str, dict[str, Any]] | None = None) -> list[MetricResult]:
         return [
             MetricResult(
                 external_id=eid,
@@ -62,9 +63,9 @@ class MockYouTubeProvider(MediaProvider):
 class MockSpotifyProvider(MediaProvider):
     media_type = "spotify"
     label = "Spotify"
-    icon = "🟢"
+    icon = "\U0001f7e2"
     metrics = [
-        MetricDef("popularity", "Popularity", "percentage", "🔥"),
+        MetricDef("playcount", "Play Count", "number", "\U0001f3a7"),
     ]
 
     def is_configured(self) -> bool:
@@ -87,13 +88,13 @@ class MockSpotifyProvider(MediaProvider):
             channel_name="Mock Artist",
             channel_id="mock_artist",
             thumbnail_url="",
-            published_at=datetime(2026, 2, 20, tzinfo=timezone.utc),
+            published_at=datetime(2026, 2, 20, tzinfo=UTC),
             duration_seconds=200,
         )
 
-    async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
+    async def fetch_metrics(self, external_ids: list[str], metadata: dict[str, dict[str, Any]] | None = None) -> list[MetricResult]:
         return [
-            MetricResult(external_id=eid, values={"popularity": 80})
+            MetricResult(external_id=eid, values={"playcount": 1000000})
             for eid in external_ids
         ]
 

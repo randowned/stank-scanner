@@ -125,8 +125,11 @@ class MediaMetricsScheduler:
 
     async def _refresh_provider(self, guild_id: int, provider_type: str) -> None:
         now = datetime.now(tz=UTC)
-        log.info("MediaMetrics: refreshing guild=%d provider=%s", guild_id, provider_type)
         async with self.bot.db() as session:
+            provider = self.registry.get(provider_type)
+            if provider is not None and not await provider.can_fetch_metrics(session, guild_id):
+                log.debug("MediaMetrics: skipping guild=%d provider=%s (cannot fetch metrics)", guild_id, provider_type)
+                return
             svc = MediaService(session=session, registry=self.registry)
             result = await svc.refresh_all(guild_id, media_type=provider_type)
         elapsed = (datetime.now(tz=UTC) - now).total_seconds()

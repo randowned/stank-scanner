@@ -209,6 +209,7 @@ async def auth_check(request: Request) -> MsgPackResponse:
             "guild_name": guild_name,
             "is_admin": is_global_admin or is_guild_admin,
             "is_global_admin": is_global_admin,
+            "is_bot_owner": int(user["id"]) == config.owner_id,
         },
         request,
     )

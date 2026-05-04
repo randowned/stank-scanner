@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { apiFetch, apiPost } from '$lib/api';
-import { toErrorMessage } from '$lib/api-utils';
+	import { toErrorMessage } from '$lib/api-utils';
 	import { onMount } from 'svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Card from '$lib/components/Card.svelte';
@@ -10,6 +10,10 @@ import { toErrorMessage } from '$lib/api-utils';
 	import Toggle from '$lib/components/Toggle.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import ErrorState from '$lib/components/ErrorState.svelte';
+
+	let { data } = $props();
+
+	const isBotOwner = $derived(data.is_bot_owner ?? false);
 
 	interface SettingsDoc {
 		guild_id: string;
@@ -45,6 +49,39 @@ import { toErrorMessage } from '$lib/api-utils';
 
 	let maintenanceEnabled = $state(false);
 	let maintenanceMsg = $state<string | null>(null);
+
+	// Spotify OAuth
+	let spotifyConnected = $state(false);
+	let spotifyConnecting = $state(false);
+	let spotifyError = $state<string | null>(null);
+
+	async function loadSpotifyStatus() {
+		if (!isBotOwner) return;
+		try {
+			const res = await apiFetch<{ connected: boolean }>('/api/admin/spotify/status');
+			spotifyConnected = res.connected;
+		} catch {
+			spotifyConnected = false;
+		}
+	}
+
+	async function connectSpotify() {
+		window.location.href = '/auth/spotify/login?redirect_to=/admin/settings';
+	}
+
+	async function disconnectSpotify() {
+		if (spotifyConnecting) return;
+		spotifyConnecting = true;
+		spotifyError = null;
+		try {
+			const res = await apiPost<{ connected: boolean }>('/api/admin/spotify/disconnect');
+			spotifyConnected = res.connected;
+		} catch (err) {
+			spotifyError = toErrorMessage(err, 'Failed to disconnect');
+		} finally {
+			spotifyConnecting = false;
+		}
+	}
 
 	async function loadSettings() {
 		loadError = null;
@@ -93,7 +130,10 @@ import { toErrorMessage } from '$lib/api-utils';
 		}
 	}
 
-	onMount(loadSettings);
+	onMount(() => {
+		loadSettings();
+		loadSpotifyStatus();
+	});
 </script>
 
 <PageHeader title="Settings" subtitle={doc?.guild_name ?? ''} />
@@ -151,6 +191,46 @@ import { toErrorMessage } from '$lib/api-utils';
 				{/if}
 			{/each}
 		</Card>
+
+		{#if isBotOwner}
+			<Card title="Spotify Account">
+				<div class="flex items-center justify-between gap-3">
+					<div>
+						{#if spotifyConnected}
+							<p class="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+								<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+								Connected
+							</p>
+						{:else}
+							<p class="text-sm font-medium text-muted">
+								Not connected
+							</p>
+						{/if}
+						<p class="text-sm text-muted mt-1">
+							Connect your personal Spotify account to enable play count tracking for tracks you add.
+						</p>
+					</div>
+					<div class="flex-shrink-0">
+						{#if spotifyConnected}
+							<Button
+								onclick={disconnectSpotify}
+								loading={spotifyConnecting}
+								variant="secondary"
+							>
+								Disconnect
+							</Button>
+						{:else}
+							<Button onclick={connectSpotify}>
+								Connect Spotify
+							</Button>
+						{/if}
+					</div>
+				</div>
+				{#if spotifyError}
+					<p class="text-sm text-red-500 mt-3">{spotifyError}</p>
+				{/if}
+			</Card>
+		{/if}
 	</div>
 
 	<div class="flex items-center justify-end gap-3 mt-4">

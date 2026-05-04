@@ -32,7 +32,7 @@ Sessions roll over on a cron (default 07:00 / 15:00 / 23:00 UTC) with configurab
 - **Multi-altar per guild.** Run a themed event (Halloween sticker, Founders Day) alongside the normal chain with its own scoring overrides and a `custom_event_key` tag on every emitted event.
 - **Achievements / badges** derived from the event log — First Stank, Centurion, Finisher, Chainbreaker, Comeback Kid, Perfect Session, Streaker, Team Player.
 - **Web dashboard** with Discord OAuth — public board with reaction-aware leaderboard (live reorder + delta chips + chain-break overlay), player profiles with 30-day sparklines + achievement gallery, session history, and a five-page admin surface (Dashboard · Templates · Admins · Audit · Settings with embedded session ops). MsgPack-first transport over HTTP + WebSocket. SvelteKit SPA served at `/`.
-- **Media analytics** for YouTube and Spotify. Add videos/albums via the admin panel, view metric history and comparison charts on the dashboard, and query stats in Discord with `/stats youtube info <name>` / `/stats spotify info <name>` / `/stats youtube chart <name> [type] [range]`. Per-provider embed templates, scheduled metric snapshots, configurable refresh intervals, and public chart image endpoint.
+- **Media analytics** for YouTube and Spotify. Add videos/albums via the admin panel, view metric history and comparison charts on the dashboard, and query stats in Discord with `/stats youtube info <name>` / `/stats spotify info <name>` / `/stats youtube chart <name> [type] [range]`. Per-provider embed templates, scheduled metric snapshots, configurable refresh intervals, and public chart image endpoint. Spotify playcount is fetched via the Partner API using the bot owner's connected account (OAuth PKCE flow in Settings).
 
 ## Running it yourself
 
@@ -127,7 +127,8 @@ Environment (see `.env.example`):
 | `GUILD_IDS` | Comma-separated guild ids for slash sync; first entry is fallback default |
 | `WEB_SECRET_KEY` | Cookie signing secret for the dashboard |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key for media metrics |
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify Web API credentials for media metrics |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify app credentials for media metrics and OAuth |
+| `SPOTIFY_OAUTH_REDIRECT_URI` | Spotify OAuth callback URL (e.g. `https://stank.bot/auth/spotify/callback`) |
 | `CHART_CACHE_DIR` | Directory for cached `/api/media/{id}/chart` PNGs (default `/data/media/chart`); cleaned every 10 minutes by the media scheduler. |
 
 **Dev-only mocks** (`.env.dev`, no secrets needed):
@@ -169,9 +170,9 @@ All setup happens on the web dashboard (log in with Discord OAuth):
 | Command | What it does |
 |---|---|
 | `/stats youtube info <name>` | Rich embed with full-number metrics, day-over-day deltas, formatted dates/durations, and cover photo. |
-| `/stats spotify info <name>` | Rich embed with latest Spotify track/album metrics and day-over-day popularity change. |
+| `/stats spotify info <name>` | Rich embed with latest Spotify track/album metrics and day-over-day playcount change. |
 | `/stats youtube chart <name> [type] [range] [mode] [resolution] [compare1] [compare2] [compare3]` | Inline chart image (16:9 PNG) for views, likes, or comments. Defaults: Views / 24h / Delta / Hourly. `resolution` buckets data (5min/15min/30min/hourly/daily/weekly/monthly); auto-selected when omitted. Add up to 3 `compare` names for a multi-series comparison chart. |
-| `/stats spotify chart <name> [type] [range] [mode] [resolution] [compare1] [compare2] [compare3]` | Inline chart image for popularity. Defaults: Popularity / 24h / Delta / Hourly. `resolution` buckets data; auto-selected when omitted. Add up to 3 `compare` names for a multi-series comparison chart. |
+| `/stats spotify chart <name> [type] [range] [mode] [resolution] [compare1] [compare2] [compare3]` | Inline chart image for playcount. Defaults: Playcount / 24h / Delta / Hourly. `resolution` buckets data; auto-selected when omitted. Add up to 3 `compare` names for a multi-series comparison chart. |
 
 Admins can disable individual media providers per-guild from the media settings panel; non-admins won't see disabled-provider items, while admins always see everything (so they can re-enable). The dashboard detail page exposes a `Resolution` dropdown (Auto / 5 Min / 15 Min / 30 Min / Hour / Day / Week / Month) filtered by the selected range and the provider's configured poll interval (resolutions finer than the poll interval are hidden). Auto resolution targets ~24 data points for the selected range (e.g. 1 day → hourly). All resolutions select exactly-aligned snapshots via bitmask for accurate delta and total values; the Discord chart-image endpoint uses the same auto-aggregation logic. Snapshot intervals are per-provider (YouTube / Spotify), configurable from 1 min to 24 hours (default 60 min).
 
@@ -202,7 +203,7 @@ The dashboard is a PWA — installable from Chrome / Edge via the address bar or
   - `/admin/audit` — admin action audit trail.
   - `/admin/events` — game event log (stanks, breaks, reactions, achievements).
   - `/admin/settings` — two-column page: left lists Altar / Scoring / Behavior / Reset windows / Announcements / Maintenance cards; right sticky rail holds New Session · Reset · Rebuild.
-- `/media` — media dashboard: provider type tabs (All / YouTube / Spotify) with colored left borders, provider-aware card grid (Spotify cards show popularity, duration, and release year; YouTube cards show views, likes, comments), search bar, sort dropdown, compare mode (select 2+ items via whole-card click — cross-type items are auto-disabled — to navigate to a detail page with comparison charts via `?compare=` query param).
+- `/media` — media dashboard: provider type tabs (All / YouTube / Spotify) with colored left borders, provider-aware card grid (Spotify cards show playcount, duration, and release year; YouTube cards show views, likes, comments), search bar, sort dropdown, compare mode (select 2+ items via whole-card click — cross-type items are auto-disabled — to navigate to a detail page with comparison charts via `?compare=` query param).
 - `/media/{id}` — single media item detail: provider-aware metric tiles (1 tile for Spotify, 3 for YouTube), time-scale history chart with range options (1h / 6h / 12h / 24h / 48h / 7d / 30d / 90d / 1y, default 48h), defaults to Change (delta) mode, view mode toggle (Change / Cumulative — title updates to "{metric} cumulative" in Cumulative mode) with alignment-filtered rendering (5 Min / 15 Min / 30 Min / Hourly / Daily / Weekly / Monthly resolution, range-filtered to require ≥2 buckets), data-start indicator when data is shorter than selected range, multi-series comparison overlay (type-filtered), staleness pill in header, "Open on YouTube / Spotify" link in metadata sidebar, chart legend uses item name instead of full title, sparse-data hint when only one snapshot exists, gap-free line rendering.
 - Admin `/admin/media` — manage media: add (tabbed by provider, optional name), client-side type filter (no API reload on tab switch), colored provider badges (YouTube red, Spotify green), force-refresh single or all, settings modal with per-provider interval dropdowns (YouTube / Spotify, 1min–24h) + ephemeral replies toggle + admin-only toggle + alignment mask backfill button, mobile-friendly rows with edge-to-edge thumbnails.
 - Admin `/admin/media/{id}/edit` — edit page: editable name field with save, metadata summary, and last 20 metric snapshots in a pivoted table (all metrics side by side per timestamp).

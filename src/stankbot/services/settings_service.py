@@ -75,6 +75,8 @@ class Keys(StrEnum):
     # Media embed templates
     YOUTUBE_MEDIA_EMBED = "youtube_media_embed"
     SPOTIFY_MEDIA_EMBED = "spotify_media_embed"
+    # Spotify OAuth
+    SPOTIFY_REFRESH_TOKEN = "spotify_refresh_token"
 
 
 DEFAULTS: dict[str, Any] = {

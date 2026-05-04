@@ -13,6 +13,7 @@ declare global {
 			guild_name?: string | null;
 			is_admin?: boolean;
 			is_global_admin?: boolean;
+			is_bot_owner?: boolean;
 			guilds?: GuildInfo[];
 		}
 	}
