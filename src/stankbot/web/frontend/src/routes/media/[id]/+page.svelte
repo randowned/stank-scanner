@@ -363,10 +363,13 @@
 
 		// Pre-seed _prevDatasets from raw SSR history so the chart shows something
 		// while the server-aggregated fetch is in-flight (avoids blank chart flash).
-		if (history.length > 0 && _prevDatasets.length === 0) {
+		// untrack() prevents subscribing the effect to `history` here — otherwise
+		// loadHistory()'s assignment would cause an infinite re-run loop.
+		const _ssnap = untrack(() => history);
+		if (_ssnap.length > 0 && _prevDatasets.length === 0) {
 			_prevDatasets = [{
 				label: item?.name ?? metricLabel(selectedMetric),
-				data: history.map(h => ({ x: new Date(h.fetched_at).getTime(), y: h.value }))
+				data: _ssnap.map(h => ({ x: new Date(h.fetched_at).getTime(), y: h.value }))
 			}];
 		}
 
