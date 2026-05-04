@@ -210,15 +210,15 @@ class SpotifyProvider(MediaProvider):
             return None
 
     # ----------------------------------------------------------------
-    # Partner API token (sp_dc cookie exchange)
+    # Partner API token (user access token from browser)
     # ----------------------------------------------------------------
 
-    async def _get_sp_dc(
+    async def _get_access_token(
         self,
         session: Any,
         guild_id: int | None,
     ) -> str | None:
-        """Get sp_dc cookie — env var first, fallback to guild_settings DB."""
+        """Get user access token — env var first, fallback to guild_settings DB."""
         if self._sp_dc and self._sp_dc.strip():
             return self._sp_dc.strip()
         if guild_id is None:
@@ -237,8 +237,8 @@ class SpotifyProvider(MediaProvider):
         session: Any,
         guild_id: int,
     ) -> bool:
-        sp_dc = await self._get_sp_dc(session, guild_id)
-        return sp_dc is not None
+        token = await self._get_access_token(session, guild_id)
+        return token is not None
 
     async def _ensure_partner_token(
         self,
@@ -248,51 +248,13 @@ class SpotifyProvider(MediaProvider):
         if self._partner_token and time.time() < self._partner_token_expires_at - 60:
             return self._partner_token
 
-        sp_dc = await self._get_sp_dc(session, guild_id)
-        if not sp_dc:
+        token = await self._get_access_token(session, guild_id)
+        if not token:
             return None
 
-        client = self._get_public_client()
-        try:
-            resp = await client.get(
-                _PARTNER_TOKEN_URL,
-                params={"reason": "transport", "productType": "web-player"},
-                headers={
-                    "User-Agent": _BROWSER_UA,
-                    "origin": "https://open.spotify.com",
-                    "referer": "https://open.spotify.com/",
-                    "Cookie": f"sp_dc={sp_dc}",
-                },
-                timeout=10.0,
-            )
-            if resp.status_code == 403:
-                log.warning("Spotify Partner token exchange blocked (WAF); sp_dc may be expired")
-                return None
-            if resp.status_code != 200:
-                try:
-                    body = resp.text
-                except Exception:
-                    body = "<unreadable>"
-                log.warning("Spotify Partner token exchange failed: %d — %s", resp.status_code, body[:200])
-                return None
-
-            data: dict[str, Any] = resp.json()
-            token = data.get("accessToken")
-            if not token:
-                log.warning("Spotify Partner token exchange: no accessToken in response — %s", list(data.keys()))
-                return None
-
-            self._partner_token = token
-            expires_in = data.get("accessTokenExpirationTimestampMs", 0)
-            if expires_in:
-                self._partner_token_expires_at = float(expires_in) / 1000.0
-            else:
-                self._partner_token_expires_at = time.time() + 3600
-
-            return self._partner_token
-        except httpx.HTTPError as exc:
-            log.warning("Spotify Partner token exchange error: %s", exc)
-            return None
+        self._partner_token = token
+        self._partner_token_expires_at = time.time() + 3600
+        return self._partner_token
 
     # ----------------------------------------------------------------
     # Partner API client (browser-mimicking)

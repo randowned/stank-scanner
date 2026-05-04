@@ -188,16 +188,16 @@
 		}
 	}
 
-	async function setSpDc() {
+	async function setSpotifyToken() {
 		if (!spDcValue.trim() || spotifyLoading) return;
 		spotifyLoading = true;
 		spotifyError = null;
 		try {
-			await apiPost<{ ok: boolean }>('/api/admin/spotify/set-sp-dc', { sp_dc: spDcValue.trim() });
+			await apiPost<{ ok: boolean }>('/api/admin/spotify/set-sp-dc', { access_token: spDcValue.trim() });
 			spDcValue = '';
 			await loadSpotifyStatus();
 		} catch (err) {
-			spotifyError = toErrorMessage(err, 'Failed to set auth cookie');
+			spotifyError = toErrorMessage(err, 'Failed to set access token');
 		} finally {
 			spotifyLoading = false;
 		}
@@ -384,23 +384,21 @@
 					{#if isBotOwner}
 						<div class="pt-3 border-t border-border">
 							<div class="flex items-center gap-2 mb-2">
-								<span class="text-xs font-medium text-muted uppercase tracking-wide">Auth Cookie</span>
-								{#if spotifyStatus === 'valid'}
-									<span class="text-xs text-green-600 dark:text-green-400 font-medium">● Valid</span>
-								{:else if spotifyStatus === 'expired'}
-									<span class="text-xs text-yellow-600 dark:text-yellow-400 font-medium">● Expired</span>
+								<span class="text-xs font-medium text-muted uppercase tracking-wide">Access Token</span>
+								{#if spotifyStatus === 'set'}
+									<span class="text-xs text-green-600 dark:text-green-400 font-medium">● Set</span>
 								{:else}
 									<span class="text-xs text-muted">● Not set</span>
 								{/if}
 							</div>
 							<p class="text-xs text-muted mb-2">
-								The <code class="text-[0.65rem] bg-surface/50 px-1 rounded">sp_dc</code> cookie from your open.spotify.com web player session. Find it in DevTools → Application → Cookies → open.spotify.com.
+								Paste your Spotify web player access token (the <code class="text-[0.65rem] bg-surface/50 px-1 rounded">Authorization: Bearer BQ...</code> header from DevTools Network tab on open.spotify.com). Expires in ~1 hour — refresh manually.
 							</p>
 							<div class="flex gap-2">
 								<div class="flex-1">
-									<Input type="password" bind:value={spDcValue} placeholder="Paste sp_dc cookie value" />
+									<Input type="password" bind:value={spDcValue} placeholder="BQC0HgcvTkPe..." />
 								</div>
-								<Button onclick={setSpDc} loading={spotifyLoading} variant="primary">Set</Button>
+								<Button onclick={setSpotifyToken} loading={spotifyLoading} variant="primary">Set</Button>
 							</div>
 							{#if spotifyStatus !== 'not-set'}
 								<div class="mt-2">

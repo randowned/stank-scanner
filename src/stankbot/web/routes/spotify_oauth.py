@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 
 class SetSpDcPayload(BaseModel):
-    sp_dc: str
+    access_token: str
 
 
 def _owner_only(request: Request) -> None:
@@ -54,9 +54,9 @@ async def set_sp_dc(
     """Store the sp_dc cookie value for Partner API token exchange (bot owner only)."""
     _owner_only(request)
 
-    sp_dc = payload.sp_dc.strip()
-    if not sp_dc:
-        raise HTTPException(status_code=400, detail="sp_dc value is required")
+    access_token = payload.access_token.strip()
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Access token is required")
 
     guild_id = request.session.get("guild_id")
     if not guild_id:
@@ -64,14 +64,14 @@ async def set_sp_dc(
 
     # Store in DB
     svc = SettingsService(session)
-    await svc.set(int(guild_id), Keys.SPOTIFY_SP_DC, sp_dc)
+    await svc.set(int(guild_id), Keys.SPOTIFY_SP_DC, access_token)
 
     # Also set on the in-memory provider so it takes effect immediately
     provider = _get_provider(request)
     if provider is not None and hasattr(provider, "set_sp_dc"):
-        provider.set_sp_dc(sp_dc)
+        provider.set_sp_dc(access_token)
 
-    log.info("Spotify: sp_dc cookie stored for guild=%s", guild_id)
+    log.info("Spotify: access token stored for guild=%s", guild_id)
     return MsgPackResponse({"ok": True, "status": "set"}, request)
 
 
@@ -88,9 +88,8 @@ async def spotify_status(
     """Return Spotify connection status (bot owner only).
 
     Status values:
-      - "not-set"   — no sp_dc cookie stored
-      - "valid"     — sp_dc exists and token exchange succeeded
-      - "expired"   — sp_dc exists but token exchange failed (likely expired cookie)
+      - "not-set"   — no access token stored
+      - "set"       — access token stored
     """
     _owner_only(request)
 
@@ -99,23 +98,13 @@ async def spotify_status(
         return MsgPackResponse({"connected": False, "status": "not-set"}, request)
 
     svc = SettingsService(session)
-    sp_dc = await svc.get(int(guild_id), Keys.SPOTIFY_SP_DC, None)
-    has_sp_dc = sp_dc is not None and isinstance(sp_dc, str) and bool(sp_dc.strip())
+    token = await svc.get(int(guild_id), Keys.SPOTIFY_SP_DC, None)
+    has_token = token is not None and isinstance(token, str) and bool(token.strip())
 
-    if not has_sp_dc:
-        return MsgPackResponse({"connected": False, "status": "not-set"}, request)
-
-    # Try a quick token exchange to validate
-    provider = _get_provider(request)
-    if provider is not None and hasattr(provider, "_ensure_partner_token"):
-        provider.set_sp_dc(str(sp_dc).strip())
-        token = await provider._ensure_partner_token(session, int(guild_id))
-        if token:
-            return MsgPackResponse({"connected": True, "status": "valid"}, request)
-        else:
-            return MsgPackResponse({"connected": False, "status": "expired"}, request)
-
-    return MsgPackResponse({"connected": bool(has_sp_dc), "status": "valid"}, request)
+    return MsgPackResponse(
+        {"connected": has_token, "status": "set" if has_token else "not-set"},
+        request,
+    )
 
 
 # ----------------------------------------------------------------
