@@ -32,7 +32,7 @@ _BROWSER_UA = (
     " (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 )
 
-_CLIENT_TOKEN_RE = re.compile(r'clientToken\s*[=:]\s*"([A-Za-z0-9+/=]+)"')
+_CLIENT_TOKEN_RE = re.compile(r'(?:clientToken|client_token|client-token)\s*[=:]\s*"([A-Za-z0-9+/=]{100,})"')
 _APP_VERSION_RE = re.compile(r'"appVersion"\s*:\s*"(\d+)"')
 
 
@@ -305,6 +305,7 @@ class SpotifyProvider(MediaProvider):
 
         Fetches open.spotify.com, finds the web player <script> tag,
         downloads the JS, and regexes out the client-token constant.
+        Falls back to searching inline scripts on the page.
         Caches in memory; re-extracts if not yet fetched.
         """
         if self._client_token:
@@ -324,43 +325,69 @@ class SpotifyProvider(MediaProvider):
 
                 body = resp.text
 
-                # 2. Find the web player JS bundle URL
-                # The web player script is typically something like:
-                # <script src="https://open.scdn.co/cdn/build/web-player/vendors~web-player.1234.js" ...>
-                bundle_match = re.search(
-                    r'src="(https://open\.scdn\.co/[^"]*web-player[^"]*\.js)"',
+                # 2. Try to find client-token in inline scripts first
+                inline_ct = _CLIENT_TOKEN_RE.search(body)
+                if inline_ct:
+                    self._client_token = inline_ct.group(1)
+                    log.info("Spotify: extracted client-token from inline script (len=%d)", len(self._client_token))
+                    return self._client_token
+
+                # 3. Find the web player JS bundle URL — try multiple patterns
+                bundle_urls: list[str] = []
+
+                # Pattern A: open.scdn.co web-player bundles (historical)
+                for m in re.finditer(r'src="(https://open\.scdn\.co/[^"]*\.js)"', body):
+                    bundle_urls.append(m.group(1))
+
+                # Pattern B: any Spotify CDN JS bundle
+                for m in re.finditer(r'src="(https://[^"]*spotify[^"]*cdn[^"]*\.js)"', body):
+                    bundle_urls.append(m.group(1))
+
+                # Pattern C: generic <script> with crossorigin attribute on Spotify domains
+                for m in re.finditer(
+                    r'<script[^>]*src="(https://[^"]*\.spotify(?:cdn)?\.(?:com|co)[^"]*)"[^>]*>',
                     body,
-                )
-                if not bundle_match:
-                    log.warning("Could not find web player JS bundle URL on open.spotify.com")
+                ):
+                    url = m.group(1)
+                    if url not in bundle_urls:
+                        bundle_urls.append(url)
+
+                if not bundle_urls:
+                    # Debug: log the first 2000 chars of script tags found
+                    script_tags = re.findall(r'<script[^>]*src="[^"]*"[^>]*>', body)
+                    log.warning(
+                        "Could not find web player JS bundle. Script srcs found: %s",
+                        script_tags[:5] if script_tags else "<none>",
+                    )
                     return None
 
-                bundle_url = bundle_match.group(1)
-                log.info("Spotify: found web player bundle: %s", bundle_url[:120])
+                # 4. Try each bundle URL until we find the client-token
+                for bundle_url in bundle_urls:
+                    try:
+                        log.info("Spotify: trying bundle: %s", bundle_url[:120])
+                        bundle_resp = await client.get(bundle_url, timeout=30.0)
+                        if bundle_resp.status_code != 200:
+                            continue
 
-                # 3. Download the bundle
-                bundle_resp = await client.get(bundle_url, timeout=30.0)
-                if bundle_resp.status_code != 200:
-                    log.warning("Failed to download web player bundle: %d", bundle_resp.status_code)
-                    return None
+                        ct_match = _CLIENT_TOKEN_RE.search(bundle_resp.text)
+                        if ct_match:
+                            self._client_token = ct_match.group(1)
+                            log.info(
+                                "Spotify: extracted client-token from bundle (len=%d)",
+                                len(self._client_token),
+                            )
 
-                bundle_text = bundle_resp.text
+                            # Also extract app version
+                            av_match = _APP_VERSION_RE.search(bundle_resp.text)
+                            if av_match:
+                                self._app_version = av_match.group(1)
 
-                # 4. Extract client-token
-                ct_match = _CLIENT_TOKEN_RE.search(bundle_text)
-                if ct_match:
-                    self._client_token = ct_match.group(1)
-                    log.info("Spotify: extracted client-token (len=%d)", len(self._client_token))
-                else:
-                    log.warning("Could not find clientToken in web player bundle")
-                    return None
+                            return self._client_token
+                    except httpx.HTTPError:
+                        continue
 
-                # 5. Extract app version
-                av_match = _APP_VERSION_RE.search(bundle_text)
-                if av_match:
-                    self._app_version = av_match.group(1)
-
-                return self._client_token
+                log.warning("Could not find clientToken in any web player bundle")
+                return None
 
             except httpx.HTTPError as exc:
                 log.warning("Spotify client-token extraction error: %s", exc)
