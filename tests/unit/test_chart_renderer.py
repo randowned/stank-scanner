@@ -95,7 +95,7 @@ class TestRenderMediaChart:
             snapshots=snaps,
             title="Test",
             metric_label="Views",
-            duration_hours=4,
+
         )
         assert isinstance(buf, bytes)
         assert len(buf) > 1000  # should be a substantial PNG
@@ -106,7 +106,7 @@ class TestRenderMediaChart:
             snapshots=snaps,
             title="Test",
             metric_label="Views",
-            duration_hours=4,
+
         )
         img = Image.open(BytesIO(buf))
         assert img.size == (1200, 675)
@@ -118,7 +118,7 @@ class TestRenderMediaChart:
             snapshots=[],
             title="Empty",
             metric_label="Views",
-            duration_hours=0,
+
         )
         assert isinstance(buf, bytes)
         assert len(buf) > 0
@@ -130,7 +130,7 @@ class TestRenderMediaChart:
             snapshots=snaps,
             title="Single",
             metric_label="Views",
-            duration_hours=0,
+
         )
         assert isinstance(buf, bytes)
 
@@ -141,7 +141,7 @@ class TestRenderMediaChart:
             snapshots=snaps,
             title="Many Points",
             metric_label="Views",
-            duration_hours=48,
+
         )
         assert isinstance(buf, bytes)
 
@@ -156,7 +156,7 @@ class TestRenderMediaChart:
             snapshots=snaps,
             title="Millions",
             metric_label="Views",
-            duration_hours=12,
+
         )
         assert isinstance(buf, bytes)
 
@@ -167,7 +167,7 @@ class TestRenderMediaChart:
             snapshots=snaps,
             title="Sub-day",
             metric_label="Views",
-            duration_hours=2,
+
         )
         assert isinstance(buf, bytes)
 
@@ -178,7 +178,7 @@ class TestRenderMediaChart:
             snapshots=snaps,
             title="Multi-day",
             metric_label="Views",
-            duration_hours=144,
+
         )
         assert isinstance(buf, bytes)
 
@@ -191,7 +191,7 @@ class TestRenderMediaChartMode:
             snapshots=snaps,
             title="Delta",
             metric_label="Views",
-            duration_hours=4,
+
             mode="delta",
         )
         img = Image.open(BytesIO(buf))
@@ -204,7 +204,7 @@ class TestRenderMediaChartMode:
             snapshots=snaps,
             title="Delta-1",
             metric_label="Views",
-            duration_hours=0,
+
             mode="delta",
         )
         # Should not crash and should still be a valid PNG (placeholder image).
@@ -218,7 +218,7 @@ class TestRenderMediaChartMode:
             snapshots=snaps,
             title="Total",
             metric_label="Views",
-            duration_hours=4,
+
             mode="total",
         )
         img = Image.open(BytesIO(buf))
@@ -231,7 +231,7 @@ class TestRenderMediaChartMode:
             snapshots=aggregated,
             title="Aggregated",
             metric_label="Views",
-            duration_hours=18,
+
             mode="total",
         )
         img = Image.open(BytesIO(buf))

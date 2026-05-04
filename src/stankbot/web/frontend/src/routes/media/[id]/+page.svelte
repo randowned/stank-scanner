@@ -132,7 +132,9 @@
 
 	const dataStartLabel = $derived(
 		dataShorter && dataStart > 0
-			? new Date(dataStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+			? new Date(dataStart).toLocaleString('en-US', selectedHours <= 48
+				? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+				: { month: 'short', day: 'numeric', year: 'numeric' })
 			: ''
 	);
 
@@ -160,8 +162,12 @@
 			const bucketStart = Math.floor(p.x / bucketMs) * bucketMs;
 			buckets[bucketStart] = (buckets[bucketStart] ?? 0) + p.y;
 		}
+		// Place each bucket at its END time (matching server-side delta placement) and
+		// drop the current partial bucket whose end is still in the future.
+		const now = Date.now();
 		return Object.entries(buckets)
-			.map(([k, v]) => ({ x: Number(k), y: v }))
+			.map(([k, v]) => ({ x: Number(k) + bucketMs, y: v }))
+			.filter((p) => p.x <= now)
 			.sort((a, b) => a.x - b.x);
 	}
 
