@@ -259,6 +259,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
         range_value: str,
         mode: str = "total",
         aggregation: str | None = None,
+        compare_names: list[str] | None = None,
     ) -> None:
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -269,41 +270,64 @@ class StatsCommands(commands.GroupCog, name="stats"):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         async with self.bot.db() as session:
-            item = await media_repo.get_by_name(
-                session, interaction.guild.id, media_type, name
-            )
-            if item is None:
+            all_names = [name] + (compare_names or [])
+            items = []
+            missing: list[str] = []
+            for n in all_names:
+                it = await media_repo.get_by_name(session, interaction.guild.id, media_type, n)
+                if it is None:
+                    missing.append(n)
+                else:
+                    items.append(it)
+
+            if missing:
                 await interaction.followup.send(
-                    f"No {media_type} item found with name `{name}`.",
+                    f"No {media_type} item(s) found: {', '.join(f'`{m}`' for m in missing)}",
                     ephemeral=True,
                 )
                 return
 
             base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
-            date_param = datetime.now(UTC).isoformat().replace("+", "%2B")
-            url = (
-                f"{base_url}/api/media/{item.id}/chart"
-                f"?metric={metric}&date={date_param}"
-            )
 
-            if range_value == "all":
-                url += "&days=0"
-            elif range_value.endswith("h"):
-                url += f"&hours={range_value[:-1]}"
+            if compare_names:
+                ids_param = ",".join(str(it.id) for it in items)
+                url = f"{base_url}/api/media/compare/chart?ids={ids_param}&metric={metric}"
+                if range_value == "all":
+                    url += "&days=0"
+                elif range_value.endswith("h"):
+                    url += f"&hours={range_value[:-1]}"
+                else:
+                    url += f"&days={range_value[:-1]}"
+                if mode != "total":
+                    url += f"&mode={mode}"
+                if aggregation:
+                    url += f"&aggregation={aggregation}"
+                title = " vs ".join(it.name or it.title for it in items)
+                description = (
+                    f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
+                    + (f" · {aggregation}" if aggregation else "")
+                )
             else:
-                url += f"&days={range_value[:-1]}"
+                item = items[0]
+                date_param = datetime.now(UTC).isoformat().replace("+", "%2B")
+                url = f"{base_url}/api/media/{item.id}/chart?metric={metric}&date={date_param}"
+                if range_value == "all":
+                    url += "&days=0"
+                elif range_value.endswith("h"):
+                    url += f"&hours={range_value[:-1]}"
+                else:
+                    url += f"&days={range_value[:-1]}"
+                if mode != "total":
+                    url += f"&mode={mode}"
+                if aggregation:
+                    url += f"&aggregation={aggregation}"
+                title = item.title
+                description = (
+                    f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
+                    + (f" · {aggregation}" if aggregation else "")
+                )
 
-            if mode != "total":
-                url += f"&mode={mode}"
-            if aggregation:
-                url += f"&aggregation={aggregation}"
-
-            embed = discord.Embed(
-                title=item.title,
-                description=f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
-                + (f" · {aggregation}" if aggregation else ""),
-                color=discord.Color.blurple(),
-            )
+            embed = discord.Embed(title=title, description=description, color=discord.Color.blurple())
             embed.set_image(url=url)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
@@ -353,7 +377,16 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
 
     @youtube.command(name="chart", description="Chart a metric for a YouTube video.")
-    @app_commands.describe(name="The video's name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for resolution.")
+    @app_commands.describe(
+        name="The video's name.",
+        metric="Which metric to chart.",
+        range_="Time range to show.",
+        mode="Total values or per-tick delta.",
+        aggregation="Bucket size for resolution.",
+        compare1="A second video to compare.",
+        compare2="A third video to compare.",
+        compare3="A fourth video to compare.",
+    )
     @app_commands.choices(metric=YOUTUBE_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
     @app_commands.rename(metric="type", range_="range", aggregation="resolution")
     @requires_stats_access()
@@ -365,8 +398,12 @@ class StatsCommands(commands.GroupCog, name="stats"):
         range_: str = "24h",
         mode: str = "delta",
         aggregation: str | None = "hourly",
+        compare1: str | None = None,
+        compare2: str | None = None,
+        compare3: str | None = None,
     ) -> None:
-        await self._send_chart_embed(interaction, "youtube", name, metric, range_, mode, aggregation)
+        compare_names = [n for n in [compare1, compare2, compare3] if n]
+        await self._send_chart_embed(interaction, "youtube", name, metric, range_, mode, aggregation, compare_names or None)
 
     @youtube_chart.autocomplete("name")
     async def _youtube_chart_name_ac(
@@ -380,12 +417,39 @@ class StatsCommands(commands.GroupCog, name="stats"):
     ) -> list[app_commands.Choice[str]]:
         return await self._aggregation_autocomplete(interaction, current, "youtube")
 
+    @youtube_chart.autocomplete("compare1")
+    async def _youtube_chart_compare1_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._name_autocomplete(interaction, current, "youtube")
+
+    @youtube_chart.autocomplete("compare2")
+    async def _youtube_chart_compare2_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._name_autocomplete(interaction, current, "youtube")
+
+    @youtube_chart.autocomplete("compare3")
+    async def _youtube_chart_compare3_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._name_autocomplete(interaction, current, "youtube")
+
     # ------------------------------------------------------------------
     # Spotify chart
     # ------------------------------------------------------------------
 
     @spotify.command(name="chart", description="Chart a metric for a Spotify item.")
-    @app_commands.describe(name="The track or album name.", metric="Which metric to chart.", range_="Time range to show.", mode="Total values or per-tick delta.", aggregation="Bucket size for resolution.")
+    @app_commands.describe(
+        name="The track or album name.",
+        metric="Which metric to chart.",
+        range_="Time range to show.",
+        mode="Total values or per-tick delta.",
+        aggregation="Bucket size for resolution.",
+        compare1="A second item to compare.",
+        compare2="A third item to compare.",
+        compare3="A fourth item to compare.",
+    )
     @app_commands.choices(metric=SPOTIFY_TYPE_CHOICES, range_=RANGE_CHOICES, mode=MODE_CHOICES)
     @app_commands.rename(metric="type", range_="range", aggregation="resolution")
     @requires_stats_access()
@@ -397,8 +461,12 @@ class StatsCommands(commands.GroupCog, name="stats"):
         range_: str = "24h",
         mode: str = "delta",
         aggregation: str | None = "hourly",
+        compare1: str | None = None,
+        compare2: str | None = None,
+        compare3: str | None = None,
     ) -> None:
-        await self._send_chart_embed(interaction, "spotify", name, metric, range_, mode, aggregation)
+        compare_names = [n for n in [compare1, compare2, compare3] if n]
+        await self._send_chart_embed(interaction, "spotify", name, metric, range_, mode, aggregation, compare_names or None)
 
     @spotify_chart.autocomplete("name")
     async def _spotify_chart_name_ac(
@@ -411,6 +479,24 @@ class StatsCommands(commands.GroupCog, name="stats"):
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         return await self._aggregation_autocomplete(interaction, current, "spotify")
+
+    @spotify_chart.autocomplete("compare1")
+    async def _spotify_chart_compare1_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._name_autocomplete(interaction, current, "spotify")
+
+    @spotify_chart.autocomplete("compare2")
+    async def _spotify_chart_compare2_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._name_autocomplete(interaction, current, "spotify")
+
+    @spotify_chart.autocomplete("compare3")
+    async def _spotify_chart_compare3_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return await self._name_autocomplete(interaction, current, "spotify")
 
 
 async def setup(bot: StankBot) -> None:

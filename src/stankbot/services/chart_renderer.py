@@ -239,6 +239,130 @@ def render_media_chart(
     return _save_bytes(img)
 
 
+_SERIES_COLORS = [
+    "#3b82f6",  # blue
+    "#7c3aed",  # purple
+    "#10b981",  # green
+    "#f59e0b",  # amber
+    "#ef4444",  # red
+    "#06b6d4",  # cyan
+]
+
+
+def render_compare_chart(
+    *,
+    series: list[dict],  # [{"label": str, "points": [{"x": str, "y": int|float}]}]
+    title: str,
+    metric_label: str,
+    width: int = WIDTH,
+    height: int = HEIGHT,
+) -> bytes:
+    """Render a multi-series comparison chart as PNG bytes."""
+    # Parse all series into (datetime, float) tuples
+    parsed: list[list[tuple[datetime, float]]] = []
+    for s in series:
+        pts: list[tuple[datetime, float]] = []
+        for p in s.get("points", []):
+            raw = p["x"]
+            if isinstance(raw, datetime):
+                dt = raw.astimezone(UTC)
+            else:
+                dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+            pts.append((dt, float(p["y"])))
+        parsed.append(pts)
+
+    valid = [(s, pts) for s, pts in zip(series, parsed) if pts]
+    img = Image.new("RGB", (width, height), BG)
+    draw = ImageDraw.Draw(img)
+
+    if not valid:
+        draw.text((width / 2 - 80, height / 2), "No data available", fill=LABEL_COLOR, font=_FONT_LABEL)
+        draw.text((PAD_LEFT, 12), title, fill=TITLE_COLOR, font=_FONT_TITLE)
+        return _save_bytes(img)
+
+    all_dts = [dt for _, pts in valid for dt, _ in pts]
+    all_vals = [v for _, pts in valid for _, v in pts]
+    tmin, tmax = min(all_dts), max(all_dts)
+    vmin, vmax = min(all_vals), max(all_vals)
+
+    t_span = (tmax - tmin).total_seconds() or 60.0
+    y_floor, y_ceil, num_grid = _nice_range(vmin, vmax)
+    y_span = y_ceil - y_floor
+
+    chart_right = width - PAD_RIGHT
+
+    def px_x(dt: datetime) -> float:
+        return CHART_LEFT + (dt - tmin).total_seconds() / t_span * CHART_W
+
+    def px_y(val: float) -> float:
+        return CHART_BOTTOM - (val - y_floor) / y_span * CHART_H
+
+    # Grid + Y labels
+    step = y_span / num_grid if num_grid > 0 else y_span
+    for i in range(num_grid + 1):
+        val = y_floor + i * step
+        y = px_y(val)
+        draw.line([(CHART_LEFT, y), (chart_right, y)], fill=GRID, width=1)
+        lbl = _format_number(val)
+        tw = _FONT_LABEL_AVG_W * len(lbl)
+        draw.text((CHART_LEFT - tw - 8, y - _FONT_LABEL_AVG_W * 0.6), lbl, fill=LABEL_COLOR, font=_FONT_LABEL)
+
+    # X-axis labels
+    show_date = t_span >= 86400
+    if show_date:
+        from datetime import timedelta as td
+        day = datetime(tmin.year, tmin.month, tmin.day, tzinfo=tmin.tzinfo)
+        while day <= tmax:
+            cx = px_x(day)
+            if CHART_LEFT <= cx <= chart_right:
+                draw.line([(int(cx), CHART_TOP), (int(cx), CHART_BOTTOM)], fill=GRID, width=1)
+                lbl = day.strftime("%b %d")
+                tw = _FONT_TICK_AVG_W * len(lbl)
+                draw.text((int(cx) - tw // 2, CHART_BOTTOM + 4), lbl, fill=LABEL_COLOR, font=_FONT_TICK)
+            day += td(days=1)
+    if t_span <= 86400 * 2:
+        from datetime import timedelta as td
+        tick_dt = tmin.replace(minute=0, second=0, microsecond=0)
+        while tick_dt <= tmax:
+            cx = px_x(tick_dt)
+            if CHART_LEFT <= cx <= chart_right:
+                lbl = tick_dt.strftime("%b %d %H:%M" if show_date else "%H:%M")
+                tw = _FONT_TICK_AVG_W * len(lbl)
+                draw.text((int(cx) - tw // 2, CHART_BOTTOM + 18), lbl, fill=LABEL_COLOR, font=_FONT_TICK)
+            tick_dt += td(hours=2) if t_span > 43200 else td(hours=1)
+
+    # Series lines + dots
+    for idx, (s_meta, pts) in enumerate(valid):
+        color = _SERIES_COLORS[idx % len(_SERIES_COLORS)]
+        screen = [(px_x(dt), px_y(v)) for dt, v in pts]
+        if len(screen) >= 2:
+            for i in range(len(screen) - 1):
+                draw.line([screen[i], screen[i + 1]], fill=color, width=2)
+        for cx, cy in screen:
+            draw.ellipse([cx - 3, cy - 3, cx + 3, cy + 3], fill=color)
+
+    # Legend — bottom-right corner of chart area
+    legend_item_w = 120
+    n = len(valid)
+    leg_x = chart_right - n * legend_item_w
+    leg_y = CHART_BOTTOM - 22
+    for idx, (s_meta, _) in enumerate(valid):
+        color = _SERIES_COLORS[idx % len(_SERIES_COLORS)]
+        label = (s_meta.get("label") or f"Series {idx + 1}")[:14]
+        lx = leg_x + idx * legend_item_w
+        draw.rectangle([lx - 2, leg_y - 2, lx + legend_item_w - 4, leg_y + 16], fill=BG)
+        draw.ellipse([lx, leg_y + 2, lx + 10, leg_y + 12], fill=color)
+        draw.text((lx + 14, leg_y), label, fill=LABEL_COLOR, font=_FONT_TICK)
+
+    # Title + Y-axis label
+    draw.text((PAD_LEFT, 12), title, fill=TITLE_COLOR, font=_FONT_TITLE)
+    draw.text((4, CHART_TOP + CHART_H // 2 - 8), metric_label, fill=LABEL_COLOR, font=_FONT_LABEL)
+
+    return _save_bytes(img)
+
+
 def _save_bytes(img: Image.Image) -> bytes:
     """Encode image to PNG bytes in memory."""
     import io

@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.repositories import media as media_repo
-from stankbot.services.chart_renderer import render_media_chart
+from stankbot.services.chart_renderer import render_compare_chart, render_media_chart
 from stankbot.services.media_service import MediaService, _aggregate_snapshots, _floor_to_bucket
 from stankbot.services.permission_service import PermissionService
 from stankbot.services.settings_service import Keys, SettingsService
@@ -116,6 +116,142 @@ async def compare_media(
         aggregation=aggregation,
     )
     return MsgPackResponse(data, request)
+
+
+@router.get("/compare/chart", include_in_schema=False)
+async def get_compare_chart(
+    request: Request,
+    ids: str = Query(...),
+    metric: str = Query("view_count"),
+    days: int | None = Query(None, ge=0, le=365),
+    hours: int | None = Query(None, ge=1, le=8760),
+    mode: str = Query("delta"),
+    aggregation: str | None = Query(None, pattern=r"^(5min|15min|30min|hourly|daily|weekly|monthly)$"),
+    session: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    try:
+        media_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="ids must be comma-separated integers") from exc
+    if len(media_ids) < 2:
+        raise HTTPException(status_code=400, detail="at least 2 ids required")
+    media_ids = media_ids[:10]
+
+    reference_date = datetime.now(UTC)
+    if hours is not None:
+        since: datetime | None = reference_date - timedelta(hours=hours)
+        range_hours = float(hours)
+    elif days is not None and days > 0:
+        since = reference_date - timedelta(days=days)
+        range_hours = float(days * 24)
+    else:
+        since = None
+        range_hours = float(7 * 24)
+
+    snaps_by_id = await media_repo.get_comparison_snapshots(session, media_ids, metric, since)
+
+    def _ensure_utc(dt: datetime) -> datetime:
+        return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+    all_snaps_flat = [s for snaps in snaps_by_id.values() for s in snaps]
+
+    # Auto-select aggregation (same logic as single chart)
+    effective_aggregation = aggregation
+    if not effective_aggregation and len(all_snaps_flat) >= 2:
+        all_times = sorted(_ensure_utc(s.fetched_at) for s in all_snaps_flat)
+        intervals_ms = [
+            (all_times[i + 1] - all_times[i]).total_seconds() * 1000
+            for i in range(len(all_times) - 1)
+            if all_times[i + 1] != all_times[i]
+        ]
+        if intervals_ms:
+            min_interval_ms = max(60_000.0, min(intervals_ms))
+            ideal_ms = (range_hours * 3_600_000) / 24
+            _BUCKETS_CMP = [
+                (300_000, "5min"),
+                (900_000, "15min"),
+                (1_800_000, "30min"),
+                (3_600_000, "hourly"),
+                (86_400_000, "daily"),
+                (604_800_000, "weekly"),
+                (2_592_000_000, "monthly"),
+            ]
+            eligible = [(ms, name) for ms, name in _BUCKETS_CMP if ms >= min_interval_ms]
+            for bucket_ms, bucket_name in eligible:
+                if bucket_ms >= ideal_ms:
+                    effective_aggregation = bucket_name
+                    break
+            if not effective_aggregation and eligible:
+                effective_aggregation = eligible[-1][1]
+
+    render_mode = mode if mode in ("total", "delta") else "delta"
+    registry = request.app.state.media_registry
+    series: list[dict[str, Any]] = []
+    metric_label = metric
+
+    for mid in media_ids:
+        item = await media_repo.get(session, mid)
+        if item is None:
+            continue
+        snaps = snaps_by_id.get(mid, [])
+
+        if metric_label == metric and item.media_type:
+            provider = registry.get(item.media_type)
+            if provider:
+                for m in provider.metrics:
+                    if m.key == metric:
+                        metric_label = m.label
+                        break
+
+        if effective_aggregation and snaps:
+            aggregated = _aggregate_snapshots(snaps, effective_aggregation, "total")
+            if render_mode == "delta" and aggregated:
+                ref_utc = reference_date if reference_date.tzinfo else reference_date.replace(tzinfo=UTC)
+                current_bucket = _floor_to_bucket(ref_utc, effective_aggregation)
+                last_bucket = datetime.fromisoformat(aggregated[-1]["fetched_at"])
+                if last_bucket.tzinfo is None:
+                    last_bucket = last_bucket.replace(tzinfo=UTC)
+                if last_bucket >= current_bucket:
+                    aggregated = aggregated[:-1]
+                raw = [{"x": p["fetched_at"], "y": float(p["value"])} for p in aggregated]
+                pts = [{"x": raw[i]["x"], "y": raw[i]["y"] - raw[i - 1]["y"]} for i in range(1, len(raw))]
+            else:
+                pts = [{"x": p["fetched_at"], "y": float(p["value"])} for p in aggregated]
+        else:
+            raw_pts = [{"x": _ensure_utc(s.fetched_at).isoformat(), "y": float(s.value)} for s in snaps]
+            if render_mode == "delta" and len(raw_pts) >= 2:
+                pts = [{"x": raw_pts[i]["x"], "y": raw_pts[i]["y"] - raw_pts[i - 1]["y"]} for i in range(1, len(raw_pts))]
+            else:
+                pts = raw_pts
+
+        series.append({"label": item.name or item.title or f"Item {mid}", "points": pts})
+
+    if not any(s["points"] for s in series):
+        raise HTTPException(status_code=404, detail="No data available for comparison")
+
+    latest_ts = max(
+        (_ensure_utc(s.fetched_at).timestamp() for s in all_snaps_flat),
+        default=reference_date.timestamp(),
+    )
+    ids_key = "_".join(str(i) for i in sorted(media_ids))
+    range_key = f"h{hours}" if hours is not None else f"d{days}" if days is not None else "all"
+    agg_key = f"_{effective_aggregation}" if effective_aggregation else ""
+    cache_dir = CHART_CACHE_DIR
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"cmp_{ids_key}_{metric}_{range_key}{agg_key}_{int(latest_ts)}_{render_mode}.png"
+
+    if cache_path.exists():
+        return FileResponse(
+            cache_path, media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    buf = render_compare_chart(series=series, title=metric_label, metric_label=metric_label)
+    cache_path.write_bytes(buf)
+    return FileResponse(
+        cache_path, media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 _PROVIDER_INTERVAL_KEYS: dict[str, str] = {
