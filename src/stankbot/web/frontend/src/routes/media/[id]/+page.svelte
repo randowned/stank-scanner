@@ -267,8 +267,19 @@
 	}
 
 	const serverAggregations = new Set(['5min', '15min', '30min', 'hourly', 'daily', 'weekly', 'monthly']);
-	const useServerAggregation = $derived(serverAggregations.has(selectedAggregation));
 
+	// When "auto" is selected, resolve it to a concrete aggregation name so it
+	// routes through the same server-side alignment-filtered path as explicit selections.
+	// Non-auto selections pass through unchanged; null means no aggregation (raw data).
+	const resolvedAggregation = $derived.by(() => {
+		if (selectedAggregation !== 'auto') return selectedAggregation;
+		if (resolutionBucketMs === null) return null;
+		return Object.entries(_AGG_BUCKET_MS).find(
+			([k, ms]) => ms === resolutionBucketMs && serverAggregations.has(k)
+		)?.[0] ?? null;
+	});
+
+	const useServerAggregation = $derived(serverAggregations.has(resolvedAggregation ?? ''));
 
 	function buildHistoryUrl(): string {
 		if (!item) return '';
@@ -280,7 +291,7 @@
 			url = `/api/media/${item.id}/history?metric=${selectedMetric}&days=${days}`;
 		}
 		if (useServerAggregation) {
-			url += `&aggregation=${selectedAggregation}&mode=${comparisonMode}`;
+			url += `&aggregation=${resolvedAggregation}&mode=${comparisonMode}`;
 		}
 		return url;
 	}
@@ -307,7 +318,7 @@
 		try {
 			const allIds = [item.id, ...compareIds.map(Number)];
 			const deltaParam = comparisonMode === 'delta' ? '&delta=true' : '&delta=false';
-			const aggParam = useServerAggregation ? `&aggregation=${selectedAggregation}` : '';
+			const aggParam = useServerAggregation ? `&aggregation=${resolvedAggregation}` : '';
 			let rangeParam: string;
 			if (selectedHours < 24) {
 				rangeParam = `&hours=${selectedHours}`;

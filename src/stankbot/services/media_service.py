@@ -575,16 +575,14 @@ class MediaService:
         return mr
 
     async def backfill_alignment_masks(self) -> int:
-        """Compute and set alignment_mask on all snapshots where it is NULL.
+        """Recompute alignment_mask on every snapshot row.
 
-        Returns the number of rows updated.
+        Runs against all rows (not just NULLs) so previously incorrect values
+        are also corrected.  Returns the number of rows updated.
         """
         from sqlalchemy import case, update
 
-        stmt = (
-            select(MetricSnapshot.id, MetricSnapshot.fetched_at)
-            .where(MetricSnapshot.alignment_mask.is_(None))
-        )
+        stmt = select(MetricSnapshot.id, MetricSnapshot.fetched_at)
         rows = (await self.session.execute(stmt)).all()
         if not rows:
             return 0

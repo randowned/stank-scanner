@@ -363,7 +363,7 @@ async def backfill_alignment_mask(
     session: AsyncSession = Depends(get_db),
     _user: dict[str, Any] = Depends(require_guild_admin),
 ) -> MsgPackResponse:
-    """One-time backfill: compute alignment_mask for all NULL snapshots."""
+    """Recompute alignment_mask on every snapshot row (including previously set values)."""
     from stankbot.services.media_service import MediaService
     registry = request.app.state.media_registry
     svc = MediaService(session=session, registry=registry)
