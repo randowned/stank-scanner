@@ -162,12 +162,11 @@
 			const bucketStart = Math.floor(p.x / bucketMs) * bucketMs;
 			buckets[bucketStart] = (buckets[bucketStart] ?? 0) + p.y;
 		}
-		// Place each bucket at its END time (matching server-side delta placement) and
-		// drop the current partial bucket whose end is still in the future.
+		// Drop the current incomplete bucket (its window hasn't closed yet).
 		const now = Date.now();
 		return Object.entries(buckets)
-			.map(([k, v]) => ({ x: Number(k) + bucketMs, y: v }))
-			.filter((p) => p.x <= now)
+			.map(([k, v]) => ({ x: Number(k), y: v }))
+			.filter((p) => p.x + bucketMs <= now)
 			.sort((a, b) => a.x - b.x);
 	}
 
@@ -278,6 +277,7 @@
 	async function loadHistory() {
 		if (!item) return;
 		loadingHistory = true;
+		history = [];
 		try {
 			const res = await apiFetch<{ history: MetricSnapshot[] }>(buildHistoryUrl());
 			history = res.history;
