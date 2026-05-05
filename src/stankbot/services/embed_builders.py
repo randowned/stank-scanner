@@ -364,7 +364,7 @@ async def build_media_embed(
 
     def _fmt_relative(iso: str | None) -> str:
         if not iso:
-            return "unknown"
+            return "\u2014"
         try:
             dt = datetime.fromisoformat(iso)
             diff = datetime.now(UTC) - dt
@@ -376,7 +376,7 @@ async def build_media_embed(
                 return f"{int(diff.total_seconds() // 3600)}h ago"
             return f"{diff.days}d ago"
         except (ValueError, TypeError):
-            return "unknown"
+            return "\u2014"
 
     # Day-over-day deltas
     yesterday = datetime.now(UTC) - timedelta(hours=24)
