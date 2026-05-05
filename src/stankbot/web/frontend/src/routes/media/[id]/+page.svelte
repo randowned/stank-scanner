@@ -162,7 +162,9 @@
 	$effect(() => {
 		const raw = $page.url.searchParams.get('compare');
 		if (raw) {
-			compareIds = raw.split(',').map((s) => s.trim()).filter(Boolean);
+			const ids = raw.split(',').map((s) => s.trim()).filter(Boolean);
+			const baseId = String(data.mediaId);
+			compareIds = ids.filter((id) => id !== baseId);
 		}
 	});
 
