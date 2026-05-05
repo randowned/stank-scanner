@@ -169,7 +169,7 @@ class SpotifyProvider(MediaProvider):
         session: Any,
         guild_id: int,
     ) -> bool:
-        return False
+        return self.is_configured()
 
     async def fetch_metrics(self, external_ids: list[str]) -> list[MetricResult]:
         return [
