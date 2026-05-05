@@ -335,7 +335,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
                     f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
                     + (f" · {aggregation}" if aggregation else "")
                 )
-                compare_ids = ",".join(str(it.id) for it in items)
+                compare_ids = ",".join(str(it.id) for it in items[1:])
                 media_url = f"{base_url}/media/{items[0].id}?compare={compare_ids}&metric={metric}"
             else:
                 item = items[0]
