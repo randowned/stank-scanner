@@ -323,6 +323,7 @@ async def build_media_embed(
     last_fetched_at: str | None,
     guild_id: int,
     session: AsyncSession,
+    base_url: str = "",
 ) -> discord.Embed:
     """Build a media item embed from the guild's per-provider template.
 
@@ -412,7 +413,8 @@ async def build_media_embed(
     }
 
     if media_type == "youtube":
-        variables["url"] = f"https://youtube.com/watch?v={metrics.get('external_id', '')}"
+        variables["provider_url"] = f"https://youtube.com/watch?v={metrics.get('external_id', '')}"
+        variables["url"] = f"{base_url}/media/{media_item_id}" if base_url else variables["provider_url"]
         variables["view_count"] = _fmt_num(view_count)
         variables["like_count"] = _fmt_num(like_count)
         variables["comment_count"] = _fmt_num(comment_count)
@@ -421,7 +423,8 @@ async def build_media_embed(
         variables["comment_count_delta"] = await _delta("comment_count", comment_count)
         template_key = "youtube_media_embed"
     else:
-        variables["url"] = "https://open.spotify.com/" + media_type + "/" + str(metrics.get('external_id', ''))
+        variables["provider_url"] = "https://open.spotify.com/" + media_type + "/" + str(metrics.get('external_id', ''))
+        variables["url"] = f"{base_url}/media/{media_item_id}" if base_url else variables["provider_url"]
         variables["playcount"] = _fmt_num(playcount)
         variables["spotify_type"] = media_type
         variables["playcount_delta"] = await _delta("playcount", playcount)

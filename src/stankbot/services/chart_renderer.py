@@ -55,7 +55,7 @@ _FONT_TICK_AVG_W = _FONT_TICK.getlength("0") if hasattr(_FONT_TICK, "getlength")
 
 WIDTH = 1200
 HEIGHT = 675
-PAD_LEFT = 110
+PAD_LEFT = 80
 PAD_RIGHT = 30
 PAD_TOP = 60
 PAD_BOTTOM = 80
@@ -234,7 +234,6 @@ def render_media_chart(
     # Title + Y-axis label
     # ------------------------------------------------------------------
     draw.text((PAD_LEFT, 12), title, fill=TITLE_COLOR, font=_FONT_TITLE)
-    draw.text((4, CHART_TOP + CHART_H // 2 - 8), metric_label, fill=LABEL_COLOR, font=_FONT_LABEL)
 
     return _save_bytes(img)
 
@@ -358,7 +357,6 @@ def render_compare_chart(
 
     # Title + Y-axis label
     draw.text((PAD_LEFT, 12), title, fill=TITLE_COLOR, font=_FONT_TITLE)
-    draw.text((4, CHART_TOP + CHART_H // 2 - 8), metric_label, fill=LABEL_COLOR, font=_FONT_LABEL)
 
     return _save_bytes(img)
 

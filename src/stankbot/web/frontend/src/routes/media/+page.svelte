@@ -33,11 +33,10 @@
 	let searchQuery = $state<string>('');
 	let sortKey = $state<string>('published_desc');
 
-	const typeTabs = [
+	const typeTabs = $derived([
 		{ value: '', label: 'All' },
-		{ value: 'youtube', label: 'YouTube' },
-		{ value: 'spotify', label: 'Spotify' }
-	];
+		...providers.map((p) => ({ value: p.type, label: p.label }))
+	]);
 
 	const sortOptions = [
 		{ value: 'published_desc', label: 'Newest', icon: '🆕' },

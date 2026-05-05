@@ -238,6 +238,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
                 else None
             )
 
+            base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
+
             embed = await build_media_embed(
                 media_type=media_type,
                 media_item_id=item.id,
@@ -251,6 +253,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
                 last_fetched_at=last_fetched,
                 guild_id=interaction.guild.id,
                 session=session,
+                base_url=base_url,
             )
 
         await interaction.followup.send(embed=embed, ephemeral=ephemeral)
@@ -312,6 +315,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
                     f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
                     + (f" · {aggregation}" if aggregation else "")
                 )
+                compare_ids = ",".join(str(it.id) for it in items)
+                media_url = f"{base_url}/media/{items[0].id}?compare={compare_ids}&metric={metric}"
             else:
                 item = items[0]
                 date_param = datetime.now(UTC).isoformat().replace("+", "%2B")
@@ -331,8 +336,9 @@ class StatsCommands(commands.GroupCog, name="stats"):
                     f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
                     + (f" · {aggregation}" if aggregation else "")
                 )
+                media_url = f"{base_url}/media/{item.id}"
 
-            embed = discord.Embed(title=title, description=description, color=discord.Color.blurple())
+            embed = discord.Embed(title=title, url=media_url, description=description, color=discord.Color.blurple())
             embed.set_image(url=url)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
