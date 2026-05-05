@@ -120,9 +120,11 @@ class StatsCommands(commands.GroupCog, name="stats"):
         interaction: discord.Interaction,
         current: str,
         media_type: str,
+        exclude_names: set[str] | None = None,
     ) -> list[app_commands.Choice[str]]:
         if interaction.guild is None:
             return []
+        exclude = exclude_names or set()
         async with self.bot.db() as session:
             settings = SettingsService(session)
             enabled = await settings.get(
@@ -135,7 +137,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
             )
         choices: list[app_commands.Choice[str]] = []
         for it in items:
-            if not it.name:
+            if not it.name or it.name in exclude:
                 continue
             if current.lower() in it.name.lower():
                 choices.append(
@@ -450,19 +452,27 @@ class StatsCommands(commands.GroupCog, name="stats"):
     async def _youtube_chart_compare1_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._name_autocomplete(interaction, current, "youtube")
+        name = getattr(interaction.namespace, "name", "")
+        return await self._name_autocomplete(interaction, current, "youtube", {name} if name else None)
 
     @youtube_chart.autocomplete("compare2")
     async def _youtube_chart_compare2_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._name_autocomplete(interaction, current, "youtube")
+        name = getattr(interaction.namespace, "name", "")
+        c1 = getattr(interaction.namespace, "compare1", "")
+        exclude = {x for x in (name, c1) if x}
+        return await self._name_autocomplete(interaction, current, "youtube", exclude if exclude else None)
 
     @youtube_chart.autocomplete("compare3")
     async def _youtube_chart_compare3_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._name_autocomplete(interaction, current, "youtube")
+        name = getattr(interaction.namespace, "name", "")
+        c1 = getattr(interaction.namespace, "compare1", "")
+        c2 = getattr(interaction.namespace, "compare2", "")
+        exclude = {x for x in (name, c1, c2) if x}
+        return await self._name_autocomplete(interaction, current, "youtube", exclude if exclude else None)
 
     # ------------------------------------------------------------------
     # Spotify chart
@@ -513,19 +523,27 @@ class StatsCommands(commands.GroupCog, name="stats"):
     async def _spotify_chart_compare1_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._name_autocomplete(interaction, current, "spotify")
+        name = getattr(interaction.namespace, "name", "")
+        return await self._name_autocomplete(interaction, current, "spotify", {name} if name else None)
 
     @spotify_chart.autocomplete("compare2")
     async def _spotify_chart_compare2_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._name_autocomplete(interaction, current, "spotify")
+        name = getattr(interaction.namespace, "name", "")
+        c1 = getattr(interaction.namespace, "compare1", "")
+        exclude = {x for x in (name, c1) if x}
+        return await self._name_autocomplete(interaction, current, "spotify", exclude if exclude else None)
 
     @spotify_chart.autocomplete("compare3")
     async def _spotify_chart_compare3_ac(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await self._name_autocomplete(interaction, current, "spotify")
+        name = getattr(interaction.namespace, "name", "")
+        c1 = getattr(interaction.namespace, "compare1", "")
+        c2 = getattr(interaction.namespace, "compare2", "")
+        exclude = {x for x in (name, c1, c2) if x}
+        return await self._name_autocomplete(interaction, current, "spotify", exclude if exclude else None)
 
 
 async def setup(bot: StankBot) -> None:
