@@ -275,7 +275,25 @@ class StatsCommands(commands.GroupCog, name="stats"):
             )
             return
 
-        await interaction.response.defer(thinking=True, ephemeral=True)
+        async with self.bot.db() as session:
+            settings = SettingsService(session)
+            enabled = await settings.get(
+                interaction.guild.id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
+            )
+            if media_type not in enabled:
+                await interaction.response.send_message(
+                    f"{media_type.capitalize()} stats are currently disabled.", ephemeral=True
+                )
+                return
+            ephemeral = bool(
+                await settings.get(
+                    interaction.guild.id,
+                    Keys.MEDIA_REPLIES_EPHEMERAL,
+                    True,
+                )
+            )
+
+        await interaction.response.defer(thinking=True, ephemeral=ephemeral)
 
         async with self.bot.db() as session:
             all_names = [name] + (compare_names or [])
@@ -341,7 +359,7 @@ class StatsCommands(commands.GroupCog, name="stats"):
             embed = discord.Embed(title=title, url=media_url, description=description, color=discord.Color.blurple())
             embed.set_image(url=url)
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=ephemeral)
 
     # ------------------------------------------------------------------
     # YouTube info
