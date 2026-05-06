@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.repositories import audit_log as audit_repo
 from stankbot.db.repositories import media as media_repo
+from stankbot.services.announcement_service import broadcast_media_milestone
+from stankbot.services.embed_builders import build_media_milestone_embed
 from stankbot.services.media_service import MediaService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_admin
@@ -141,6 +143,12 @@ async def add_media(
     media_id = item["id"]
     result = await svc.refresh_single(media_id)
 
+    # Get cached metrics for the audit log
+    initial_metrics: dict[str, Any] | None = None
+    if result.refreshed > 0:
+        cached = await media_repo.get_metric_cache(session, media_id)
+        initial_metrics = {k: v.get("value") for k, v in cached.items() if isinstance(v, dict)}
+
     await audit_repo.append(
         session,
         guild_id=guild_id,
@@ -150,7 +158,7 @@ async def add_media(
             "media_type": payload.media_type,
             "external_id": payload.external_id,
             "media_id": media_id,
-            "initial_metrics": result.values if result and not result.error else None,
+            "initial_metrics": initial_metrics,
         },
     )
 
@@ -262,10 +270,8 @@ async def refresh_single(
 ) -> MsgPackResponse:
     svc = MediaService(session=session, registry=request.app.state.media_registry)
     result = await svc.refresh_single(media_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Media item not found")
-    if result.error:
-        raise HTTPException(status_code=502, detail=f"Refresh failed: {result.error}")
+    if result.failed:
+        raise HTTPException(status_code=502, detail=f"Refresh failed: {result.errors[0] if result.errors else 'Unknown error'}")
 
     await audit_repo.append(
         session,
@@ -274,7 +280,11 @@ async def refresh_single(
         action="media.refresh",
         payload={"media_item_id": media_id},
     )
-    return _ok(request, {"metrics": result.values})
+
+    # Milestone announcements
+    await _broadcast_milestones(request, session, guild_id, result.milestones)
+
+    return _ok(request, {"refreshed": result.refreshed, "errors": result.errors[:10]})
 
 
 @router.post("/refresh-all")
@@ -294,12 +304,17 @@ async def refresh_all(
         action="media.refresh_all",
         payload={"refreshed": result.refreshed, "failed": result.failed},
     )
+
+    # Milestone announcements
+    await _broadcast_milestones(request, session, guild_id, result.milestones)
+
     return _ok(
         request,
         {
             "refreshed": result.refreshed,
             "failed": result.failed,
             "errors": result.errors[:10],
+            "milestones": len(result.milestones),
         },
     )
 
@@ -315,6 +330,8 @@ class MediaSettingsPayload(BaseModel):
     replies_ephemeral: bool | None = None
     admin_only: bool | None = None
     providers_enabled: list[str] | None = None
+    announce_milestones: bool | None = None
+    announce_channel_id: int | None = None
 
 
 @router.post("/settings")
@@ -350,6 +367,12 @@ async def update_media_settings(
     if payload.providers_enabled is not None:
         await svc.set(guild_id, Keys.MEDIA_PROVIDERS_ENABLED, payload.providers_enabled)
         audit_payload["providers_enabled"] = payload.providers_enabled
+    if payload.announce_milestones is not None:
+        await svc.set(guild_id, Keys.MEDIA_ANNOUNCE_MILESTONES, payload.announce_milestones)
+        audit_payload["announce_milestones"] = payload.announce_milestones
+    if payload.announce_channel_id is not None:
+        await svc.set(guild_id, Keys.MEDIA_ANNOUNCE_CHANNEL_ID, payload.announce_channel_id)
+        audit_payload["announce_channel_id"] = payload.announce_channel_id
 
     if audit_payload:
         await audit_repo.append(
@@ -374,3 +397,73 @@ async def backfill_alignment_mask(
     svc = MediaService(session=session, registry=registry)
     updated = await svc.backfill_alignment_masks()
     return MsgPackResponse({"updated": updated}, request)
+
+
+async def _broadcast_milestones(
+    request: Request,
+    session: AsyncSession,
+    guild_id: int,
+    milestones: list[Any],
+) -> None:
+    if not milestones:
+        return
+    settings_svc = SettingsService(session)
+    milestones_enabled = await settings_svc.get(guild_id, Keys.MEDIA_ANNOUNCE_MILESTONES, True)
+    if not milestones_enabled:
+        return
+    media_channel = await settings_svc.get(guild_id, Keys.MEDIA_ANNOUNCE_CHANNEL_ID, None)
+    bot = getattr(request.app.state, "bot", None)
+    if bot is None:
+        return
+
+    registry = request.app.state.media_registry
+    base_url = bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
+
+    for minfo in milestones:
+        other_parts: list[str] = []
+        cache = await media_repo.get_metric_cache(session, minfo.media_item_id)
+        provider = registry.get(minfo.media_type)
+        if provider:
+            for mdef in provider.metrics:
+                if mdef.key == minfo.metric_key:
+                    continue
+                mv = cache.get(mdef.key, {})
+                if isinstance(mv, dict) and int(mv.get("value", 0)):
+                    other_parts.append(f"{mdef.icon} {_fmt_compact_media(int(mv['value']))}")
+        other_metrics = "  \u00b7  ".join(other_parts) if other_parts else "\u2014"
+
+        chart_url = (
+            f"{base_url}/api/media/{minfo.media_item_id}/chart"
+            f"?metric={minfo.metric_key}&hours=12&mode=total&aggregation=30min"
+        )
+        embed = await build_media_milestone_embed(
+            info=minfo,
+            other_metrics=other_metrics,
+            chart_url=chart_url,
+            guild_id=guild_id,
+            session=session,
+            base_url=base_url,
+        )
+        await broadcast_media_milestone(
+            session,
+            bot,
+            guild_id=guild_id,
+            embed=embed,
+            media_announce_channel_id=media_channel,
+            milestones_enabled=True,
+        )
+        log.info(
+            "MediaMilestone: guild=%d item=%d metric=%s milestone=%s announced via admin refresh",
+            guild_id, minfo.media_item_id, minfo.metric_key,
+            f"{minfo.milestone_value:,}",
+        )
+
+
+def _fmt_compact_media(n: int) -> str:
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f}B"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)

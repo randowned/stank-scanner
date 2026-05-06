@@ -13,6 +13,7 @@ from discord.ext import commands
 from stankbot.cogs._checks import requires_admin
 from stankbot.db.repositories import altars as altars_repo
 from stankbot.services import embed_builders
+from stankbot.services.media_service import MilestoneInfo
 
 if __name__ == "__main__":
     pass
@@ -36,6 +37,8 @@ class PreviewOnly(commands.Cog, name="stank-preview"):
             app_commands.Choice(name="chain-break", value="chain-break"),
             app_commands.Choice(name="new-session", value="new-session"),
             app_commands.Choice(name="cooldown", value="cooldown"),
+            app_commands.Choice(name="media-milestone (YouTube)", value="media-milestone-yt"),
+            app_commands.Choice(name="media-milestone (Spotify)", value="media-milestone-sp"),
         ]
     )
     @requires_admin()
@@ -113,6 +116,36 @@ class PreviewOnly(commands.Cog, name="stank-preview"):
                     board_url=board_url,
                     session=session,
                     guild_id=guild.id,
+                )
+            elif value in ("media-milestone-yt", "media-milestone-sp"):
+                base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
+                is_yt = value == "media-milestone-yt"
+                media_type = "youtube" if is_yt else "spotify"
+                external_id = "dQw4w9WgXcQ" if is_yt else "0VjIjW4GlUZAMYd2vXMi3b"
+                minfo = MilestoneInfo(
+                    media_item_id=1,
+                    media_type=media_type,
+                    metric_key="view_count" if is_yt else "playcount",
+                    milestone_value=10_000_000,
+                    new_value=10_000_000,
+                    title="Never Gonna Give You Up" if is_yt else "Blinding Lights",
+                    channel_name="Rick Astley" if is_yt else "The Weeknd",
+                    thumbnail_url="https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" if is_yt else "https://i.scdn.co/image/ab67616d0000b273b51a0a46c7d09c4c2b3b4c00",
+                    name="sample-video" if is_yt else "sample-track",
+                    external_id=external_id,
+                )
+                other_metrics = "\U0001f44d 1.2M  \u00b7  \U0001f4ac 45K  \u00b7  \u23f1 3m 42s" if is_yt else "\U0001f3b5 track"
+                chart_url = (
+                    f"{base_url}/api/media/{minfo.media_item_id}/chart"
+                    f"?metric={minfo.metric_key}&hours=12&mode=total&aggregation=30min"
+                )
+                embed = await embed_builders.build_media_milestone_embed(
+                    info=minfo,
+                    other_metrics=other_metrics,
+                    chart_url=chart_url,
+                    guild_id=guild.id,
+                    session=session,
+                    base_url=base_url,
                 )
             else:
                 embed = await embed_builders.build_cooldown_embed(

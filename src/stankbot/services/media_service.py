@@ -16,10 +16,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import MetricSnapshot
 from stankbot.db.repositories import media as media_repo
-from stankbot.services.media_providers.base import MetricResult
 from stankbot.services.media_providers.registry import MediaProviderRegistry
 
 log = logging.getLogger(__name__)
+
+# Milestone thresholds — every 1M until 50M, then selected jumps through 1B.
+_MILESTONES_BASE: list[int] = [n * 1_000_000 for n in range(1, 51)]
+_MILESTONES_EXT: list[int] = [
+    75_000_000, 100_000_000, 150_000_000, 200_000_000,
+    250_000_000, 300_000_000, 400_000_000, 500_000_000,
+    600_000_000, 700_000_000, 800_000_000, 900_000_000,
+    1_000_000_000,
+]
+MILESTONE_THRESHOLDS: list[int] = sorted(_MILESTONES_BASE + _MILESTONES_EXT)
+
+# Primary metric per provider — the one used for milestone detection.
+_PRIMARY_METRIC: dict[str, str] = {
+    "youtube": "view_count",
+    "spotify": "playcount",
+}
+
+
+def get_crossed_milestones(old_value: int, new_value: int) -> list[int]:
+    """Return thresholds crossed between old and new values (upward only)."""
+    if new_value <= old_value:
+        return []
+    return [m for m in MILESTONE_THRESHOLDS if old_value < m <= new_value]
+
+
+def next_milestone(current_value: int) -> int | None:
+    """Return the next milestone above current_value, or None if past 1B."""
+    for m in MILESTONE_THRESHOLDS:
+        if current_value < m:
+            return m
+    return None
 
 
 def _slugify(text: str) -> str:
@@ -163,10 +193,25 @@ def _aggregate_snapshots(
 
 
 @dataclass(slots=True)
+class MilestoneInfo:
+    media_item_id: int
+    media_type: str
+    metric_key: str
+    milestone_value: int
+    new_value: int
+    title: str
+    channel_name: str | None
+    thumbnail_url: str | None
+    name: str | None
+    external_id: str
+
+
+@dataclass(slots=True)
 class RefreshResult:
     refreshed: int = 0
     failed: int = 0
     errors: list[str] = field(default_factory=list)
+    milestones: list[MilestoneInfo] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -521,6 +566,19 @@ class MediaService:
                 continue
             external_ids = [i.external_id for i in items]
             id_to_item = {i.external_id: i for i in items}
+
+            # Snapshot old primary-metric values for milestone detection
+            primary_key = _PRIMARY_METRIC.get(provider.media_type, "")
+            old_values: dict[int, int] = {}
+            if primary_key:
+                old_metrics = await media_repo.get_metrics_for_items(
+                    self.session, [it.id for it in items]
+                )
+                for mid, metrics in old_metrics.items():
+                    pm = metrics.get(primary_key)
+                    if pm and isinstance(pm, dict):
+                        old_values[mid] = int(pm.get("value", 0))
+
             metrics_list = await provider.fetch_metrics(external_ids)
             now = datetime.now(UTC)
             for mr in metrics_list:
@@ -541,24 +599,65 @@ class MediaService:
                     )
                 item.metrics_last_fetched_at = now
                 result.refreshed += 1
+
+                # Milestone detection
+                if primary_key and primary_key in mr.values:
+                    new_val = mr.values[primary_key]
+                    old_val = old_values.get(item.id, 0)
+                    crossed = get_crossed_milestones(old_val, new_val)
+                    for mval in crossed:
+                        recorded = await media_repo.insert_milestone(
+                            self.session, item.id, primary_key, mval,
+                        )
+                        if recorded is not None:
+                            result.milestones.append(MilestoneInfo(
+                                media_item_id=item.id,
+                                media_type=provider.media_type,
+                                metric_key=primary_key,
+                                milestone_value=mval,
+                                new_value=new_val,
+                                title=item.title,
+                                channel_name=item.channel_name,
+                                thumbnail_url=item.thumbnail_url,
+                                name=item.name,
+                                external_id=item.external_id,
+                            ))
         return result
 
-    async def refresh_single(self, media_item_id: int) -> MetricResult | None:
+    async def refresh_single(self, media_item_id: int) -> RefreshResult:
+        result = RefreshResult()
         item = await media_repo.get(self.session, media_item_id)
         if item is None:
-            return None
+            result.failed += 1
+            result.errors.append("Media item not found")
+            return result
 
         provider = self.registry.get(item.media_type)
         if provider is None:
-            return MetricResult(external_id=item.external_id, error="provider_not_found")
+            result.failed += 1
+            result.errors.append(f"Provider not found for type: {item.media_type}")
+            return result
+
+        # Snapshot old primary-metric value for milestone detection
+        primary_key = _PRIMARY_METRIC.get(item.media_type, "")
+        old_value = 0
+        if primary_key:
+            cache_metrics = await media_repo.get_metric_cache(self.session, item.id)
+            pm = cache_metrics.get(primary_key)
+            if pm and isinstance(pm, dict):
+                old_value = int(pm.get("value", 0))
 
         results = await provider.fetch_metrics([item.external_id])
         if not results:
-            return MetricResult(external_id=item.external_id, error="no_response")
+            result.failed += 1
+            result.errors.append(f"No response from provider for {item.title}")
+            return result
 
         mr = results[0]
         if mr.error:
-            return mr
+            result.failed += 1
+            result.errors.append(f"{item.title}: {mr.error}")
+            return result
 
         now = datetime.now(UTC)
         mask = _compute_alignment_mask(now)
@@ -572,7 +671,30 @@ class MediaService:
             )
 
         item.metrics_last_fetched_at = now
-        return mr
+        result.refreshed += 1
+
+        # Milestone detection
+        if primary_key and primary_key in mr.values:
+            new_val = mr.values[primary_key]
+            crossed = get_crossed_milestones(old_value, new_val)
+            for mval in crossed:
+                recorded = await media_repo.insert_milestone(
+                    self.session, item.id, primary_key, mval,
+                )
+                if recorded is not None:
+                    result.milestones.append(MilestoneInfo(
+                        media_item_id=item.id,
+                        media_type=item.media_type,
+                        metric_key=primary_key,
+                        milestone_value=mval,
+                        new_value=new_val,
+                        title=item.title,
+                        channel_name=item.channel_name,
+                        thumbnail_url=item.thumbnail_url,
+                        name=item.name,
+                        external_id=item.external_id,
+                    ))
+        return result
 
     async def backfill_alignment_masks(self) -> int:
         """Recompute alignment_mask on every snapshot row.

@@ -56,3 +56,26 @@ async def broadcast_to_guild(
     ids = await announcement_channel_ids(session, guild_id)
     await broadcast(sender, ids, embed)
     return ids
+
+
+async def broadcast_media_milestone(
+    session: AsyncSession,
+    sender: EmbedSender,
+    *,
+    guild_id: int,
+    embed: discord.Embed,
+    media_announce_channel_id: int | None = None,
+    milestones_enabled: bool = True,
+) -> Sequence[int]:
+    """Send a media milestone embed to announcement channels plus an
+    optional dedicated media channel. Respects the milestones toggle.
+
+    Returns the deduplicated set of channel IDs the embed was sent to.
+    """
+    if not milestones_enabled:
+        return []
+    seen: set[int] = set(await announcement_channel_ids(session, guild_id))
+    if media_announce_channel_id is not None:
+        seen.add(media_announce_channel_id)
+    await broadcast(sender, seen, embed)
+    return list(seen)

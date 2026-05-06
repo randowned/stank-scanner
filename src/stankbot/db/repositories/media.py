@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stankbot.db.models import MediaItem, MetricCache, MetricSnapshot
+from stankbot.db.models import MediaItem, MediaMilestone, MetricCache, MetricSnapshot
 
 
 async def add(
@@ -312,3 +312,49 @@ async def get_metric_snapshots_pivoted(
         {"fetched_at": ts, **metrics}
         for ts, metrics in [(t, by_time[t]) for t in order[:limit]]
     ]
+
+
+# ---------------------------------------------------------------------------
+# Milestones (announcement tracking)
+# ---------------------------------------------------------------------------
+
+
+async def insert_milestone(
+    session: AsyncSession,
+    media_item_id: int,
+    metric_key: str,
+    milestone_value: int,
+) -> MediaMilestone | None:
+    from sqlalchemy.dialects.sqlite import insert as sqlite_upsert
+
+    now = datetime.now(UTC)
+    stmt = sqlite_upsert(MediaMilestone).values(
+        media_item_id=media_item_id,
+        metric_key=metric_key,
+        milestone_value=milestone_value,
+        announced_at=now,
+    )
+    stmt = stmt.on_conflict_do_nothing(
+        index_elements=["media_item_id", "metric_key", "milestone_value"]
+    )
+    result = await session.execute(stmt)
+    await session.flush()
+    if result.rowcount and result.rowcount > 0:  # type: ignore[attr-defined]
+        row = await session.get(MediaMilestone, result.lastrowid)  # type: ignore[attr-defined]
+        return row
+    return None
+
+
+async def has_milestone(
+    session: AsyncSession,
+    media_item_id: int,
+    metric_key: str,
+    milestone_value: int,
+) -> bool:
+    stmt = select(MediaMilestone).where(
+        MediaMilestone.media_item_id == media_item_id,
+        MediaMilestone.metric_key == metric_key,
+        MediaMilestone.milestone_value == milestone_value,
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none() is not None

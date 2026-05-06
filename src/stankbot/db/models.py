@@ -571,6 +571,32 @@ class MetricSnapshot(Base):
     alignment_mask: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class MediaMilestone(Base):
+    """Tracks which milestone thresholds have been announced for a media item.
+
+    One row per (media_item, metric_key, milestone_value). Unique constraint
+    prevents duplicate announcements. Upward-only — regression is ignored.
+    """
+
+    __tablename__ = "media_milestones"
+    __table_args__ = (
+        UniqueConstraint(
+            "media_item_id", "metric_key", "milestone_value",
+            name="uq_media_milestone",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    media_item_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("media_items.id", ondelete="CASCADE"), nullable=False
+    )
+    metric_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    milestone_value: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    announced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 # ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------

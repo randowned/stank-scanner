@@ -15,10 +15,14 @@ from typing import TYPE_CHECKING
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Guild
+from stankbot.db.repositories import media as media_repo
+from stankbot.services.announcement_service import broadcast_media_milestone
+from stankbot.services.embed_builders import build_media_milestone_embed
 from stankbot.services.media_providers.registry import MediaProviderRegistry
-from stankbot.services.media_service import MediaService
+from stankbot.services.media_service import MediaService, MilestoneInfo
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.routes.media_api import cleanup_chart_cache
 
@@ -132,10 +136,78 @@ class MediaMetricsScheduler:
                 return
             svc = MediaService(session=session, registry=self.registry)
             result = await svc.refresh_all(guild_id, media_type=provider_type)
+
+            # Milestone announcements
+            for minfo in result.milestones:
+                await self._announce_milestone(session, guild_id, minfo)
+
         elapsed = (datetime.now(tz=UTC) - now).total_seconds()
         log.info(
-            "MediaMetrics: guild=%d provider=%s refreshed=%d failed=%d in %.1fs",
-            guild_id, provider_type, result.refreshed, result.failed, elapsed,
+            "MediaMetrics: guild=%d provider=%s refreshed=%d failed=%d milestones=%d in %.1fs",
+            guild_id, provider_type, result.refreshed, result.failed,
+            len(result.milestones), elapsed,
+        )
+
+    async def _announce_milestone(
+        self,
+        session: AsyncSession,
+        guild_id: int,
+        minfo: MilestoneInfo,
+    ) -> None:
+        settings = SettingsService(session)
+        milestones_enabled = await settings.get(guild_id, Keys.MEDIA_ANNOUNCE_MILESTONES, True)
+        if not milestones_enabled:
+            return
+        media_channel = await settings.get(guild_id, Keys.MEDIA_ANNOUNCE_CHANNEL_ID, None)
+
+        # Build compact other-metrics string
+        other_parts: list[str] = []
+        cache = await media_repo.get_metric_cache(session, minfo.media_item_id)
+        provider = self.registry.get(minfo.media_type)
+        if provider:
+            for mdef in provider.metrics:
+                if mdef.key == minfo.metric_key:
+                    continue
+                mv = cache.get(mdef.key, {})
+                if isinstance(mv, dict) and int(mv.get("value", 0)):
+                    cv = int(mv["value"])
+                    if cv >= 1_000_000_000:
+                        fm = f"{cv / 1_000_000_000:.1f}B"
+                    elif cv >= 1_000_000:
+                        fm = f"{cv / 1_000_000:.1f}M"
+                    elif cv >= 1_000:
+                        fm = f"{cv / 1_000:.1f}K"
+                    else:
+                        fm = str(cv)
+                    other_parts.append(f"{mdef.icon} {fm}")
+        other_metrics = "  \u00b7  ".join(other_parts) if other_parts else "—"
+
+        base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
+        chart_url = (
+            f"{base_url}/api/media/{minfo.media_item_id}/chart"
+            f"?metric={minfo.metric_key}&hours=12&mode=total&aggregation=30min"
+        )
+
+        embed = await build_media_milestone_embed(
+            info=minfo,
+            other_metrics=other_metrics,
+            chart_url=chart_url,
+            guild_id=guild_id,
+            session=session,
+            base_url=base_url,
+        )
+        await broadcast_media_milestone(
+            session,
+            self.bot,
+            guild_id=guild_id,
+            embed=embed,
+            media_announce_channel_id=media_channel,
+            milestones_enabled=True,
+        )
+        log.info(
+            "MediaMilestone: guild=%d item=%d metric=%s milestone=%s announced",
+            guild_id, minfo.media_item_id, minfo.metric_key,
+            f"{minfo.milestone_value:,}",
         )
 
     async def _cleanup_chart_cache(self) -> None:

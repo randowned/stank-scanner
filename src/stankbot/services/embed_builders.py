@@ -23,6 +23,7 @@ from stankbot.db.repositories import media as media_repo
 from stankbot.db.repositories import players as players_repo
 from stankbot.services import template_store
 from stankbot.services.board_renderer import PlayerRow
+from stankbot.services.media_service import MilestoneInfo, next_milestone
 from stankbot.services.template_engine import RenderContext, render_embed
 
 
@@ -421,6 +422,7 @@ async def build_media_embed(
         variables["view_count_delta"] = await _delta("view_count", view_count)
         variables["like_count_delta"] = await _delta("like_count", like_count)
         variables["comment_count_delta"] = await _delta("comment_count", comment_count)
+        variables["milestone_progress"] = _milestone_progress_bar(view_count, next_milestone(view_count))
         template_key = "youtube_media_embed"
     else:
         variables["provider_url"] = "https://open.spotify.com/" + media_type + "/" + str(metrics.get('external_id', ''))
@@ -428,9 +430,79 @@ async def build_media_embed(
         variables["playcount"] = _fmt_num(playcount)
         variables["spotify_type"] = media_type
         variables["playcount_delta"] = await _delta("playcount", playcount)
+        variables["milestone_progress"] = _milestone_progress_bar(playcount, next_milestone(playcount))
         template_key = "spotify_media_embed"
 
     ctx = RenderContext(variables=variables)
+    tmpl = await template_store.load(template_key, session, guild_id)
+    return render_embed(tmpl, ctx)
+
+
+def _fmt_compact(n: int) -> str:
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f}B"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)
+
+
+def _milestone_progress_bar(current: int, target: int | None, bar_length: int = 10) -> str:
+    if target is None or target <= 0:
+        return "No milestones remaining"
+    if current >= target:
+        return f"100% to {_fmt_compact(target)}"
+    pct = current / target
+    filled = int(bar_length * pct)
+    empty = bar_length - filled
+    pct_str = f"{int(pct * 100)}%"
+    if filled == 0:
+        bar = "\u2591" * bar_length
+    elif empty == 0:
+        bar = "\u2588" * bar_length
+    else:
+        bar = "\u2588" * filled + "\u2591" * empty
+    return f"{bar} {pct_str} to {_fmt_compact(target)}"
+
+
+async def build_media_milestone_embed(
+    *,
+    info: MilestoneInfo,
+    other_metrics: str,
+    chart_url: str,
+    guild_id: int,
+    session: AsyncSession,
+    base_url: str = "",
+) -> discord.Embed:
+    def _fmt_num(n: int) -> str:
+        return f"{n:,}"
+
+    metric_label = "Views" if info.metric_key == "view_count" else "Play Count"
+
+    if info.media_type == "youtube":
+        provider_url = f"https://youtube.com/watch?v={info.external_id}"
+        template_key = "youtube_milestone_embed"
+    else:
+        provider_url = f"https://open.spotify.com/{info.media_type}/{info.external_id}"
+        template_key = "spotify_milestone_embed"
+
+    media_page_url = f"{base_url}/media/{info.media_item_id}" if base_url else provider_url
+    board_url = base_url if base_url else ""
+
+    ctx = RenderContext(
+        variables={
+            "title": info.title,
+            "provider_url": provider_url,
+            "thumbnail_url": info.thumbnail_url or "",
+            "chart_url": chart_url,
+            "milestone_value": _fmt_num(info.milestone_value),
+            "metric_label": metric_label,
+            "other_metrics": other_metrics,
+            "board_url": board_url,
+            "media_page_url": media_page_url,
+        }
+    )
     tmpl = await template_store.load(template_key, session, guild_id)
     return render_embed(tmpl, ctx)
 
@@ -447,6 +519,7 @@ __all__ = [
     "build_chain_break_embed",
     "build_cooldown_embed",
     "build_media_embed",
+    "build_media_milestone_embed",
     "build_new_session_embed",
     "build_record_embed",
     "current_record",

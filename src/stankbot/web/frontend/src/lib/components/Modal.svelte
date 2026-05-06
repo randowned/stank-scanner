@@ -47,14 +47,14 @@
 		tabindex="-1"
 	>
 		<div
-			class="w-full {sizeCls[size]} bg-panel border border-border rounded-lg shadow-xl"
+			class="w-full {sizeCls[size]} bg-panel border border-border rounded-lg shadow-xl flex flex-col max-h-[calc(100vh-2rem)]"
 			role="none"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
 			tabindex="-1"
 		>
 			{#if title}
-				<header class="px-4 py-3 border-b border-border flex items-center justify-between">
+				<header class="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
 					<h2 id="modal-title" class="text-lg font-semibold">{title}</h2>
 					<button
 						type="button"
@@ -64,11 +64,11 @@
 					>×</button>
 				</header>
 			{/if}
-			<div class="p-4">
+			<div class="p-4 flex-1 overflow-y-auto scrollbar-thin">
 				{@render children()}
 			</div>
 			{#if footer}
-				<footer class="px-4 py-3 border-t border-border flex justify-end gap-2">
+				<footer class="px-4 py-3 border-t border-border flex justify-end gap-2 shrink-0">
 					{@render footer()}
 				</footer>
 			{/if}

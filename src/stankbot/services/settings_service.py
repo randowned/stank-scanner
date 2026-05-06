@@ -75,6 +75,12 @@ class Keys(StrEnum):
     # Media embed templates
     YOUTUBE_MEDIA_EMBED = "youtube_media_embed"
     SPOTIFY_MEDIA_EMBED = "spotify_media_embed"
+    # Media milestones
+    MEDIA_ANNOUNCE_MILESTONES = "media_announce_milestones"
+    MEDIA_ANNOUNCE_CHANNEL_ID = "media_announce_channel_id"
+    # Media milestone embed templates
+    YOUTUBE_MILESTONE_EMBED = "youtube_milestone_embed"
+    SPOTIFY_MILESTONE_EMBED = "spotify_milestone_embed"
 
 
 DEFAULTS: dict[str, Any] = {
@@ -99,6 +105,8 @@ DEFAULTS: dict[str, Any] = {
     Keys.MEDIA_REPLIES_EPHEMERAL: True,
     Keys.MEDIA_REPLIES_ADMIN_ONLY: False,
     Keys.MEDIA_PROVIDERS_ENABLED: ["youtube", "spotify"],
+    Keys.MEDIA_ANNOUNCE_MILESTONES: True,
+    Keys.MEDIA_ANNOUNCE_CHANNEL_ID: None,
     # Embed templates are seeded per guild on install (see
     # `SettingsService.seed_defaults`) rather than inlined here; default
     # dicts live in `services/default_templates.py`.
@@ -189,6 +197,14 @@ LABELS: dict[str, tuple[str, str]] = {
     Keys.MEDIA_PROVIDERS_ENABLED: (
         "Enabled media providers",
         "List of provider types to enable (e.g. [\"youtube\", \"spotify\"]). Disabled providers are hidden from non-admins.",
+    ),
+    Keys.MEDIA_ANNOUNCE_MILESTONES: (
+        "Media milestone announcements",
+        "When enabled, the bot announces media milestone achievements (e.g. 1M views) to the configured channels.",
+    ),
+    Keys.MEDIA_ANNOUNCE_CHANNEL_ID: (
+        "Media announcement channel",
+        "Additional Discord channel ID where media milestone announcements are posted (on top of standard announcement channels).",
     ),
 }
 

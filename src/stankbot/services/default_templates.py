@@ -203,6 +203,7 @@ YOUTUBE_MEDIA_EMBED: dict[str, Any] = {
         },
         {"name": "\U0001f4c5 Published", "value": "{published_at}", "inline": True},
         {"name": "\u23f1 Duration", "value": "{duration}", "inline": True},
+        {"name": "\U0001f4c8 Milestone progress", "value": "{milestone_progress}", "inline": False},
     ],
     "footer": "\U0001f3ac YouTube \u00b7 {name} \u00b7 Updated {last_fetched_at}",
 }
@@ -222,8 +223,55 @@ SPOTIFY_MEDIA_EMBED: dict[str, Any] = {
         },
         {"name": "\U0001f4c5 Released", "value": "{published_at}", "inline": True},
         {"name": "\U0001f3b5 Type", "value": "{spotify_type}", "inline": True},
+        {"name": "\U0001f4c8 Milestone progress", "value": "{milestone_progress}", "inline": False},
     ],
     "footer": "\U0001f3b5 Spotify \u00b7 {name} \u00b7 Updated {last_fetched_at}",
+}
+
+
+YOUTUBE_MILESTONE_EMBED: dict[str, Any] = {
+    "color": "#FFD700",
+    "title": "{title}",
+    "url": "{provider_url}",
+    "thumbnail": "{thumbnail_url}",
+    "image": "{chart_url}",
+    "author": {"name": "\U0001f680 Milestone Reached!", "url": "{board_url}"},
+    "fields": [
+        {
+            "name": "\U0001f3c6 {metric_label}",
+            "value": "**{milestone_value}**",
+            "inline": False,
+        },
+        {
+            "name": "\U0001f4ca All stats",
+            "value": "{other_metrics}",
+            "inline": False,
+        },
+    ],
+    "footer": "\U0001f517 {media_page_url}",
+}
+
+
+SPOTIFY_MILESTONE_EMBED: dict[str, Any] = {
+    "color": "#FFD700",
+    "title": "{title}",
+    "url": "{provider_url}",
+    "thumbnail": "{thumbnail_url}",
+    "image": "{chart_url}",
+    "author": {"name": "\U0001f680 Milestone Reached!", "url": "{board_url}"},
+    "fields": [
+        {
+            "name": "\U0001f3c6 {metric_label}",
+            "value": "**{milestone_value}**",
+            "inline": False,
+        },
+        {
+            "name": "\U0001f4ca All stats",
+            "value": "{other_metrics}",
+            "inline": False,
+        },
+    ],
+    "footer": "\U0001f517 {media_page_url}",
 }
 
 
@@ -236,4 +284,6 @@ ALL_DEFAULTS: dict[str, dict[str, Any]] = {
     "points_embed": POINTS_EMBED,
     "youtube_media_embed": YOUTUBE_MEDIA_EMBED,
     "spotify_media_embed": SPOTIFY_MEDIA_EMBED,
+    "youtube_milestone_embed": YOUTUBE_MILESTONE_EMBED,
+    "spotify_milestone_embed": SPOTIFY_MILESTONE_EMBED,
 }

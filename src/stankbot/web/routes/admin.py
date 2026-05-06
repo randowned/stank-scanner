@@ -724,6 +724,28 @@ _PREVIEW_CONTEXTS: dict[str, dict[str, Any]] = {
         "user": "Alice",
         "remaining_seconds": 45,
     },
+    "youtube_milestone": {
+        "title": "Never Gonna Give You Up",
+        "provider_url": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+        "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+        "chart_url": "https://via.placeholder.com/1200x675/1a1d24/3b82f6?text=12h+Chart",
+        "milestone_value": "10,000,000",
+        "metric_label": "Views",
+        "other_metrics": "\U0001f44d 1.2M  \u00b7  \U0001f4ac 45K  \u00b7  \u23f1 3m 42s",
+        "board_url": "https://example.com/",
+        "media_page_url": "https://example.com/media/1",
+    },
+    "spotify_milestone": {
+        "title": "Blinding Lights",
+        "provider_url": "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b",
+        "thumbnail_url": "https://i.scdn.co/image/ab67616d0000b273b51a0a46c7d09c4c2b3b4c00",
+        "chart_url": "https://via.placeholder.com/1200x675/1a1d24/3b82f6?text=12h+Chart",
+        "milestone_value": "50,000,000",
+        "metric_label": "Play Count",
+        "other_metrics": "\U0001f3b5 track  \u00b7  \U0001f4c5 Jan 15, 2020",
+        "board_url": "https://example.com/",
+        "media_page_url": "https://example.com/media/2",
+    },
 }
 
 

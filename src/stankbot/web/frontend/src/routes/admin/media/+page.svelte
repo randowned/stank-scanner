@@ -28,6 +28,9 @@
 	let savingSettings = $state(false);
 	let settingsError = $state<string | null>(null);
 
+	let milestonesEnabled = $state(true);
+	let milestonesChannelId = $state<string>('');
+
 	let deleteOpen = $state(false);
 	let deletingId = $state<number | null>(null);
 	let deletingTitle = $state('');
@@ -97,6 +100,13 @@
 			if (Array.isArray(prov)) {
 				enabledProviders = prov as string[];
 			}
+			if (typeof res.values?.['media_announce_milestones'] === 'boolean') {
+				milestonesEnabled = res.values?.['media_announce_milestones'] as boolean;
+			}
+			const mac = res.values?.['media_announce_channel_id'];
+			if (mac !== null && mac !== undefined) {
+				milestonesChannelId = String(mac);
+			}
 		} catch {
 			// keep defaults
 		}
@@ -111,7 +121,9 @@
 				spotify_interval_minutes: spotifyInterval,
 				replies_ephemeral: ephemeralEnabled,
 				admin_only: adminOnly,
-				providers_enabled: enabledProviders
+				providers_enabled: enabledProviders,
+				announce_milestones: milestonesEnabled,
+				announce_channel_id: milestonesChannelId ? Number(milestonesChannelId) : null
 			});
 			settingsOpen = false;
 		} catch (err) {
@@ -334,6 +346,29 @@
 			<div class="text-xs text-muted mt-1">Fetches are aligned to clock boundaries. Disabled providers are hidden from everyone.</div>
 		</div>
 
+		<!-- Milestones -->
+		<div>
+			<h3 class="text-sm font-semibold mb-3">Milestones</h3>
+			<div class="space-y-3">
+				<div>
+					<Toggle bind:checked={milestonesEnabled} label="Announce media milestones" disabled={savingSettings} />
+					<div class="text-xs text-muted mt-1">Announce when tracked media hits view/play milestones (1M, 2M, ..., 1B).</div>
+				</div>
+				<div>
+					<label for="milestones-channel-id" class="text-xs text-muted block mb-1">Additional media channel ID</label>
+					<input
+						id="milestones-channel-id"
+						type="text"
+						bind:value={milestonesChannelId}
+						placeholder="Optional — extra channel for milestones"
+						disabled={savingSettings}
+						class="w-full bg-surface border border-border rounded px-3 py-1.5 text-sm text-text placeholder:text-muted/50 focus:outline-none focus:border-accent"
+					/>
+					<div class="text-xs text-muted mt-1">Channel ID to also send milestones to (on top of announcement channels).</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Operations -->
 		<div class="pt-2 border-t border-border">
 			<h3 class="text-sm font-semibold mb-2">Operations</h3>
@@ -344,11 +379,11 @@
 		{#if settingsError}
 			<div class="text-red-400 text-sm">{settingsError}</div>
 		{/if}
-		<div class="flex justify-end gap-2 pt-2">
-			<Button variant="secondary" onclick={() => (settingsOpen = false)} testId="media-settings-cancel">Cancel</Button>
-			<Button variant="primary" onclick={saveSettings} loading={savingSettings} testId="media-settings-save">Save</Button>
-		</div>
 	</div>
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (settingsOpen = false)} testId="media-settings-cancel">Cancel</Button>
+		<Button variant="primary" onclick={saveSettings} loading={savingSettings} testId="media-settings-save">Save</Button>
+	{/snippet}
 </Modal>
 
 <!-- Refresh All Confirm -->

@@ -21,7 +21,11 @@ import { toErrorMessage } from '$lib/api-utils';
 		chain_break_embed: 'Chain break',
 		new_session_embed: 'New session',
 		cooldown_embed: 'Cooldown',
-		points_embed: 'Points'
+		points_embed: 'Points',
+		youtube_media_embed: 'YouTube Media',
+		spotify_media_embed: 'Spotify Media',
+		youtube_milestone_embed: 'YouTube Milestone',
+		spotify_milestone_embed: 'Spotify Milestone'
 	};
 
 	const KEY_TO_PRESET: Record<string, string> = {
@@ -30,7 +34,9 @@ import { toErrorMessage } from '$lib/api-utils';
 		chain_break_embed: 'chain_break',
 		new_session_embed: 'session_start',
 		cooldown_embed: 'cooldown',
-		points_embed: 'points'
+		points_embed: 'points',
+		youtube_milestone_embed: 'youtube_milestone',
+		spotify_milestone_embed: 'spotify_milestone'
 	};
 
 	let doc = $state<TemplatesDoc | null>(null);
