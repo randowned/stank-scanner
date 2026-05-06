@@ -25,6 +25,23 @@ log = logging.getLogger(__name__)
 
 _member_cache: dict[tuple[int, int], tuple[float, dict[str, Any] | None]] = {}
 _MEMBER_CACHE_TTL = 300
+_MEMBER_CACHE_MAXSIZE = 1000
+
+
+def _evict_expired(now: float) -> None:
+    """Remove cache entries whose TTL has passed."""
+    stale = [k for k, (ts, _) in _member_cache.items() if now - ts >= _MEMBER_CACHE_TTL]
+    for k in stale:
+        del _member_cache[k]
+
+
+def _evict_oldest(count: int) -> None:
+    """Remove the ``count`` oldest entries from the cache."""
+    if count <= 0:
+        return
+    sorted_keys = sorted(_member_cache.items(), key=lambda item: item[1][0])
+    for k, _ in sorted_keys[:count]:
+        del _member_cache[k]
 
 
 async def fetch_guild_member(
@@ -71,6 +88,12 @@ async def fetch_guild_member(
             return None
 
         data = resp.json()
+
+        if len(_member_cache) >= _MEMBER_CACHE_MAXSIZE:
+            _evict_expired(now)
+        if len(_member_cache) >= _MEMBER_CACHE_MAXSIZE:
+            _evict_oldest(len(_member_cache) - _MEMBER_CACHE_MAXSIZE + 1)
+
         _member_cache[cache_key] = (now, data)
         return data
     except Exception:

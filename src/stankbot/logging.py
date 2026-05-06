@@ -65,6 +65,9 @@ def configure_logging(level: str = "INFO", fmt: str = "text") -> None:
     logging.getLogger("discord.gateway").setLevel("WARNING")
     logging.getLogger("discord.client").setLevel("WARNING")
     logging.getLogger("apscheduler.scheduler").setLevel("WARNING")
+    # httpx logs full request URLs at INFO which leaks API keys
+    # (YouTube, Spotify) into Railway logs. Suppress them.
+    logging.getLogger("httpx").setLevel("WARNING")
     # Uvicorn's default config disables propagation and installs its own
     # handlers; with ``log_config=None`` we want the opposite — no child
     # handlers, just propagate to root. Also mute its access log as a

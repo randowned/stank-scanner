@@ -89,6 +89,9 @@ class MediaProvider(ABC):
     @abstractmethod
     async def health_check(self) -> bool: ...
 
+    async def close(self) -> None:
+        """Release any resources held by this provider (HTTP clients, etc.)."""
+
     def to_def(self) -> ProviderDef:
         return ProviderDef(
             type=self.media_type,

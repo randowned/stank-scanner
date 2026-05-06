@@ -11,12 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from stankbot.config import AppConfig
 from stankbot.db.engine import build_engine, build_sessionmaker, session_scope
-from stankbot.scheduling.session_scheduler import SessionScheduler
 from stankbot.scheduling.media_metrics_scheduler import MediaMetricsScheduler
+from stankbot.scheduling.session_scheduler import SessionScheduler
 from stankbot.services.media_providers import (
     MediaProviderRegistry,
-    YouTubeProvider,
     SpotifyProvider,
+    YouTubeProvider,
 )
 
 log = logging.getLogger(__name__)
@@ -56,6 +56,7 @@ class StankBot(commands.Bot):
             command_prefix=commands.when_mentioned,
             intents=build_intents(),
             application_id=config.discord_app_id,
+            chunk_guilds_at_startup=False,
         )
         self.config = config
         self.engine = build_engine(config.database_url)
@@ -159,3 +160,4 @@ class StankBot(commands.Bot):
         await self.media_scheduler.shutdown()
         await super().close()
         await self.engine.dispose()
+        await self.media_registry.close()

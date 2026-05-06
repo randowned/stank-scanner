@@ -28,3 +28,7 @@ class MediaProviderRegistry:
 
     def all_defs(self) -> list[ProviderDef]:
         return [p.to_def() for p in self.enabled()]
+
+    async def close(self) -> None:
+        for provider in self._providers.values():
+            await provider.close()
