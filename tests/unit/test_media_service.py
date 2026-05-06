@@ -1,20 +1,27 @@
-"""Unit tests for media_service — alignment_mask, aggregation, flooring."""
+"""Unit tests for media_service — alignment_mask, aggregation, flooring,
+and add_resolved_media metrics_last_fetched_at."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
+from stankbot.db.models import Guild
+from stankbot.services.media_providers.base import ResolvedMedia
+from stankbot.services.media_providers.registry import MediaProviderRegistry
+from stankbot.services.media_providers.youtube import YouTubeProvider
 from stankbot.services.media_service import (
     ALIGN_5MIN,
     ALIGN_15MIN,
     ALIGN_30MIN,
-    ALIGN_HOURLY,
     ALIGN_DAILY,
-    ALIGN_WEEKLY,
+    ALIGN_HOURLY,
     ALIGN_MONTHLY,
+    ALIGN_WEEKLY,
+    MediaService,
     _aggregate_snapshots,
     _compute_alignment_mask,
     _floor_to_bucket,
@@ -215,3 +222,34 @@ class TestAggregateSnapshots:
         assert len(result) == 2
         assert result[0]["value"] == 200
         assert result[1]["value"] == 400
+
+
+# ── add_resolved_media tests ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_add_resolved_media_sets_metrics_last_fetched_at(session: Any) -> None:
+    session.add(Guild(id=10))
+    await session.flush()
+
+    registry = MediaProviderRegistry()
+    registry.register(YouTubeProvider(api_key="fake-key"))
+
+    svc = MediaService(session=session, registry=registry)
+
+    resolved = ResolvedMedia(
+        external_id="vid_001",
+        title="Test Video",
+        channel_name="Test Channel",
+    )
+
+    result = await svc.add_resolved_media(
+        guild_id=10,
+        media_type="youtube",
+        resolved=resolved,
+        added_by=100,
+    )
+    await session.flush()
+
+    assert result is not None
+    assert result["metrics_last_fetched_at"] is not None

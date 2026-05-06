@@ -326,6 +326,7 @@ class MediaService:
             added_by=added_by,
             name=name_final,
         )
+        item.metrics_last_fetched_at = datetime.now(UTC)
         return self._serialize_item(item)
 
     async def get_media_item(self, media_item_id: int) -> dict[str, Any] | None:

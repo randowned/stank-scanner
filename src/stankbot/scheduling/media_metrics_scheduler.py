@@ -95,9 +95,22 @@ class MediaMetricsScheduler:
         When media_type is None (initial sync), creates a job for every
         enabled provider. When called with a specific type (settings change),
         only recreates that provider's job.
+
+        Respects ``MEDIA_PROVIDERS_ENABLED``: disabled providers get their
+        jobs removed and no new job is created.
         """
+        async with self.bot.db() as session:
+            settings = SettingsService(session)
+            enabled = await settings.get(guild_id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"])
         for provider in self.registry.enabled():
             if media_type is not None and provider.media_type != media_type:
+                continue
+            if provider.media_type not in enabled:
+                job_id = _media_provider_job_id(guild_id, provider.media_type)
+                job = self.scheduler.get_job(job_id)
+                if job is not None:
+                    job.remove()
+                    log.info("MediaMetrics: guild=%d provider=%s disabled — removed job", guild_id, provider.media_type)
                 continue
             await self._sync_provider(guild_id, provider.media_type)
 
@@ -133,6 +146,11 @@ class MediaMetricsScheduler:
             provider = self.registry.get(provider_type)
             if provider is not None and not await provider.can_fetch_metrics(session, guild_id):
                 log.debug("MediaMetrics: skipping guild=%d provider=%s (cannot fetch metrics)", guild_id, provider_type)
+                return
+            settings = SettingsService(session)
+            enabled = await settings.get(guild_id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"])
+            if provider_type not in enabled:
+                log.debug("MediaMetrics: skipping guild=%d provider=%s (disabled by guild setting)", guild_id, provider_type)
                 return
             svc = MediaService(session=session, registry=self.registry)
             result = await svc.refresh_all(guild_id, media_type=provider_type)

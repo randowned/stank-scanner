@@ -367,6 +367,9 @@ async def update_media_settings(
     if payload.providers_enabled is not None:
         await svc.set(guild_id, Keys.MEDIA_PROVIDERS_ENABLED, payload.providers_enabled)
         audit_payload["providers_enabled"] = payload.providers_enabled
+        bot = getattr(request.app.state, "bot", None)
+        if bot is not None and hasattr(bot, "media_scheduler"):
+            await bot.media_scheduler.sync_guild(guild_id)
     if payload.announce_milestones is not None:
         await svc.set(guild_id, Keys.MEDIA_ANNOUNCE_MILESTONES, payload.announce_milestones)
         audit_payload["announce_milestones"] = payload.announce_milestones
