@@ -306,6 +306,7 @@ async def get_media_history(
     hours: int | None = Query(None, ge=1, le=48),
     aggregation: str | None = Query(None, pattern=r"^(5min|15min|30min|hourly|daily|weekly|monthly)$"),
     mode: str = Query("total", pattern=r"^(total|delta)$"),
+    compare_ids: str | None = Query(None),
     guild_id: int = Depends(get_active_guild_id),
     _user: dict[str, Any] = Depends(require_guild_member),
     session: AsyncSession = Depends(get_db),
@@ -327,6 +328,22 @@ async def get_media_history(
         payload["aggregation"] = aggregation
     if mode != "total":
         payload["mode"] = mode
+
+    if compare_ids:
+        try:
+            extra_ids = [int(x.strip()) for x in compare_ids.split(",") if x.strip()]
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="compare_ids must be comma-separated integers") from exc
+        all_ids = [media_id] + [eid for eid in extra_ids if eid != media_id]
+        if len(all_ids) >= 2:
+            compare = await svc.get_comparison_data(
+                all_ids, metric,
+                window_days=days, window_hours=hours,
+                align_release=False, delta=(mode == "delta"),
+                aggregation=aggregation,
+            )
+            payload["compare"] = compare
+
     return MsgPackResponse(payload, request)
 
 

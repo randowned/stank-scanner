@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { base } from '$app/paths';
-	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { apiFetch } from '$lib/api';
 	import { formatFreshness } from '$lib/format';
 	import type { MediaItem, MetricSnapshot, CompareData, MetricDef, ProviderDef } from '$lib/types';
@@ -19,6 +19,8 @@
 
 	const item = $derived(data.item as MediaItem | null);
 	const initialHistory = $derived(data.history as MetricSnapshot[]);
+	const initialCompare = $derived(data.compare as CompareData | null);
+	const chartParams = $derived(data.chartParams as { metric: string; hours: number; resolution: string; mode: string; compareIds: string } | null);
 	const providers = $derived((data.providers as ProviderDef[]) ?? []);
 
 	$effect(() => {
@@ -37,7 +39,7 @@
 	const providerMetrics = $derived<MetricDef[]>(provider?.metrics ?? []);
 
 	const initialMetric = $derived(item?.media_type === 'spotify' ? 'playcount' : 'view_count');
-	let selectedMetric = $state<string>('view_count');
+	let selectedMetric = $state<string>(chartParams?.metric || initialMetric);
 	$effect(() => {
 		// align selected metric with provider once known
 		if (providerMetrics.length > 0 && !providerMetrics.some((m) => m.key === selectedMetric)) {
@@ -45,20 +47,26 @@
 		}
 	});
 	$effect(() => {
-		// initial metric on first load
-		if (item) untrack(() => { selectedMetric = initialMetric; });
+		// initial metric on first load (only when no chartParams override)
+		if (item && !chartParams?.metric) untrack(() => { selectedMetric = initialMetric; });
 	});
 
 	// Range value: number of hours; days option encoded as hours = days*24
-	let selectedHours = $state<number>(48);
+	let selectedHours = $state<number>(chartParams?.hours ?? 48);
 	let history = $state<MetricSnapshot[]>(untrack(() => initialHistory));
 	let loadingHistory = $state(false);
 
-	let compareIds = $state<string[]>([]);
-	let compareData = $state<CompareData | null>(null);
+	let compareIds = $state<string[]>((() => {
+		const raw = chartParams?.compareIds;
+		if (!raw) return [];
+		return raw.split(',').map((s) => s.trim()).filter(Boolean).filter((id) => id !== String(data.mediaId));
+	})());
+	let compareData = $state<CompareData | null>(untrack(() => initialCompare));
 	let loadingCompare = $state(false);
-	let comparisonMode = $state<'delta' | 'total'>('delta');
-	let selectedAggregation = $state<string>('auto');
+	let comparisonMode = $state<'delta' | 'total'>(
+		(chartParams?.mode === 'total' || chartParams?.mode === 'delta') ? chartParams.mode : 'delta'
+	);
+	let selectedAggregation = $state<string>(chartParams?.resolution ?? 'auto');
 
 	// URL that was used to fetch the current `history`. When it doesn't match
 	// buildHistoryUrl(), the history is stale and buildChartDatasets returns
@@ -135,12 +143,6 @@
 		dataStart > 0 && dataStart > rangeStart + selectedHours * 3_600_000 * 0.1
 	);
 
-	const dataSpanMs = $derived(
-		history.length >= 2
-			? new Date(history[history.length - 1].fetched_at).getTime() - dataStart
-			: 0
-	);
-
 	const dataStartLabel = $derived(
 		dataShorter && dataStart > 0
 			? new Date(dataStart).toLocaleString('en-US', selectedHours <= 48
@@ -159,15 +161,6 @@
 		return 'month';
 	});
 
-	$effect(() => {
-		const raw = $page.url.searchParams.get('compare');
-		if (raw) {
-			const ids = raw.split(',').map((s) => s.trim()).filter(Boolean);
-			const baseId = String(data.mediaId);
-			compareIds = ids.filter((id) => id !== baseId);
-		}
-	});
-
 	function bucketDeltas(points: { x: number; y: number }[], bucketMs: number): { x: number; y: number }[] {
 		if (points.length === 0 || bucketMs <= 0) return points;
 		const buckets: Record<number, number> = {};
@@ -175,7 +168,6 @@
 			const bucketStart = Math.floor(p.x / bucketMs) * bucketMs;
 			buckets[bucketStart] = (buckets[bucketStart] ?? 0) + p.y;
 		}
-		// Drop the current incomplete bucket (its window hasn't closed yet).
 		const now = Date.now();
 		return Object.entries(buckets)
 			.map(([k, v]) => ({ x: Number(k), y: v }))
@@ -183,7 +175,6 @@
 			.sort((a, b) => a.x - b.x);
 	}
 
-	// For cumulative data take the last (highest) value per bucket — not a sum.
 	function bucketCumulative(points: { x: number; y: number }[], bucketMs: number): { x: number; y: number }[] {
 		if (points.length === 0 || bucketMs <= 0) return points;
 		const buckets: Record<number, number> = {};
@@ -223,17 +214,6 @@
 			? autoResolutionMs(selectedHours, providerIntervalMs)
 			: (_AGG_BUCKET_MS[selectedAggregation] ?? null)
 	);
-
-	// Auto-default Δ/Σ when entering/leaving compare mode. User toggles still stick
-	// within a given mode because we only flip on the transition.
-	let prevHasCompare = $state(false);
-	$effect(() => {
-		const now = compareIds.length > 0;
-		if (now !== prevHasCompare) {
-			comparisonMode = 'delta';
-			prevHasCompare = now;
-		}
-	});
 
 	function activeMetric(): MetricDef | undefined {
 		return providerMetrics.find((m) => m.key === selectedMetric);
@@ -284,7 +264,18 @@
 
 	const useServerAggregation = $derived(serverAggregations.has(resolvedAggregation ?? ''));
 
-	function buildHistoryUrl(): string {
+	// Auto-default Δ/Σ when entering/leaving compare mode. User toggles still stick
+	// within a given mode because we only flip on the transition.
+	let prevHasCompare = $state(false);
+	$effect(() => {
+		const now = compareIds.length > 0;
+		if (now !== prevHasCompare) {
+			comparisonMode = 'delta';
+			prevHasCompare = now;
+		}
+	});
+
+	function buildChartUrl(): string {
 		if (!item) return '';
 		let url: string;
 		if (selectedHours < 24) {
@@ -296,48 +287,53 @@
 		if (useServerAggregation) {
 			url += `&aggregation=${resolvedAggregation}&mode=${comparisonMode}`;
 		}
+		if (compareIds.length > 0) {
+			url += `&compare_ids=${compareIds.join(',')}`;
+		}
 		return url;
 	}
 
-	async function loadHistory() {
+	async function loadChartData() {
 		if (!item) return;
-		const url = buildHistoryUrl();
+		const url = buildChartUrl();
 		loadingHistory = true;
+		loadingCompare = compareIds.length > 0;
 		try {
-			const res = await apiFetch<{ history: MetricSnapshot[] }>(url);
+			const res = await apiFetch<{ history: MetricSnapshot[]; compare?: CompareData }>(url);
 			history = res.history;
+			compareData = res.compare ?? null;
 			currentHistoryUrl = url;
 		} catch {
 			history = [];
+			compareData = null;
 			currentHistoryUrl = url;
 		} finally {
 			loadingHistory = false;
+			loadingCompare = false;
 		}
 	}
 
-	async function loadComparison() {
-		if (!item || compareIds.length === 0) return;
-		loadingCompare = true;
-		try {
-			const allIds = [item.id, ...compareIds.map(Number)];
-			const deltaParam = comparisonMode === 'delta' ? '&delta=true' : '&delta=false';
-			const aggParam = useServerAggregation ? `&aggregation=${resolvedAggregation}` : '';
-			let rangeParam: string;
-			if (selectedHours < 24) {
-				rangeParam = `&hours=${selectedHours}`;
-			} else {
-				const days = Math.max(1, Math.round(selectedHours / 24));
-				rangeParam = `&days=${days}`;
-			}
-			const res = await apiFetch<CompareData>(
-				`/api/media/compare?ids=${allIds.join(',')}&metric=${selectedMetric}${rangeParam}&align=calendar${deltaParam}${aggParam}`
-			);
-			compareData = res;
-		} catch {
-			compareData = null;
-		} finally {
-			loadingCompare = false;
+	function syncURL() {
+		if (!item) return;
+		const params = new SvelteURLSearchParams();
+		params.set('metric', selectedMetric);
+		if (selectedHours < 24) {
+			params.set('hours', String(selectedHours));
+		} else {
+			params.set('days', String(Math.max(1, Math.round(selectedHours / 24))));
 		}
+		if (selectedAggregation !== 'auto') {
+			params.set('resolution', selectedAggregation);
+		}
+		if (comparisonMode !== 'delta') {
+			params.set('mode', comparisonMode);
+		}
+		if (compareIds.length > 0) {
+			params.set('compare', compareIds.join(','));
+		}
+		const qs = params.toString();
+		const target = qs ? `?${qs}` : `${base}/media/${item.id}`;
+		void goto(target, { replaceState: true, keepFocus: true, noScroll: true });
 	}
 
 	let _initialFetchSkipped = false;
@@ -350,16 +346,17 @@
 		// Validate aggregation against current range; reset without an extra effect run.
 		if (!aggregationOptions.some((o) => o.value === selectedAggregation)) {
 			untrack(() => { selectedAggregation = 'auto'; });
+			return;
 		}
 
-		// Skip the very first run when SSR already provided usable history data.
+		// Skip the very first run when SSR already provided usable data.
 		// Only skip when in raw (client-side) mode — server-aggregated views need a
 		// real fetch because SSR always returns unaggregated data. Reading hasCompare
 		// before the return ensures the effect subscribes to compareIds changes.
 		if (!_initialFetchSkipped && history.length > 0 && !useServerAggregation) {
 			_initialFetchSkipped = true;
-			currentHistoryUrl = buildHistoryUrl();
-			if (hasCompare) void loadComparison();
+			currentHistoryUrl = buildChartUrl();
+			syncURL();
 			return;
 		}
 		_initialFetchSkipped = true;
@@ -367,7 +364,7 @@
 		// Pre-seed _prevDatasets from raw SSR history so the chart shows something
 		// while the server-aggregated fetch is in-flight (avoids blank chart flash).
 		// untrack() prevents subscribing the effect to `history` here — otherwise
-		// loadHistory()'s assignment would cause an infinite re-run loop.
+		// loadChartData()'s assignment would cause an infinite re-run loop.
 		const _ssnap = untrack(() => history);
 		if (_ssnap.length > 0 && _prevDatasets.length === 0) {
 			_prevDatasets = [{
@@ -376,14 +373,13 @@
 			}];
 		}
 
-		void loadHistory();
-		if (hasCompare) void loadComparison();
+		void loadChartData();
+		syncURL();
 	});
 
 	function clearComparison() {
 		compareIds = [];
 		compareData = null;
-		void goto(`${base}/media/${item?.id ?? ''}`);
 	}
 
 	function buildChartDatasets() {
@@ -415,7 +411,7 @@
 		// When settings have changed but the fetch hasn't completed yet, return the
 		// last good datasets so the old chart stays visible (dimmed by loadingHistory)
 		// rather than briefly showing wrong data from mismatched history+settings.
-		if (buildHistoryUrl() !== currentHistoryUrl) {
+		if (buildChartUrl() !== currentHistoryUrl) {
 			return _prevDatasets;
 		}
 		// Single-item view: /api/media/{id}/history always returns raw totals,

@@ -76,10 +76,11 @@ test.describe('Media page', () => {
 	test('compare navigates to detail page with query params', async ({ page, injectMedia }) => {
 		const item1 = await injectMedia({ guildId: GUILD, slug: 'compare-video-1', historyDays: 7 });
 		const item2 = await injectMedia({ guildId: GUILD, slug: 'compare-video-2', historyDays: 7 });
-		// Navigate directly to compare URL (bypasses flaky checkbox UI in E2E)
-		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&days=7`);
+		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&days=7&resolution=auto&mode=delta`);
 		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
-		await expect(page).toHaveURL(new RegExp(`/media/${item1.id}\\?compare=${item2.id}`));
+		await expect(page).toHaveURL(new RegExp(`/media/${item1.id}\\?metric=view_count`));
+		await expect(page).toHaveURL(new RegExp(`compare=${item2.id}`));
+		await expect(page).toHaveURL(/days=7/);
 	});
 
 	test('compare renders comparison section on detail page', async ({ page, injectMedia }) => {
@@ -91,6 +92,77 @@ test.describe('Media page', () => {
 		await expect(page.getByText(/comparison/)).toBeVisible({ timeout: 15000 });
 		// Clear comparison button present
 		await expect(page.getByTestId('media-clear-compare')).toBeVisible();
+	});
+
+	test('URL params restore chart state on reload', async ({ page, injectMedia }) => {
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'url-restore', historyDays: 7 });
+		await page.goto(`/media/${id}?metric=like_count&hours=12&resolution=hourly&mode=total`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+
+		// Metric dropdown shows "Likes" label
+		const metricBtn = page.getByTestId('media-detail-metric');
+		await expect(metricBtn).toHaveAttribute('aria-label', 'Likes');
+
+		// Range dropdown shows "12 hours"
+		const rangeBtn = page.getByTestId('media-detail-range');
+		await expect(rangeBtn).toHaveAttribute('aria-label', '12 hours');
+
+		// Reload and verify state persists
+		await page.reload();
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+		await expect(page.getByTestId('media-detail-metric')).toHaveAttribute('aria-label', 'Likes');
+		await expect(page.getByTestId('media-detail-range')).toHaveAttribute('aria-label', '12 hours');
+	});
+
+	test('changing dropdown updates URL', async ({ page, injectMedia }) => {
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'dd-url-sync', historyDays: 7 });
+		await page.goto(`/media/${id}`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+
+		// Change metric to Likes
+		await page.getByTestId('media-detail-metric').click();
+		await page.getByRole('menuitem', { name: 'Likes' }).click();
+		await expect(page).toHaveURL(/metric=like_count/);
+
+		// Change range to 6 hours
+		await page.getByTestId('media-detail-range').click();
+		await page.getByRole('menuitem', { name: '6 hours' }).click();
+		await expect(page).toHaveURL(/hours=6/);
+
+		// Change mode to Cumulative
+		await page.getByTestId('media-detail-view').click();
+		await page.getByRole('menuitem', { name: 'Cumulative' }).click();
+		await expect(page).toHaveURL(/mode=total/);
+	});
+
+	test('clear compare keeps other chart params in URL', async ({ page, injectMedia }) => {
+		const item1 = await injectMedia({ guildId: GUILD, slug: 'clear-cmp-1', historyDays: 7 });
+		const item2 = await injectMedia({ guildId: GUILD, slug: 'clear-cmp-2', historyDays: 7 });
+		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&hours=48&resolution=auto`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+		await expect(page.getByTestId('media-clear-compare')).toBeVisible({ timeout: 10000 });
+
+		// Clear comparison
+		await page.getByTestId('media-clear-compare').click();
+
+		// URL should keep metric, hours, resolution but lose compare
+		await expect(page).toHaveURL(/metric=view_count/);
+		await expect(page).toHaveURL(/hours=48/);
+		await expect(page).not.toHaveURL(/compare=/);
+	});
+
+	test('shared URL reproduces exact chart view with compare', async ({ page, injectMedia }) => {
+		const item1 = await injectMedia({ guildId: GUILD, slug: 'share-1', historyDays: 7 });
+		const item2 = await injectMedia({ guildId: GUILD, slug: 'share-2', historyDays: 7 });
+		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&hours=24&mode=delta`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+
+		// Comparison heading renders from the shared URL
+		await expect(page.getByText(/comparing/)).toBeVisible({ timeout: 15000 });
+		// Clear comparison button confirms compare mode is active
+		await expect(page.getByTestId('media-clear-compare')).toBeVisible();
+		// Chart renders
+		await expect(page.getByTestId('media-detail-chart')).toBeVisible();
 	});
 
 	test('detail page shows chart and external link for YouTube', async ({ page, injectMedia }) => {
