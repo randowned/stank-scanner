@@ -67,14 +67,28 @@ class PermissionService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
-    async def is_guild_admin(self, guild_id: int, user_id: int) -> bool:
+    async def is_guild_admin(
+        self,
+        guild_id: int,
+        user_id: int,
+        user_role_ids: Iterable[int] | None = None,
+    ) -> bool:
         """Check if user is a guild admin via admin_roles table.
 
-        Note: This requires the user's Discord role IDs to be passed in. For web auth,
-        prefer is_global_admin() and compute guild admin from admin_roles table.
-        This method is kept for Discord command compatibility.
+        Requires ``user_role_ids`` (the user's current Discord role IDs).
+        Intersects with the guild's ``admin_roles`` entries.
+
+        Returns ``False`` if ``user_role_ids`` is ``None`` (web callers
+        must provide role IDs from ``guild_member_roles`` or Discord API).
         """
-        return False
+        if user_role_ids is None:
+            return False
+        role_set = set(user_role_ids)
+        if not role_set:
+            return False
+        stmt = select(AdminRole.role_id).where(AdminRole.guild_id == guild_id)
+        admin_ids = set((await self.session.execute(stmt)).scalars().all())
+        return bool(admin_ids & role_set)
 
     async def add_admin_user(self, user_id: int) -> bool:
         stmt = select(AdminUser).where(AdminUser.guild_id == 0, AdminUser.user_id == user_id)

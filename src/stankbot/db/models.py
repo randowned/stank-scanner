@@ -148,6 +148,32 @@ class AdminUser(Base):
     )
 
 
+class GuildMember(Base):
+    """Write-through cache of Discord member identity + roles + permissions.
+
+    Populated on first stank or dashboard visit, then kept fresh by
+    ``on_member_update`` / ``on_member_remove`` Gateway events. Used as
+    the primary source of display name / avatar for the dashboard,
+    falling back to ``players`` only when the member has left the guild.
+    """
+
+    __tablename__ = "guild_members"
+
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("guilds.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    role_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    permissions: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    nick: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    global_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    avatar: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class ChannelBinding(Base):
     """Command + announcement channels. Altar channels live in ``altars``."""
 

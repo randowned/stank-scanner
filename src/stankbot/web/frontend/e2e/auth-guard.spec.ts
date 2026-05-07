@@ -1,4 +1,4 @@
-import { test, expect, adminUser } from './fixtures';
+import { test, expect, adminUser, guildAdminUser } from './fixtures';
 
 test.describe('Auth guard — unauthenticated redirects', () => {
 	test('/auth returns 200 null when unauthenticated', async ({ page }) => {
@@ -96,5 +96,30 @@ test.describe('Auth guard — admin user', () => {
 		await mockLogin(adminUser);
 		const res = await page.request.get('/api/admin/settings');
 		expect(res.status()).toBe(200);
+	});
+});
+
+test.describe('Auth guard — guild-only admin user', () => {
+	test('guild admin can access admin page', async ({ mockLogin, page }) => {
+		await mockLogin(guildAdminUser);
+		await page.goto('/admin');
+		await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible();
+	});
+
+	test('guild admin /api/admin/settings returns 200', async ({ mockLogin, page }) => {
+		await mockLogin(guildAdminUser);
+		const res = await page.request.get('/api/admin/settings');
+		expect(res.status()).toBe(200);
+	});
+
+	test('guild admin /api/guilds returns 403 (not global admin)', async ({ mockLogin, page }) => {
+		await mockLogin(guildAdminUser);
+		const res = await page.request.get('/api/guilds');
+		expect(res.status()).toBe(403);
+	});
+
+	test('guild admin can access board', async ({ mockLogin, page }) => {
+		await mockLogin(guildAdminUser);
+		await expect(page.locator('[data-testid="guild-name"]')).toBeVisible();
 	});
 });

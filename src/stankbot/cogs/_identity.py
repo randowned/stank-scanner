@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import discord
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from stankbot.db.repositories import guild_members as guild_members_repo
 from stankbot.db.repositories import players as players_repo
 
 if TYPE_CHECKING:
@@ -93,4 +94,16 @@ async def ensure_player(
         resolved_avatar = getattr(hint, "display_avatar", None)
         avatar_hash = getattr(resolved_avatar, "key", None) if resolved_avatar else None
     await players_repo.get_or_create(session, guild_id, user_id, name, avatar_hash)
+    if isinstance(hint, discord.Member):
+        await guild_members_repo.upsert_from_member(
+            session,
+            guild_id,
+            user_id,
+            role_ids=[r.id for r in hint.roles],
+            permissions=hint.guild_permissions.value,
+            nick=hint.nick,
+            username=hint.name,
+            global_name=getattr(hint, "global_name", None),
+            avatar=hint.avatar.key if hint.avatar else None,
+        )
     return name or str(user_id)

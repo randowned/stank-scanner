@@ -19,6 +19,7 @@ from stankbot.cogs._identity import ensure_player
 from stankbot.db.models import RecordScope
 from stankbot.db.repositories import altars as altars_repo
 from stankbot.db.repositories import events as events_repo
+from stankbot.db.repositories import guild_members as guild_members_repo
 from stankbot.db.repositories import guilds as guilds_repo
 from stankbot.services import embed_builders
 from stankbot.services.announcement_service import broadcast_to_guild
@@ -109,6 +110,17 @@ class ChainListener(commands.Cog):
             await session_svc.ensure_started(message.guild.id, when=message.created_at)
 
             config = await settings.effective_scoring(message.guild.id, altar)
+            await guild_members_repo.upsert_from_member(
+                session,
+                message.guild.id,
+                message.author.id,
+                role_ids=[r.id for r in message.author.roles],
+                permissions=message.author.guild_permissions.value,
+                nick=message.author.nick,
+                username=message.author.name,
+                global_name=getattr(message.author, "global_name", None),
+                avatar=message.author.avatar.key if message.author.avatar else None,
+            )
             stank_input = StankInput(
                 guild_id=message.guild.id,
                 altar=altar,

@@ -58,6 +58,15 @@ class MockGuild:
                 return e
         return None
 
+    def get_role(self, role_id: int):
+        return None
+
+
+@dataclass
+class MockRole:
+    id: int
+    name: str
+
 
 @dataclass
 class MockMessage:

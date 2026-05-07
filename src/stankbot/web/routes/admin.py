@@ -291,19 +291,21 @@ async def get_roles(
                 role_names[str(rid)] = role.name
 
     user_names: dict[str, str] = {}
+    avatars: dict[str, str] = {}
     if bot:
         import asyncio
-        async def _fetch_name(uid: int) -> tuple[int, str | None]:
+        async def _fetch_name(uid: int) -> tuple[int, str | None, str | None]:
             user = bot.get_user(uid)
             if user:
-                return uid, user.name
+                return uid, user.name, user.avatar.key if user.avatar else None
             try:
                 user = await bot.fetch_user(uid)
-                return uid, user.name
+                return uid, user.name, user.avatar.key if user.avatar else None
             except Exception:
-                return uid, None
+                return uid, None, None
         results = await asyncio.gather(*(_fetch_name(uid) for uid in global_user_ids))
-        user_names = {str(uid): name for uid, name in results if name}
+        user_names = {str(uid): name for uid, name, _ in results if name}
+        avatars = {str(uid): av for uid, _, av in results if av}
 
     return MsgPackResponse(
         {
@@ -311,6 +313,7 @@ async def get_roles(
             "role_names": role_names,
             "global_user_ids": [str(u) for u in global_user_ids],
             "names": user_names,
+            "avatars": avatars,
         },
         request,
     )

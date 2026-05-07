@@ -165,6 +165,7 @@ async def auth_check(request: Request) -> MsgPackResponse:
     from stankbot.services.permission_service import PermissionService
     from stankbot.web.tools import (
         current_user,
+        fetch_guild_member,
         get_active_guild_id,
     )
 
@@ -193,7 +194,11 @@ async def auth_check(request: Request) -> MsgPackResponse:
             if is_global_admin:
                 is_guild_admin = True
             else:
-                is_guild_admin = await svc.is_guild_admin(guild_id, uid)
+                member = await fetch_guild_member(config, guild_id, uid, session=session)
+                if member:
+                    is_guild_admin = await svc.is_guild_admin(
+                        guild_id, uid, user_role_ids=member.get("roles", [])
+                    )
     else:
         is_global_admin = request.session.get("is_global_admin", True)
         is_guild_admin = request.session.get("is_guild_admin", True)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import AsyncIterator, Iterable
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
@@ -16,54 +15,40 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.engine import session_scope
-from stankbot.db.models import Guild, Player
+from stankbot.db.models import Guild, GuildMember, Player
 
 if TYPE_CHECKING:
     from stankbot.config import AppConfig
 
 log = logging.getLogger(__name__)
 
-_member_cache: dict[tuple[int, int], tuple[float, dict[str, Any] | None]] = {}
-_MEMBER_CACHE_TTL = 300
-_MEMBER_CACHE_MAXSIZE = 1000
-
-
-def _evict_expired(now: float) -> None:
-    """Remove cache entries whose TTL has passed."""
-    stale = [k for k, (ts, _) in _member_cache.items() if now - ts >= _MEMBER_CACHE_TTL]
-    for k in stale:
-        del _member_cache[k]
-
-
-def _evict_oldest(count: int) -> None:
-    """Remove the ``count`` oldest entries from the cache."""
-    if count <= 0:
-        return
-    sorted_keys = sorted(_member_cache.items(), key=lambda item: item[1][0])
-    for k, _ in sorted_keys[:count]:
-        del _member_cache[k]
-
 
 async def fetch_guild_member(
-    config: AppConfig, guild_id: int, user_id: int
+    config: AppConfig, guild_id: int, user_id: int, session: AsyncSession | None = None
 ) -> dict[str, Any] | None:
-    """Check if user is a member of guild via Discord API.
+    """Check if user is a member of guild — DB-first, Discord API fallback.
 
-    Uses bot token to call GET /guilds/{guild_id}/members/{user_id}.
-    Results are cached in-memory for 5 minutes.
+    Queries ``guild_member_roles`` (populated on first interaction and kept
+    fresh by ``on_member_update`` events). On miss, calls Discord
+    ``GET /guilds/{guild_id}/members/{user_id}`` and stores the result.
 
-    Returns member dict with 'permissions' or None if not found.
+    Returns a member dict with ``roles``, ``permissions``, ``nick``, and a
+    ``user`` sub-object, or ``None`` if the member is not found.
     """
-    global _member_cache
-
-    cache_key = (guild_id, user_id)
-    now = time.time()
-
-    if cache_key in _member_cache:
-        ts, cached = _member_cache[cache_key]
-        if now - ts < _MEMBER_CACHE_TTL:
-            return cached
-        del _member_cache[cache_key]
+    if session is not None:
+        row = await session.get(GuildMember, (guild_id, user_id))
+        if row is not None:
+            return {
+                "roles": row.role_ids or [],
+                "permissions": str(row.permissions),
+                "nick": row.nick,
+                "user": {
+                    "id": str(user_id),
+                    "username": row.username or str(user_id),
+                    "avatar": row.avatar,
+                    "global_name": row.global_name,
+                },
+            }
 
     token = config.discord_token.get_secret_value()
     if not token:
@@ -76,7 +61,6 @@ async def fetch_guild_member(
                 headers={"Authorization": f"Bot {token}"},
             )
         if resp.status_code == 404:
-            _member_cache[cache_key] = (now, None)
             return None
         if resp.status_code != 200:
             log.warning(
@@ -87,14 +71,23 @@ async def fetch_guild_member(
             )
             return None
 
-        data = resp.json()
+        data: dict[str, Any] = resp.json()
 
-        if len(_member_cache) >= _MEMBER_CACHE_MAXSIZE:
-            _evict_expired(now)
-        if len(_member_cache) >= _MEMBER_CACHE_MAXSIZE:
-            _evict_oldest(len(_member_cache) - _MEMBER_CACHE_MAXSIZE + 1)
+        if session is not None:
+            user_obj: dict[str, Any] = data.get("user", {})
+            await session.merge(
+                GuildMember(
+                    guild_id=guild_id,
+                    user_id=user_id,
+                    role_ids=[int(r) for r in data.get("roles", [])],
+                    permissions=int(data.get("permissions", 0)),
+                    nick=data.get("nick"),
+                    username=user_obj.get("username") or str(user_id),
+                    global_name=user_obj.get("global_name"),
+                    avatar=user_obj.get("avatar"),
+                )
+            )
 
-        _member_cache[cache_key] = (now, data)
         return data
     except Exception:
         log.exception("fetch_guild_member error: guild=%d user=%d", guild_id, user_id)
@@ -156,10 +149,12 @@ class _NotInGuild(HTTPException):
         self.response = response
 
 
-async def _is_guild_member(request: Request, guild_id: int, user_id: int) -> bool:
-    """Return True if the user is a member of the given guild (via Discord API)."""
+async def _is_guild_member(
+    request: Request, guild_id: int, user_id: int, session: AsyncSession | None = None
+) -> bool:
+    """Return True if the user is a member of the given guild (DB-first, Discord fallback)."""
     config: AppConfig = request.app.state.config
-    member = await fetch_guild_member(config, guild_id, user_id)
+    member = await fetch_guild_member(config, guild_id, user_id, session=session)
     return member is not None
 
 
@@ -182,7 +177,9 @@ async def require_login(request: Request) -> dict[str, Any]:
     return user
 
 
-async def require_guild_member(request: Request) -> dict[str, Any]:
+async def require_guild_member(
+    request: Request, session: AsyncSession = Depends(get_db)
+) -> dict[str, Any]:
     """Dependency for public dashboard routes.
 
     Redirects unauthenticated visitors to ``/`` (which shows the login UI).
@@ -219,7 +216,7 @@ async def require_guild_member(request: Request) -> dict[str, Any]:
     config: AppConfig = request.app.state.config
     default_gid = config.default_guild_id
     uid = int(user["id"])
-    is_member = await _is_guild_member(request, default_gid, uid)
+    is_member = await _is_guild_member(request, default_gid, uid, session=session)
     if not is_member:
         templates = get_templates(request)
         raise _NotInGuild(
@@ -243,17 +240,34 @@ async def guild_name_for(session: AsyncSession, guild_id: int) -> str:
 async def player_names_for(
     session: AsyncSession, guild_id: int, user_ids: Iterable[int]
 ) -> dict[int, str]:
+    """Return ``{user_id: display_name}`` preferring guild_members, falling back to players."""
     ids = [int(u) for u in user_ids if u is not None]
     if not ids:
         return {}
-    rows = (
+    result: dict[int, str] = {}
+    gm_rows = (
         await session.execute(
-            select(Player.user_id, Player.display_name).where(
-                Player.guild_id == guild_id, Player.user_id.in_(ids)
+            select(GuildMember.user_id, GuildMember.nick, GuildMember.global_name, GuildMember.username).where(
+                GuildMember.guild_id == guild_id, GuildMember.user_id.in_(ids)
             )
         )
     ).all()
-    return {int(uid): (name or str(uid)) for uid, name in rows}
+    for uid, nick, gname, uname in gm_rows:
+        name = nick or gname or uname
+        if name:
+            result[int(uid)] = name
+    missing = [uid for uid in ids if uid not in result]
+    if missing:
+        p_rows = (
+            await session.execute(
+                select(Player.user_id, Player.display_name).where(
+                    Player.guild_id == guild_id, Player.user_id.in_(missing)
+                )
+            )
+        ).all()
+        for uid, name in p_rows:
+            result[int(uid)] = name or str(uid)
+    return {uid: result.get(uid) or str(uid) for uid in ids}
 
 
 def get_guild_id(request: Request) -> int:
@@ -338,6 +352,7 @@ async def require_guild_admin(
     Owner (config.owner_id) is always admin.
     Global admins (in admin_users table) have access to all guilds.
     Guild admins (in admin_roles for the guild) have access to that guild.
+    Discord Manage Guild permission is also accepted.
     In dev mock-auth mode, respects session flags (is_global_admin / is_guild_admin).
     """
     if _is_mock_auth(request):
@@ -373,13 +388,12 @@ async def require_guild_admin(
     if is_global:
         return user
 
-    if await svc.is_guild_admin(guild_id, uid):
-        return user
-
-    config: AppConfig = request.app.state.config
-    member = await fetch_guild_member(config, guild_id, uid)
+    member = await fetch_guild_member(config, guild_id, uid, session=session)
     if member is None:
         raise _unauthorized()
+
+    if await svc.is_guild_admin(guild_id, uid, user_role_ids=member.get("roles", [])):
+        return user
 
     perms = int(member.get("permissions", 0))
     has_manage_guild = bool(perms & 0x20)

@@ -262,14 +262,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             return
 
         owner_id = int(getattr(config, "owner_id", 0) or 0)
+        from stankbot.db.engine import session_scope
         from stankbot.web.tools import fetch_guild_member
-        if int(user.get("id", 0)) != owner_id:
-            member_data = await fetch_guild_member(config, guild_id, int(user["id"]))
-            if member_data is None:
-                await websocket.close(code=4003, reason="Not in guild")
-                return
-        else:
-            member_data = await fetch_guild_member(config, guild_id, int(user["id"]))
+        async with session_scope(session_factory) as db_session:
+            if int(user.get("id", 0)) != owner_id:
+                member_data = await fetch_guild_member(config, guild_id, int(user["id"]), session=db_session)
+                if member_data is None:
+                    await websocket.close(code=4003, reason="Not in guild")
+                    return
+            else:
+                member_data = await fetch_guild_member(config, guild_id, int(user["id"]), session=db_session)
     else:
         member_data = None
 

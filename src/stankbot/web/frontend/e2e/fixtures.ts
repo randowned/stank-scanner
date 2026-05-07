@@ -46,6 +46,15 @@ export const adminUser: MockUser = {
 	is_guild_admin: true
 };
 
+export const guildAdminUser: MockUser = {
+	user_id: 333333333,
+	username: 'E2E Guild Admin',
+	avatar: null,
+	guild: 123456789,
+	is_global_admin: false,
+	is_guild_admin: true
+};
+
 export interface BotGuild {
 	id: number;
 	name: string;
