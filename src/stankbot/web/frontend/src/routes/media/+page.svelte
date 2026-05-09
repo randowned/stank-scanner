@@ -186,7 +186,7 @@
 			const provider = $providersByType[t];
 			metric = provider?.metrics?.[0]?.key ?? 'view_count';
 		}
-		void goto(`${base}/media/${primary}?compare=${extras.join(',')}&metric=${metric}&days=7`);
+		void goto(`${base}/media/${primary}?compare=${extras.join(',')}&metric=${metric}&days=2`);
 	}
 
 	const showCompareBtn = $derived(filteredItems.length > 1);

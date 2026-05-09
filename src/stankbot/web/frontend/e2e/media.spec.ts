@@ -76,17 +76,17 @@ test.describe('Media page', () => {
 	test('compare navigates to detail page with query params', async ({ page, injectMedia }) => {
 		const item1 = await injectMedia({ guildId: GUILD, slug: 'compare-video-1', historyDays: 7 });
 		const item2 = await injectMedia({ guildId: GUILD, slug: 'compare-video-2', historyDays: 7 });
-		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&days=7&resolution=auto&mode=delta`);
+		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&days=2&resolution=auto&mode=delta`);
 		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
 		await expect(page).toHaveURL(new RegExp(`/media/${item1.id}\\?metric=view_count`));
 		await expect(page).toHaveURL(new RegExp(`compare=${item2.id}`));
-		await expect(page).toHaveURL(/days=7/);
+		await expect(page).toHaveURL(/days=2/);
 	});
 
 	test('compare renders comparison section on detail page', async ({ page, injectMedia }) => {
 		const item1 = await injectMedia({ guildId: GUILD, slug: 'comp-1', historyDays: 7 });
 		const item2 = await injectMedia({ guildId: GUILD, slug: 'comp-2', historyDays: 7 });
-		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&days=7`);
+		await page.goto(`/media/${item1.id}?compare=${item2.id}&metric=view_count&days=2`);
 		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
 		// Comparison heading renders
 		await expect(page.getByText(/comparison/)).toBeVisible({ timeout: 15000 });
