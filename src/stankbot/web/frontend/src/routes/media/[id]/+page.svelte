@@ -503,27 +503,52 @@
 		liveMetrics = m;
 	});
 
+	// Track last-fetched timestamp so the freshness pill updates in real-time
+	// and animates to "just now" when WS snapshots arrive.
+	let lastFetchedAt = $state<string | null | undefined>(item?.metrics_last_fetched_at);
+	$effect(() => {
+		if (item?.metrics_last_fetched_at) {
+			lastFetchedAt = item.metrics_last_fetched_at;
+		}
+	});
+
+	// Ticker that forces $derived freshness to re-evaluate every 15s so the
+	// "X minutes ago" text advances without a full state change.
+	let _freshnessTick = $state(0);
+	$effect(() => {
+		const interval = setInterval(() => { _freshnessTick++; }, 15_000);
+		return () => clearInterval(interval);
+	});
+
+	const freshness = $derived.by(() => {
+		void _freshnessTick;
+		return formatFreshness(lastFetchedAt, provider?.interval_minutes ?? 10);
+	});
+
 	let flashKeys = $state<Record<string, boolean>>({});
 	$effect(() => {
 		const updates = $mediaMetricUpdates;
 		if (!updates.length || !item) return;
 		const keys: Record<string, boolean> = {};
 		let changed = false;
+		let refreshChart = false;
 		for (const u of updates) {
 			if (u.mediaItemId === item.id) {
 				keys[u.metricKey] = true;
-				// patch the live value so StatTile re-renders with new value
 				liveMetrics[u.metricKey] = u.value;
 				changed = true;
+				if (u.metricKey === selectedMetric) refreshChart = true;
 			}
 		}
 		if (changed) {
+			lastFetchedAt = new Date().toISOString();
 			flashKeys = keys;
 			setTimeout(() => { flashKeys = {}; }, 1500);
 		}
+		if (refreshChart) {
+			void loadChartData();
+		}
 	});
-
-	const freshness = $derived(formatFreshness(item?.metrics_last_fetched_at, 10));
 	const graphs = $derived(history.length > 0);
 
 	function externalUrl(): string | null {
