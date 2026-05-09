@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
+	import { untrack } from 'svelte';
 	import { apiFetch } from '$lib/api';
 	import { formatFreshness } from '$lib/format';
 	import type { MediaItem, MetricSnapshot, CompareData, MetricDef, ProviderDef } from '$lib/types';
@@ -357,7 +358,7 @@
 			return;
 		}
 
-		const _ssnap = history;
+		const _ssnap = untrack(() => history);
 		if (_ssnap.length > 0 && _prevDatasets.length === 0) {
 			_prevDatasets = [{
 				label: item?.name ?? metricLabel(selectedMetric),

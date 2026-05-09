@@ -63,6 +63,14 @@ async def list_media(
     return MsgPackResponse({"items": items}, request)
 
 
+
+
+_PROVIDER_INTERVAL_KEYS: dict[str, str] = {
+    "youtube": Keys.MEDIA_YOUTUBE_UPDATE_INTERVAL_MINUTES,
+    "spotify": Keys.MEDIA_SPOTIFY_UPDATE_INTERVAL_MINUTES,
+}
+
+
 @router.get("/providers")
 async def list_providers(
     request: Request,
