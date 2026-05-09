@@ -234,10 +234,13 @@ class StatsCommands(commands.GroupCog, name="stats"):
                     metrics[key] = int(val["value"])
             metrics["external_id"] = item.external_id
 
-            last_fetched = (
-                item.metrics_last_fetched_at.isoformat()
-                if item.metrics_last_fetched_at
-                else None
+            last_fetched = max(
+                (
+                    val["fetched_at"]
+                    for val in metrics_raw.values()
+                    if isinstance(val, dict) and val.get("fetched_at")
+                ),
+                default=None,
             )
 
             base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
