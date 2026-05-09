@@ -301,6 +301,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 async with session_scope(session_factory) as db:
                     svc = PermissionService(db, owner_id=owner_id)
                     is_admin = await svc.is_global_admin(int(user_id_str))
+                    if not is_admin and member_data is not None:
+                        is_admin = await svc.is_guild_admin(
+                            guild_id, int(user_id_str), user_role_ids=member_data.get("roles", [])
+                        )
             except Exception:
                 log.warning("Failed to check admin status for WS client: user_id=%s", user_id_str)
 
