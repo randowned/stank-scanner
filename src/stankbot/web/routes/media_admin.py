@@ -464,9 +464,9 @@ async def _broadcast_milestones(
 
 def _fmt_compact_media(n: int) -> str:
     if n >= 1_000_000_000:
-        return f"{n / 1_000_000_000:.1f}B"
+        return f"{n / 1_000_000_000:.1f}B".replace(".0B", "B")
     if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
+        return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
     if n >= 1_000:
-        return f"{n / 1_000:.1f}K"
+        return f"{n / 1_000:.1f}K".replace(".0K", "K")
     return str(n)

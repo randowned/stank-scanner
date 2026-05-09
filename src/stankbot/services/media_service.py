@@ -52,6 +52,14 @@ def next_milestone(current_value: int) -> int | None:
     return None
 
 
+def prev_milestone(current_value: int) -> int:
+    """Return the greatest milestone <= current_value, or 0 if none."""
+    for m in reversed(MILESTONE_THRESHOLDS):
+        if m <= current_value:
+            return m
+    return 0
+
+
 def _slugify(text: str) -> str:
     """Convert text to URL-safe slug: lowercase, spaces→dashes, strip non-alnum."""
     text = text.lower().strip()

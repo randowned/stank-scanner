@@ -16,10 +16,10 @@ from stankbot.services.media_service import MilestoneInfo
 
 class TestFmtCompact:
     def test_thousands(self) -> None:
-        assert _fmt_compact(5_000) == "5.0K"
+        assert _fmt_compact(5_000) == "5K"
 
     def test_millions(self) -> None:
-        assert _fmt_compact(5_000_000) == "5.0M"
+        assert _fmt_compact(5_000_000) == "5M"
 
     def test_billions(self) -> None:
         assert _fmt_compact(1_500_000_000) == "1.5B"
@@ -31,14 +31,14 @@ class TestFmtCompact:
         assert _fmt_compact(0) == "0"
 
     def test_1m_exact(self) -> None:
-        assert _fmt_compact(1_000_000) == "1.0M"
+        assert _fmt_compact(1_000_000) == "1M"
 
 
 class TestMilestoneProgressBar:
     def test_mid_progress(self) -> None:
         bar = _milestone_progress_bar(5_000_000, 10_000_000)
         assert "50%" in bar
-        assert "to 10.0M" in bar
+        assert "to 10M" in bar
 
     def test_full_progress(self) -> None:
         bar = _milestone_progress_bar(10_000_000, 10_000_000)
@@ -59,6 +59,17 @@ class TestMilestoneProgressBar:
     def test_almost_done(self) -> None:
         bar = _milestone_progress_bar(999_000, 1_000_000)
         assert "99%" in bar
+
+    def test_segment_based_progress(self) -> None:
+        """3.1M between 3M→4M milestone = 10% progress."""
+        bar = _milestone_progress_bar(3_100_000, 4_000_000, previous=3_000_000)
+        assert "10%" in bar
+        assert "to 4M" in bar
+
+    def test_segment_mid_progress(self) -> None:
+        """3.5M between 3M→4M = 50% progress."""
+        bar = _milestone_progress_bar(3_500_000, 4_000_000, previous=3_000_000)
+        assert "50%" in bar
 
 
 class TestBuildMediaMilestoneEmbed:

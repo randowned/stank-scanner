@@ -455,8 +455,8 @@
 	function yTickCallback(value: number): string {
 		const fmt = metricFormat();
 		if (fmt === 'percentage') return `${Math.round(value)}%`;
-		if (value >= 1_000_000) return (value / 1_000_000).toFixed(1) + 'M';
-		if (value >= 1_000) return (value / 1_000).toFixed(1) + 'K';
+		if (value >= 1_000_000) return (value / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+		if (value >= 1_000) return (value / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
 		return value.toString();
 	}
 

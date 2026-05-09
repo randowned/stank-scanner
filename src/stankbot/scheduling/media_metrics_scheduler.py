@@ -205,11 +205,11 @@ class MediaMetricsScheduler:
                 if isinstance(mv, dict) and int(mv.get("value", 0)):
                     cv = int(mv["value"])
                     if cv >= 1_000_000_000:
-                        fm = f"{cv / 1_000_000_000:.1f}B"
+                        fm = f"{cv / 1_000_000_000:.1f}B".replace(".0B", "B")
                     elif cv >= 1_000_000:
-                        fm = f"{cv / 1_000_000:.1f}M"
+                        fm = f"{cv / 1_000_000:.1f}M".replace(".0M", "M")
                     elif cv >= 1_000:
-                        fm = f"{cv / 1_000:.1f}K"
+                        fm = f"{cv / 1_000:.1f}K".replace(".0K", "K")
                     else:
                         fm = str(cv)
                     other_parts.append(f"{mdef.icon} {fm}")

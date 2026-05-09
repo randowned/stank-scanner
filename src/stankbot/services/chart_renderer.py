@@ -80,11 +80,11 @@ def _format_number(n: int | float) -> str:
     """Human-readable metric value."""
     n = float(n)
     if n >= 1_000_000_000:
-        return f"{n / 1_000_000_000:.1f}B"
+        return f"{n / 1_000_000_000:.1f}B".replace(".0B", "B")
     if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
+        return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
     if n >= 1_000:
-        return f"{n / 1_000:.1f}K"
+        return f"{n / 1_000:.1f}K".replace(".0K", "K")
     if n == int(n):
         return str(int(n))
     return f"{n:.1f}"

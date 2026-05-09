@@ -15,15 +15,16 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import discord
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stankbot.db.models import Altar, Record, RecordScope
+from stankbot.db.models import Altar, MetricSnapshot, Record, RecordScope
 from stankbot.db.repositories import events as events_repo
 from stankbot.db.repositories import media as media_repo
 from stankbot.db.repositories import players as players_repo
 from stankbot.services import template_store
 from stankbot.services.board_renderer import PlayerRow
-from stankbot.services.media_service import MilestoneInfo, next_milestone
+from stankbot.services.media_service import MilestoneInfo, next_milestone, prev_milestone
 from stankbot.services.template_engine import RenderContext, render_embed
 
 
@@ -369,13 +370,31 @@ async def build_media_embed(
         try:
             dt = datetime.fromisoformat(iso)
             diff = datetime.now(UTC) - dt
-            if diff < timedelta(minutes=2):
+            secs = diff.total_seconds()
+            if secs < 60:
                 return "just now"
-            if diff < timedelta(hours=1):
-                return f"{int(diff.total_seconds() // 60)}m ago"
-            if diff < timedelta(days=1):
-                return f"{int(diff.total_seconds() // 3600)}h ago"
-            return f"{diff.days}d ago"
+            mins = int(secs // 60)
+            if mins < 2:
+                return "1 minute ago"
+            if mins < 60:
+                return f"{mins} minutes ago"
+            hrs = mins // 60
+            if hrs < 2:
+                return "1 hour ago"
+            if hrs < 24:
+                return f"{hrs} hours ago"
+            days = diff.days
+            if days < 2:
+                return "1 day ago"
+            if days < 14:
+                return f"{days} days ago"
+            weeks = days // 7
+            if weeks < 5:
+                return f"{weeks} weeks ago"
+            months = days // 30
+            if months < 12:
+                return f"{months} months ago"
+            return f"{days // 365} years ago"
         except (ValueError, TypeError):
             return "\u2014"
 
@@ -402,6 +421,17 @@ async def build_media_embed(
     comment_count = int(metrics.get("comment_count", 0))
     playcount = int(metrics.get("playcount", 0))
 
+    if not last_fetched_at:
+        latest = await session.execute(
+            select(MetricSnapshot.fetched_at)
+            .where(MetricSnapshot.media_item_id == media_item_id)
+            .order_by(MetricSnapshot.fetched_at.desc())
+            .limit(1)
+        )
+        row = latest.scalar()
+        if row:
+            last_fetched_at = row.isoformat()
+
     variables: dict[str, Any] = {
         "title": title or "",
         "channel_name": channel_name or "",
@@ -422,7 +452,7 @@ async def build_media_embed(
         variables["view_count_delta"] = await _delta("view_count", view_count)
         variables["like_count_delta"] = await _delta("like_count", like_count)
         variables["comment_count_delta"] = await _delta("comment_count", comment_count)
-        variables["milestone_progress"] = _milestone_progress_bar(view_count, next_milestone(view_count))
+        variables["milestone_progress"] = _milestone_progress_bar(view_count, next_milestone(view_count), prev_milestone(view_count))
         template_key = "youtube_media_embed"
     else:
         variables["provider_url"] = "https://open.spotify.com/" + media_type + "/" + str(metrics.get('external_id', ''))
@@ -430,7 +460,7 @@ async def build_media_embed(
         variables["playcount"] = _fmt_num(playcount)
         variables["spotify_type"] = media_type
         variables["playcount_delta"] = await _delta("playcount", playcount)
-        variables["milestone_progress"] = _milestone_progress_bar(playcount, next_milestone(playcount))
+        variables["milestone_progress"] = _milestone_progress_bar(playcount, next_milestone(playcount), prev_milestone(playcount))
         template_key = "spotify_media_embed"
 
     ctx = RenderContext(variables=variables)
@@ -440,20 +470,22 @@ async def build_media_embed(
 
 def _fmt_compact(n: int) -> str:
     if n >= 1_000_000_000:
-        return f"{n / 1_000_000_000:.1f}B"
+        return f"{n / 1_000_000_000:.1f}B".replace(".0B", "B")
     if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
+        return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
     if n >= 1_000:
-        return f"{n / 1_000:.1f}K"
+        return f"{n / 1_000:.1f}K".replace(".0K", "K")
     return str(n)
 
 
-def _milestone_progress_bar(current: int, target: int | None, bar_length: int = 10) -> str:
+def _milestone_progress_bar(current: int, target: int | None, previous: int = 0, bar_length: int = 10) -> str:
     if target is None or target <= 0:
         return "No milestones remaining"
     if current >= target:
         return f"100% to {_fmt_compact(target)}"
-    pct = current / target
+    segment = target - previous
+    offset = current - previous
+    pct = offset / segment
     filled = int(bar_length * pct)
     empty = bar_length - filled
     pct_str = f"{int(pct * 100)}%"
