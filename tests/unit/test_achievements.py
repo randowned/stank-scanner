@@ -203,6 +203,38 @@ async def test_centurion_combined_across_chains_not_enough(session: Any) -> None
     assert await _centurion(session, 1, 100) is False
 
 
+async def test_centurion_user_in_100plus_chain_one_message(session: Any) -> None:
+    """User contributed only 1 message but the chain itself reached 100."""
+    await _mk_guild_altar(session)
+    chain = await _mk_chain(session, starter_id=200)  # started by someone else
+    now = datetime.now(tz=UTC)
+
+    # User 100 has just 1 message in the chain.
+    session.add(
+        ChainMessage(
+            chain_id=chain.id,
+            message_id=1,
+            user_id=100,
+            position=1,
+            created_at=now,
+        )
+    )
+    # 99 more messages from other users fill out the chain to 100 total.
+    for i in range(99):
+        session.add(
+            ChainMessage(
+                chain_id=chain.id,
+                message_id=i + 1000,
+                user_id=300,  # different user
+                position=i + 2,
+                created_at=now,
+            )
+        )
+    await session.flush()
+
+    assert await _centurion(session, 1, 100) is True
+
+
 # ── _comeback_kid ───────────────────────────────────────────────────────────
 
 
@@ -230,3 +262,22 @@ async def test_comeback_kid_still_negative(session: Any) -> None:
 
 async def test_comeback_kid_no_events_at_all(session: Any) -> None:
     assert await _comeback_kid(session, 1, 100) is False
+
+
+async def test_comeback_kid_team_player_never_negative(session: Any) -> None:
+    """Team Player SP then PP, net still positive, never actually negative."""
+    await _event(session, user_id=100, type=EventType.SP_TEAM_PLAYER, delta=20)
+    await _event(session, user_id=100, type=EventType.PP_BREAK, delta=15)
+
+    # Net +5, but was never negative (team_player kept them in the green).
+    assert await _comeback_kid(session, 1, 100) is False
+
+
+async def test_comeback_kid_team_player_genuine_comeback(session: Any) -> None:
+    """Team Player SP after being negative counts as a genuine comeback."""
+    await _event(session, user_id=100, type=EventType.PP_BREAK, delta=30)
+    await _event(session, user_id=100, type=EventType.SP_TEAM_PLAYER, delta=20)
+    await _event(session, user_id=100, type=EventType.SP_BASE, delta=15)
+
+    # Net +5, was negative after PP, then team_player + SP base recovered.
+    assert await _comeback_kid(session, 1, 100) is True

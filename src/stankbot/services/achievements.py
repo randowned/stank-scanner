@@ -101,11 +101,19 @@ async def _finisher(session: AsyncSession, guild_id: int, user_id: int) -> bool:
 async def _centurion(session: AsyncSession, guild_id: int, user_id: int) -> bool:
     # User has posted in at least one chain whose final_length >= 100
     # (still-alive chains with >=100 current messages also qualify).
+    user_chain_ids = (
+        select(ChainMessage.chain_id)
+        .where(ChainMessage.user_id == user_id)
+        .distinct()
+    )
     count = func.count(ChainMessage.message_id)
     stmt = (
         select(Chain.id)
         .join(ChainMessage, ChainMessage.chain_id == Chain.id)
-        .where(Chain.guild_id == guild_id, ChainMessage.user_id == user_id)
+        .where(
+            Chain.guild_id == guild_id,
+            Chain.id.in_(user_chain_ids.scalar_subquery()),
+        )
         .group_by(Chain.id)
         .having(count >= 100)
         .limit(1)
@@ -152,6 +160,7 @@ async def _comeback_kid(
         EventType.SP_STARTER_BONUS.value,
         EventType.SP_FINISH_BONUS.value,
         EventType.SP_REACTION.value,
+        EventType.SP_TEAM_PLAYER.value,
     }
     async for row in await session.stream(stmt):
         t, delta = row
