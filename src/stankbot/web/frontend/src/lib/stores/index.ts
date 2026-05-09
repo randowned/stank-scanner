@@ -7,4 +7,5 @@ export { activeChainBreak, type ChainBreakInfo } from './chainBreak';
 export { adminSidebarOpen } from './admin';
 export { onlineUsers, type OnlineUser } from './onlineUsers';
 export { providersByType, loadProviders } from './providers';
+export { mediaHistoryCache, mediaMetricUpdates, type MediaMetricUpdate } from './media';
 export type { Toast, ToastKind } from '$lib/types';

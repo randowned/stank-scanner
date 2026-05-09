@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { formatNumber, formatFreshness } from '$lib/format';
 	import type { MediaItem, MetricDef, ProviderDef } from '$lib/types';
-	import { providersByType, loadProviders } from '$lib/stores';
+	import { providersByType, loadProviders, mediaMetricUpdates } from '$lib/stores';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Tabs from '$lib/components/Tabs.svelte';
@@ -32,6 +32,19 @@
 	let selectedMediaType = $state<string | null>(null);
 	let searchQuery = $state<string>('');
 	let sortKey = $state<string>('published_desc');
+
+	// Flash indicators for live metric updates via WS
+	let flashItems = $state<Record<number, boolean>>({});
+	$effect(() => {
+		const updates = $mediaMetricUpdates;
+		if (!updates.length) return;
+		const ids: Record<number, boolean> = {};
+		for (const u of updates) ids[u.mediaItemId] = true;
+		if (Object.keys(ids).length > 0) {
+			flashItems = ids;
+			setTimeout(() => { flashItems = {}; }, 1500);
+		}
+	});
 
 	const typeTabs = $derived([
 		{ value: '', label: 'All' },
@@ -223,7 +236,7 @@
 				{@const cardMetrics = metricsForCard(item)}
 				{@const typeLocked = compareMode && selectedMediaType !== null && item.media_type !== selectedMediaType}
 				<div
-					class="panel overflow-hidden p-0 block hover:border-accent transition-colors relative {borderClass(item.media_type)} {compareMode ? (selectedIds.includes(item.id) ? 'ring-2 ring-accent' : typeLocked ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'opacity-50') : ''}"
+					class="panel overflow-hidden p-0 block hover:border-accent transition-colors relative {borderClass(item.media_type)} {compareMode ? (selectedIds.includes(item.id) ? 'ring-2 ring-accent' : typeLocked ? 'opacity-30 pointer-events-none cursor-not-allowed' : 'opacity-50') : ''} {flashItems[item.id] ? 'row-flash' : ''}"
 				>
 					{#if compareMode}
 						<button

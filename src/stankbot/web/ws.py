@@ -32,6 +32,8 @@ MSG_TYPE_GAME_EVENT = 107
 MSG_TYPE_ERROR = 108
 MSG_TYPE_VERSION_MISMATCH = 109
 MSG_TYPE_ONLINE_USERS = 110
+MSG_TYPE_MEDIA_SNAPSHOT = 111
+MSG_TYPE_MEDIA_MILESTONE = 112
 
 router = APIRouter(prefix="")
 
@@ -496,6 +498,40 @@ async def notify_session(
                 "action": action,
                 "started_at": utc_isoformat(started_at),
                 "ended_at": utc_isoformat(ended_at),
+            },
+        },
+    )
+
+
+async def broadcast_media_milestone(
+    guild_id: int,
+    *,
+    media_item_id: int,
+    media_type: str,
+    metric_key: str,
+    milestone_value: int,
+    new_value: int,
+    title: str,
+    channel_name: str | None = None,
+    thumbnail_url: str | None = None,
+    name: str | None = None,
+    external_id: str | None = None,
+) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {
+            "t": MSG_TYPE_MEDIA_MILESTONE,
+            "d": {
+                "media_item_id": media_item_id,
+                "media_type": media_type,
+                "metric_key": metric_key,
+                "milestone_value": milestone_value,
+                "new_value": new_value,
+                "title": title,
+                "channel_name": channel_name,
+                "thumbnail_url": thumbnail_url,
+                "name": name,
+                "external_id": external_id,
             },
         },
     )

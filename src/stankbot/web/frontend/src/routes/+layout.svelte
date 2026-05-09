@@ -20,6 +20,7 @@
 	import OnlineBadge from '$lib/components/OnlineBadge.svelte';
 	import NavSkeleton from '$lib/components/NavSkeleton.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import MilestoneOverlay from '$lib/components/MilestoneOverlay.svelte';
 
 	let { data, children } = $props();
 
@@ -29,6 +30,11 @@
 	const isAdmin = $derived(Boolean(data.is_admin));
 
 	let updateToast = $state<{ serverVersion: string; clientVersion: string } | null>(null);
+	let milestoneQueue = $state<Array<{
+		id: number; mediaItemId: number; title: string; metricKey: string;
+		milestoneValue: number; newValue: number; thumbnailUrl?: string | null; name?: string | null;
+	}>>([]);
+	let _milestoneId = 0;
 
 	$effect(() => {
 		user.set(userData);
@@ -78,6 +84,23 @@
 			case 'disconnected':
 				// LiveBadge surfaces transport state — no toast.
 				break;
+			case 'media-milestone': {
+				const id = ++_milestoneId;
+				milestoneQueue = [...milestoneQueue, {
+					id,
+					mediaItemId: event.mediaItemId,
+					title: event.title,
+					metricKey: event.metricKey,
+					milestoneValue: event.milestoneValue,
+					newValue: event.newValue,
+					thumbnailUrl: event.thumbnailUrl,
+					name: event.name
+				}];
+				setTimeout(() => {
+					milestoneQueue = milestoneQueue.filter((m) => m.id !== id);
+				}, 8000);
+				break;
+			}
 		}
 	}
 
@@ -172,4 +195,5 @@
 	</main>
 
 	<ToastContainer {updateToast} onreload={reloadPage} />
+	<MilestoneOverlay bind:entries={milestoneQueue} />
 </div>

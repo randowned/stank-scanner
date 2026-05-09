@@ -16,7 +16,10 @@ export type WsEvent =
 	| { kind: 'error'; code: string; message: string }
 	| { kind: 'achievement'; userId: string; badge: Badge }
 	| { kind: 'session'; action: 'start' | 'end'; sessionId: number }
-	| { kind: 'update-available'; serverVersion: string; clientVersion: string };
+	| { kind: 'update-available'; serverVersion: string; clientVersion: string }
+	| { kind: 'media-milestone'; mediaItemId: number; title: string;
+	    metricKey: string; milestoneValue: number; newValue: number;
+	    thumbnailUrl?: string | null; name?: string | null };
 
 /** Latest event; subscribers react on change. `null` between events. */
 export const lastWsEvent: Writable<WsEvent | null> = writable(null);

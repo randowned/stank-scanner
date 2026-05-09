@@ -318,8 +318,8 @@ class StatsCommands(commands.GroupCog, name="stats"):
             base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
 
             if compare_names:
-                ids_param = ",".join(str(it.id) for it in items)
-                url = f"{base_url}/api/media/compare/chart?ids={ids_param}&metric={metric}"
+                compare_ids = ",".join(str(it.id) for it in items[1:])
+                url = f"{base_url}/api/media/{items[0].id}/chart?metric={metric}&compare_ids={compare_ids}"
                 if range_value == "all":
                     url += "&days=0"
                 elif range_value.endswith("h"):
@@ -335,12 +335,10 @@ class StatsCommands(commands.GroupCog, name="stats"):
                     f"{media_type.capitalize()} · {metric} · {range_value} · {mode}"
                     + (f" · {aggregation}" if aggregation else "")
                 )
-                compare_ids = ",".join(str(it.id) for it in items[1:])
                 media_url = f"{base_url}/media/{items[0].id}?compare={compare_ids}&metric={metric}"
             else:
                 item = items[0]
-                date_param = datetime.now(UTC).isoformat().replace("+", "%2B")
-                url = f"{base_url}/api/media/{item.id}/chart?metric={metric}&date={date_param}"
+                url = f"{base_url}/api/media/{item.id}/chart?metric={metric}"
                 if range_value == "all":
                     url += "&days=0"
                 elif range_value.endswith("h"):

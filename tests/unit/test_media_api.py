@@ -304,3 +304,69 @@ async def test_history_compare_primary_duplicate_in_compare_ids_no_dup_in_series
     assert "compare" in data
     series_ids = [s["media_item_id"] for s in data["compare"]["series"]]
     assert series_ids == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_compare_endpoint_removed(
+    session: AsyncSession, registry: MediaProviderRegistry,
+) -> None:
+    """The old GET /api/media/compare endpoint was removed in favour of
+    /api/media/{id}/history?compare_ids=."""
+    await _seed_media_items(session)
+
+    app = _build_test_app(session, registry)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/media/compare?ids=1,2&metric=view_count&hours=24")
+
+    assert resp.status_code in (status.HTTP_404_NOT_FOUND, 422)
+
+
+@pytest.mark.asyncio
+async def test_chart_endpoint_returns_png(
+    session: AsyncSession, registry: MediaProviderRegistry,
+) -> None:
+    """GET /api/media/{id}/chart returns a PNG image (no auth)."""
+    await _seed_media_items(session)
+
+    app = _build_test_app(session, registry)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/media/1/chart?metric=view_count&hours=24&mode=delta")
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.headers.get("content-type") == "image/png"
+    assert len(resp.content) > 0
+
+
+@pytest.mark.asyncio
+async def test_chart_endpoint_with_compare_ids(
+    session: AsyncSession, registry: MediaProviderRegistry,
+) -> None:
+    """GET /api/media/{id}/chart with compare_ids returns a compare PNG."""
+    await _seed_media_items(session)
+
+    app = _build_test_app(session, registry)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(
+            "/api/media/1/chart?metric=view_count&hours=24&mode=delta&compare_ids=2"
+        )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.headers.get("content-type") == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_chart_endpoint_404_for_nonexistent_item(
+    session: AsyncSession, registry: MediaProviderRegistry,
+) -> None:
+    """Chart endpoint returns 404 for non-existent primary item."""
+    await _seed_media_items(session)
+
+    app = _build_test_app(session, registry)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/media/9999/chart?metric=view_count&hours=24")
+
+    assert resp.status_code == status.HTTP_404_NOT_FOUND

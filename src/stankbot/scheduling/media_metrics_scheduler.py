@@ -23,6 +23,7 @@ from stankbot.services.announcement_service import broadcast_media_milestone
 from stankbot.services.embed_builders import build_media_milestone_embed
 from stankbot.services.media_providers.registry import MediaProviderRegistry
 from stankbot.services.media_service import MediaService, MilestoneInfo
+from stankbot.web.ws import broadcast_media_milestone as ws_broadcast_milestone
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.routes.media_api import cleanup_chart_cache
 
@@ -221,6 +222,19 @@ class MediaMetricsScheduler:
             embed=embed,
             media_announce_channel_id=media_channel,
             milestones_enabled=True,
+        )
+        await ws_broadcast_milestone(
+            guild_id,
+            media_item_id=minfo.media_item_id,
+            media_type=minfo.media_type,
+            metric_key=minfo.metric_key,
+            milestone_value=minfo.milestone_value,
+            new_value=minfo.new_value,
+            title=minfo.title,
+            channel_name=minfo.channel_name,
+            thumbnail_url=minfo.thumbnail_url,
+            name=minfo.name,
+            external_id=minfo.external_id,
         )
         log.info(
             "MediaMilestone: guild=%d item=%d metric=%s milestone=%s announced",

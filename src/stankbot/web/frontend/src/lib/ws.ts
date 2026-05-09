@@ -2,6 +2,8 @@ import { base } from '$app/paths';
 import { Packr } from 'msgpackr';
 import { connectionStatus, wsLatency, boardState, onlineUsers } from './stores/index';
 import type { OnlineUser } from './stores/index';
+import { mediaMetricUpdates } from './stores/index';
+import type { MediaMetricUpdate } from './stores/index';
 import { emitWsEvent } from './stores/ws-events';
 import type { BoardState, Badge } from './types';
 import { get } from 'svelte/store';
@@ -23,7 +25,9 @@ export enum MsgType {
 	GAME_EVENT = 107,
 	ERROR = 108,
 	VERSION_MISMATCH = 109,
-	ONLINE_USERS = 110
+	ONLINE_USERS = 110,
+	MEDIA_SNAPSHOT = 111,
+	MEDIA_MILESTONE = 112
 }
 
 interface PingMsg {
@@ -119,6 +123,32 @@ interface OnlineUsersMsg {
 	};
 }
 
+interface MediaSnapshotMsg {
+	t: typeof MsgType.MEDIA_SNAPSHOT;
+	d: {
+		media_item_id: number;
+		metric_key: string;
+		value: number;
+		fetched_at: string;
+	};
+}
+
+interface MediaMilestoneMsg {
+	t: typeof MsgType.MEDIA_MILESTONE;
+	d: {
+		media_item_id: number;
+		media_type: string;
+		metric_key: string;
+		milestone_value: number;
+		new_value: number;
+		title: string;
+		channel_name: string | null;
+		thumbnail_url: string | null;
+		name: string | null;
+		external_id: string;
+	};
+}
+
 type ServerMsg =
 	| StateMsg
 	| RankUpdateMsg
@@ -129,7 +159,9 @@ type ServerMsg =
 	| GameEventMsg
 	| ErrorMsg
 	| VersionMismatchMsg
-	| OnlineUsersMsg;
+	| OnlineUsersMsg
+	| MediaSnapshotMsg
+	| MediaMilestoneMsg;
 
 let ws: WebSocket | null = null;
 let pingInterval: ReturnType<typeof setInterval> | null = null;
@@ -343,6 +375,30 @@ function handleMessage(msg: ServerMsg): void {
 
 		case MsgType.ONLINE_USERS:
 			onlineUsers.set(msg.d.users);
+			break;
+
+		case MsgType.MEDIA_SNAPSHOT: {
+			const update: MediaMetricUpdate = {
+				mediaItemId: msg.d.media_item_id,
+				metricKey: msg.d.metric_key,
+				value: msg.d.value,
+				fetchedAt: msg.d.fetched_at
+			};
+			mediaMetricUpdates.update((prev) => [...prev, update]);
+			break;
+		}
+
+		case MsgType.MEDIA_MILESTONE:
+			emitWsEvent({
+				kind: 'media-milestone',
+				mediaItemId: msg.d.media_item_id,
+				title: msg.d.title,
+				metricKey: msg.d.metric_key,
+				milestoneValue: msg.d.milestone_value,
+				newValue: msg.d.new_value,
+				thumbnailUrl: msg.d.thumbnail_url,
+				name: msg.d.name
+			});
 			break;
 	}
 }

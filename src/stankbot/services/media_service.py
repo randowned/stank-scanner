@@ -398,12 +398,14 @@ class MediaService:
         window_hours: int | None = None,
         aggregation: str | None = None,
         mode: str = "total",
+        reference_date: datetime | None = None,
     ) -> list[dict[str, Any]]:
+        ref = reference_date or datetime.now(UTC)
         since = None
         if window_hours is not None and window_hours > 0:
-            since = datetime.now(UTC) - timedelta(hours=window_hours)
+            since = ref - timedelta(hours=window_hours)
         elif window_days > 0:
-            since = datetime.now(UTC) - timedelta(days=window_days)
+            since = ref - timedelta(days=window_days)
 
         alignment_bit: int | None = _ALIGN_BIT.get(aggregation) if aggregation else None
 
@@ -427,15 +429,17 @@ class MediaService:
         align_release: bool = False,
         delta: bool = True,
         aggregation: str | None = None,
+        reference_date: datetime | None = None,
     ) -> dict[str, Any]:
         if align_release:
             return await self._comparison_aligned(media_item_ids, metric_key, window_days, delta=delta, aggregation=aggregation)
 
+        ref = reference_date or datetime.now(UTC)
         since = None
         if window_hours is not None and window_hours > 0:
-            since = datetime.now(UTC) - timedelta(hours=window_hours)
+            since = ref - timedelta(hours=window_hours)
         elif window_days > 0:
-            since = datetime.now(UTC) - timedelta(days=window_days)
+            since = ref - timedelta(days=window_days)
 
         alignment_bit: int | None = _ALIGN_BIT.get(aggregation) if aggregation else None
 
