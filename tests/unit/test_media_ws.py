@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from stankbot.web.ws import MSG_TYPE_MEDIA_MILESTONE, broadcast_media_milestone
+from stankbot.web.ws import MSG_TYPE_MEDIA_SNAPSHOT, broadcast_media_snapshot
 
 
 @pytest.mark.asyncio
@@ -73,3 +74,28 @@ async def test_broadcast_media_milestone_nullable_fields() -> None:
         assert msg["d"]["channel_name"] is None
         assert msg["d"]["thumbnail_url"] is None
         assert msg["d"]["name"] is None
+
+
+@pytest.mark.asyncio
+async def test_broadcast_media_snapshot_message_shape() -> None:
+    """The WS snapshot message has correct t and d fields."""
+    with patch("stankbot.web.ws.manager") as mock_mgr:
+        mock_mgr.broadcast_json = AsyncMock()
+
+        await broadcast_media_snapshot(
+            guild_id=7,
+            media_item_id=1,
+            metric_key="view_count",
+            value=12345,
+            fetched_at="2026-05-09T12:00:00+00:00",
+        )
+
+        mock_mgr.broadcast_json.assert_awaited_once()
+        args, _ = mock_mgr.broadcast_json.call_args
+        assert args[0] == 7
+        msg = args[1]
+        assert msg["t"] == MSG_TYPE_MEDIA_SNAPSHOT
+        assert msg["d"]["media_item_id"] == 1
+        assert msg["d"]["metric_key"] == "view_count"
+        assert msg["d"]["value"] == 12345
+        assert msg["d"]["fetched_at"] == "2026-05-09T12:00:00+00:00"

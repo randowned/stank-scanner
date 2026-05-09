@@ -384,7 +384,7 @@ function handleMessage(msg: ServerMsg): void {
 				value: msg.d.value,
 				fetchedAt: msg.d.fetched_at
 			};
-			mediaMetricUpdates.update((prev) => [...prev, update]);
+			mediaMetricUpdates.set([update]);
 			break;
 		}
 

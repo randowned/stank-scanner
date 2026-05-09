@@ -535,3 +535,25 @@ async def broadcast_media_milestone(
             },
         },
     )
+
+
+async def broadcast_media_snapshot(
+    guild_id: int,
+    *,
+    media_item_id: int,
+    metric_key: str,
+    value: int,
+    fetched_at: str,
+) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {
+            "t": MSG_TYPE_MEDIA_SNAPSHOT,
+            "d": {
+                "media_item_id": media_item_id,
+                "metric_key": metric_key,
+                "value": value,
+                "fetched_at": fetched_at,
+            },
+        },
+    )

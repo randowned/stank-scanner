@@ -24,6 +24,8 @@ from stankbot.services.embed_builders import build_media_milestone_embed
 from stankbot.services.media_providers.registry import MediaProviderRegistry
 from stankbot.services.media_service import MediaService, MilestoneInfo
 from stankbot.web.ws import broadcast_media_milestone as ws_broadcast_milestone
+from stankbot.web.ws import broadcast_media_snapshot as ws_broadcast_snapshot
+from stankbot.utils.time_utils import utc_isoformat
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.routes.media_api import cleanup_chart_cache
 
@@ -154,7 +156,19 @@ class MediaMetricsScheduler:
                 log.debug("MediaMetrics: skipping guild=%d provider=%s (disabled by guild setting)", guild_id, provider_type)
                 return
             svc = MediaService(session=session, registry=self.registry)
-            result = await svc.refresh_all(guild_id, media_type=provider_type)
+
+            async def _on_snapshot(*, media_item_id: int, metric_key: str,
+                                   value: int, fetched_at: datetime) -> None:
+                await ws_broadcast_snapshot(
+                    guild_id,
+                    media_item_id=media_item_id,
+                    metric_key=metric_key,
+                    value=value,
+                    fetched_at=utc_isoformat(fetched_at),
+                )
+
+            result = await svc.refresh_all(guild_id, media_type=provider_type,
+                                             on_snapshot=_on_snapshot)
 
             # Milestone announcements
             for minfo in result.milestones:

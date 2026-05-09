@@ -9,7 +9,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -560,7 +560,8 @@ class MediaService:
     # Refresh
     # ------------------------------------------------------------------
 
-    async def refresh_all(self, guild_id: int, media_type: str | None = None) -> RefreshResult:
+    async def refresh_all(self, guild_id: int, media_type: str | None = None,
+                           on_snapshot: Callable[..., Any] | None = None) -> RefreshResult:
         """Refresh metrics for all media items, optionally scoped to one provider type."""
         result = RefreshResult()
         for provider in self.registry.enabled():
@@ -602,6 +603,9 @@ class MediaService:
                         self.session, item.id, metric_key, value, now,
                         alignment_mask=_compute_alignment_mask(now),
                     )
+                    if on_snapshot is not None:
+                        await on_snapshot(media_item_id=item.id, metric_key=metric_key,
+                                          value=value, fetched_at=now)
                 item.metrics_last_fetched_at = now
                 result.refreshed += 1
 

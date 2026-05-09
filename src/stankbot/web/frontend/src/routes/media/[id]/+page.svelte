@@ -283,7 +283,7 @@
 	}
 
 	function metricValue(key: string): number {
-		return item?.metrics?.[key]?.value ?? 0;
+		return liveMetrics[key] ?? item?.metrics?.[key]?.value ?? 0;
 	}
 
 	const serverAggregations = new Set(['5min', '15min', '30min', 'hourly', 'daily', 'weekly', 'monthly']);
@@ -489,19 +489,35 @@
 		};
 	}
 
-	// ---- live metric updates for StatTile flash ---------------------------
+	// ---- live metric updates from WS ---------------------------------------
+
+	// Local cache of metric values that starts from item data and is
+	// patched by WS MEDIA_SNAPSHOT events so StatTiles update in-place.
+	let liveMetrics = $state<Record<string, number>>({});
+	$effect(() => {
+		if (!item?.metrics) return;
+		const m: Record<string, number> = {};
+		for (const [k, v] of Object.entries(item.metrics)) {
+			m[k] = v.value;
+		}
+		liveMetrics = m;
+	});
 
 	let flashKeys = $state<Record<string, boolean>>({});
 	$effect(() => {
 		const updates = $mediaMetricUpdates;
 		if (!updates.length || !item) return;
 		const keys: Record<string, boolean> = {};
+		let changed = false;
 		for (const u of updates) {
 			if (u.mediaItemId === item.id) {
 				keys[u.metricKey] = true;
+				// patch the live value so StatTile re-renders with new value
+				liveMetrics[u.metricKey] = u.value;
+				changed = true;
 			}
 		}
-		if (Object.keys(keys).length > 0) {
+		if (changed) {
 			flashKeys = keys;
 			setTimeout(() => { flashKeys = {}; }, 1500);
 		}

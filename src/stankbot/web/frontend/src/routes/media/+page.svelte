@@ -33,14 +33,22 @@
 	let searchQuery = $state<string>('');
 	let sortKey = $state<string>('published_desc');
 
-	// Flash indicators for live metric updates via WS
+	// Flash indicators + live metric cache for WS updates
 	let flashItems = $state<Record<number, boolean>>({});
+	let liveMetricsCache = $state<Record<number, Record<string, number>>>({});
 	$effect(() => {
 		const updates = $mediaMetricUpdates;
 		if (!updates.length) return;
 		const ids: Record<number, boolean> = {};
-		for (const u of updates) ids[u.mediaItemId] = true;
-		if (Object.keys(ids).length > 0) {
+		let changed = false;
+		for (const u of updates) {
+			ids[u.mediaItemId] = true;
+			const cur = liveMetricsCache[u.mediaItemId] ?? {};
+			cur[u.metricKey] = u.value;
+			liveMetricsCache[u.mediaItemId] = cur;
+			changed = true;
+		}
+		if (changed) {
 			flashItems = ids;
 			setTimeout(() => { flashItems = {}; }, 1500);
 		}
@@ -62,7 +70,11 @@
 	function primaryMetricValue(item: MediaItem): number {
 		const provider = $providersByType[item.media_type];
 		const key = provider?.metrics?.[0]?.key ?? 'view_count';
-		return item.metrics?.[key]?.value ?? 0;
+		return liveMetricsCache[item.id]?.[key] ?? metricValue(item, key);
+	}
+
+	function metricValue(item: MediaItem, key: string): number {
+		return liveMetricsCache[item.id]?.[key] ?? item.metrics?.[key]?.value ?? 0;
 	}
 
 	const filteredItems = $derived.by(() => {
@@ -101,10 +113,6 @@
 		if (type === 'youtube') return 'border-l-[3px] border-l-[#ff0000]/70';
 		if (type === 'spotify') return 'border-l-[3px] border-l-[#1db954]/70';
 		return '';
-	}
-
-	function metricValue(item: MediaItem, key: string): number {
-		return item.metrics?.[key]?.value ?? 0;
 	}
 
 	function formatMetric(m: MetricDef, value: number): string {
