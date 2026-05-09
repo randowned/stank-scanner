@@ -78,6 +78,9 @@
 						</div>
 					{/if}
 					<span class="flex-1 min-w-0 truncate">{user.username}</span>
+					{#if user.is_admin}
+						<span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ok bg-ok/10 border border-ok/20 rounded px-1.5 py-px leading-none" data-testid="online-user-admin-tag">Admin</span>
+					{/if}
 					<span class="shrink-0 text-xs text-muted tabular-nums"><Duration start={user.connected_at} useNativeTooltip /></span>
 				</div>
 			{/each}

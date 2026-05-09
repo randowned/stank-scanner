@@ -123,6 +123,7 @@ class ConnectionManager:
                 "username": info.username,
                 "discord_avatar": info.avatar_url,
                 "connected_at": utc_isoformat(info.connected_at),
+                "is_admin": info.is_admin,
             }
             for uid, info in dedup.items()
         ]

@@ -5,6 +5,7 @@ export interface OnlineUser {
 	username: string;
 	discord_avatar: string;
 	connected_at: string;
+	is_admin: boolean;
 }
 
 export const onlineUsers = writable<OnlineUser[]>([]);
