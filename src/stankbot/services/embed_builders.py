@@ -369,6 +369,8 @@ async def build_media_embed(
             return "\u2014"
         try:
             dt = datetime.fromisoformat(iso)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
             diff = datetime.now(UTC) - dt
             secs = diff.total_seconds()
             if secs < 60:
