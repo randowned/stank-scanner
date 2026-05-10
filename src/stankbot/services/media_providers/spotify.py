@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-from .base import MediaProvider, MetricDef, MetricResult, ResolvedMedia
+from .base import MediaProvider, MetricDef, MetricResult, OwnerResult, ResolvedMedia
 
 log = logging.getLogger(__name__)
 
@@ -162,6 +162,51 @@ class SpotifyProvider(MediaProvider):
             )
         except httpx.HTTPError as exc:
             log.warning("Spotify resolve HTTP error for %s/%s: %s", kind, spotify_id, exc)
+            return None
+
+    async def fetch_owner(self, external_id: str) -> OwnerResult | None:
+        # TODO: Spotify has deprecated followers, popularity, and genres on
+        # the artist endpoint.  Monthly listeners and total streams are NOT
+        # exposed via the Web API.  When Spotify provides replacement fields,
+        # extend the metrics dict below.
+        if not external_id:
+            return None
+        token = await self._ensure_token()
+        if not token:
+            return None
+
+        client = self._get_client()
+        url = f"{_API_BASE}/artists/{external_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+
+        try:
+            resp = await client.get(url, headers=headers, timeout=10.0)
+            if resp.status_code != 200:
+                log.warning("Spotify artist fetch failed for %s: %d", external_id, resp.status_code)
+                return None
+            data: dict[str, Any] = resp.json()
+            name = data.get("name", "")
+            images = data.get("images", [])
+            thumbnail_url = images[0].get("url") if images else None
+            followers = data.get("followers", {})
+            try:
+                follower_count = int(followers.get("total", 0))
+            except (ValueError, TypeError):
+                follower_count = 0
+            popularity = data.get("popularity", 0)
+
+            return OwnerResult(
+                external_id=external_id,
+                name=name,
+                external_url=f"https://open.spotify.com/artist/{external_id}",
+                thumbnail_url=thumbnail_url,
+                metrics={
+                    "follower_count": follower_count,
+                    "popularity": popularity,
+                },
+            )
+        except httpx.HTTPError as exc:
+            log.warning("Spotify artist fetch HTTP error for %s: %s", external_id, exc)
             return None
 
     async def can_fetch_metrics(

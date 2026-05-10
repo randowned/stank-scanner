@@ -20,7 +20,8 @@ from discord.ext import commands
 
 from stankbot.cogs._checks import requires_stats_access
 from stankbot.db.repositories import media as media_repo
-from stankbot.services.embed_builders import build_media_embed
+from stankbot.services.embed_builders import build_media_embed, build_owner_embed
+from stankbot.services.media_service import MediaService
 from stankbot.services.settings_service import Keys, SettingsService
 
 if TYPE_CHECKING:
@@ -183,6 +184,124 @@ class StatsCommands(commands.GroupCog, name="stats"):
     # ------------------------------------------------------------------
     # Send helpers
     # ------------------------------------------------------------------
+
+    async def _send_owner_embeds(
+        self,
+        interaction: discord.Interaction,
+        media_type: str,
+    ) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command only works inside a server.", ephemeral=True
+            )
+            return
+
+        async with self.bot.db() as session:
+            settings = SettingsService(session)
+            enabled = await settings.get(
+                interaction.guild.id, Keys.MEDIA_PROVIDERS_ENABLED, ["youtube", "spotify"]
+            )
+            if media_type not in enabled:
+                await interaction.response.send_message(
+                    f"{media_type.capitalize()} stats are currently disabled.", ephemeral=True
+                )
+                return
+            ephemeral = bool(
+                await settings.get(
+                    interaction.guild.id,
+                    Keys.MEDIA_REPLIES_EPHEMERAL,
+                    True,
+                )
+            )
+
+        await interaction.response.defer(thinking=True, ephemeral=ephemeral)
+
+        async with self.bot.db() as session:
+            registry = self.bot.media_registry
+            svc = MediaService(session=session, registry=registry)
+            owners = await svc.list_owners_for_guild(interaction.guild.id, media_type)
+
+            if not owners:
+                await interaction.followup.send(
+                    f"No {media_type.capitalize()} channels tracked in this server.",
+                    ephemeral=True,
+                )
+                return
+
+            def _fmt_relative(iso: str | None) -> str:
+                if not iso:
+                    return "\u2014"
+                try:
+                    dt = datetime.fromisoformat(iso)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=UTC)
+                    diff = datetime.now(UTC) - dt
+                    secs = diff.total_seconds()
+                    if secs < 60:
+                        return "just now"
+                    mins = int(secs // 60)
+                    if mins < 2:
+                        return "1 minute ago"
+                    if mins < 60:
+                        return f"{mins} minutes ago"
+                    hrs = mins // 60
+                    if hrs < 2:
+                        return "1 hour ago"
+                    if hrs < 24:
+                        return f"{hrs} hours ago"
+                    days = diff.days
+                    if days < 2:
+                        return "1 day ago"
+                    if days < 14:
+                        return f"{days} days ago"
+                    return f"{days // 7} weeks ago"
+                except (ValueError, TypeError):
+                    return "\u2014"
+
+            for owner in owners:
+                owner_name = str(owner.get("name", ""))
+                owner_url = str(owner.get("external_url", ""))
+                thumbnail_url = owner.get("thumbnail_url")
+                metrics = owner.get("metrics", {})
+                media_items = owner.get("media_items", [])
+                fetched_at = _fmt_relative(str(owner.get("fetched_at", "")))
+
+                # Build media links description
+                media_links_parts: list[str] = []
+                for mi in media_items:
+                    mi_name = str(mi.get("name") if isinstance(mi, dict) else "")
+                    mi_title = str(mi.get("title") if isinstance(mi, dict) else "")
+                    mi_ext_id = str(mi.get("external_id") if isinstance(mi, dict) else "")
+                    display_title = mi_title or mi_name
+                    if media_type == "youtube":
+                        direct_url: str = f"https://youtube.com/watch?v={mi_ext_id}"
+                    else:
+                        direct_url = f"https://open.spotify.com/track/{mi_ext_id}"
+                    cmd_link = f"</stats {media_type} info:{mi_name or ''}>" if mi_name else ""
+                    parts: list[str] = []
+                    if direct_url:
+                        parts.append(f"[{display_title}]({direct_url})")
+                    else:
+                        parts.append(display_title)
+                    if cmd_link:
+                        parts.append(f"\u2014 {cmd_link}")
+                    media_links_parts.append(" ".join(parts))
+
+                media_links = "\n".join(media_links_parts) if media_links_parts else "No media items."
+
+                embed = await build_owner_embed(
+                    media_type=media_type,
+                    owner_name=owner_name,
+                    owner_url=owner_url,
+                    thumbnail_url=thumbnail_url,
+                    metrics=metrics,
+                    media_links=media_links,
+                    media_count=len(media_items) if isinstance(media_items, list) else 0,
+                    fetched_at=fetched_at,
+                    guild_id=interaction.guild.id,
+                    session=session,
+                )
+                await interaction.followup.send(embed=embed, ephemeral=ephemeral)
 
     async def _send_info_embed(
         self,
@@ -363,6 +482,30 @@ class StatsCommands(commands.GroupCog, name="stats"):
             embed.set_image(url=url)
 
         await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+
+    # ------------------------------------------------------------------
+    # YouTube owner summary
+    # ------------------------------------------------------------------
+
+    @youtube.command(name="channel", description="Show YouTube channel overview and tracked videos.")
+    @requires_stats_access()
+    async def youtube_owner(
+        self,
+        interaction: discord.Interaction,
+    ) -> None:
+        await self._send_owner_embeds(interaction, "youtube")
+
+    # ------------------------------------------------------------------
+    # Spotify artist summary
+    # ------------------------------------------------------------------
+
+    @spotify.command(name="artist", description="Show Spotify artist overview and tracked items.")
+    @requires_stats_access()
+    async def spotify_owner(
+        self,
+        interaction: discord.Interaction,
+    ) -> None:
+        await self._send_owner_embeds(interaction, "spotify")
 
     # ------------------------------------------------------------------
     # YouTube info

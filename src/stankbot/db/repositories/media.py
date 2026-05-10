@@ -7,7 +7,14 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from stankbot.db.models import MediaItem, MediaMilestone, MetricCache, MetricSnapshot
+from stankbot.db.models import (
+    MediaItem,
+    MediaMilestone,
+    MediaOwner,
+    MediaOwnerSnapshot,
+    MetricCache,
+    MetricSnapshot,
+)
 
 
 async def add(
@@ -358,3 +365,209 @@ async def has_milestone(
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none() is not None
+
+
+# ---------------------------------------------------------------------------
+# Media owners (channels / artists)
+# ---------------------------------------------------------------------------
+
+
+async def upsert_owner(
+    session: AsyncSession,
+    *,
+    media_type: str,
+    external_id: str,
+    name: str,
+    external_url: str,
+    thumbnail_url: str | None = None,
+) -> MediaOwner:
+    stmt = select(MediaOwner).where(
+        MediaOwner.media_type == media_type,
+        MediaOwner.external_id == external_id,
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        row = MediaOwner(
+            media_type=media_type,
+            external_id=external_id,
+            name=name,
+            external_url=external_url,
+            thumbnail_url=thumbnail_url,
+        )
+        session.add(row)
+    else:
+        row.name = name
+        row.external_url = external_url
+        if thumbnail_url is not None:
+            row.thumbnail_url = thumbnail_url
+        row.updated_at = datetime.now(UTC)
+    await session.flush()
+    return row
+
+
+async def get_owner(
+    session: AsyncSession,
+    media_type: str,
+    external_id: str,
+) -> MediaOwner | None:
+    stmt = select(MediaOwner).where(
+        MediaOwner.media_type == media_type,
+        MediaOwner.external_id == external_id,
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_owner_by_id(
+    session: AsyncSession,
+    owner_id: int,
+) -> MediaOwner | None:
+    return await session.get(MediaOwner, owner_id)
+
+
+async def insert_owner_snapshot(
+    session: AsyncSession,
+    media_owner_id: int,
+    metric_key: str,
+    value: int,
+    fetched_at: datetime | None = None,
+) -> MediaOwnerSnapshot:
+    snap = MediaOwnerSnapshot(
+        media_owner_id=media_owner_id,
+        metric_key=metric_key,
+        value=value,
+    )
+    if fetched_at is not None:
+        snap.fetched_at = fetched_at
+    session.add(snap)
+    await session.flush()
+    return snap
+
+
+async def get_owner_latest_metrics(
+    session: AsyncSession,
+    media_owner_id: int,
+) -> dict[str, dict[str, int | str]]:
+    """Return {metric_key: {value, fetched_at}} for the latest snapshot
+    of each metric for an owner."""
+    from sqlalchemy import func
+
+    subq = (
+        select(
+            MediaOwnerSnapshot.metric_key,
+            func.max(MediaOwnerSnapshot.id).label("max_id"),
+        )
+        .where(MediaOwnerSnapshot.media_owner_id == media_owner_id)
+        .group_by(MediaOwnerSnapshot.metric_key)
+        .subquery()
+    )
+    stmt = (
+        select(MediaOwnerSnapshot)
+        .where(
+            MediaOwnerSnapshot.media_owner_id == media_owner_id,
+            MediaOwnerSnapshot.id.in_(select(subq.c.max_id)),
+        )
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return {
+        r.metric_key: {
+            "value": r.value,
+            "fetched_at": r.fetched_at.isoformat() if r.fetched_at else "",
+        }
+        for r in rows
+    }
+
+
+async def get_owner_snapshots_pivoted(
+    session: AsyncSession,
+    media_owner_id: int,
+    limit: int = 20,
+) -> list[dict[str, int | str]]:
+    """Return last N owner snapshots pivoted: one row per timestamp, all metrics as columns."""
+    subq = (
+        select(
+            MediaOwnerSnapshot.fetched_at,
+            MediaOwnerSnapshot.metric_key,
+            MediaOwnerSnapshot.value,
+        )
+        .where(MediaOwnerSnapshot.media_owner_id == media_owner_id)
+        .order_by(MediaOwnerSnapshot.fetched_at.desc())
+        .limit(limit * 5)
+        .subquery()
+    )
+    stmt = (
+        select(subq.c.fetched_at, subq.c.metric_key, subq.c.value)
+        .order_by(subq.c.fetched_at.desc())
+    )
+    rows = (await session.execute(stmt)).all()
+
+    by_time: dict[str, dict[str, int]] = {}
+    order: list[str] = []
+    for fetched_at, metric_key, value in rows:
+        if fetched_at.tzinfo is None:
+            fetched_at = fetched_at.replace(tzinfo=UTC)
+        ts = fetched_at.isoformat()
+        if ts not in by_time:
+            by_time[ts] = {}
+            order.append(ts)
+        by_time[ts][metric_key] = value
+
+    return [
+        {"fetched_at": ts, **metrics}
+        for ts, metrics in [(t, by_time[t]) for t in order[:limit]]
+    ]
+
+
+async def get_owners_for_guild(
+    session: AsyncSession,
+    guild_id: int,
+    media_type: str | None = None,
+) -> list[dict[str, object]]:
+    """Return owners that have media items in a guild, with latest metrics
+    and media item summaries."""
+    from sqlalchemy import and_
+
+    join_conds = and_(
+        MediaItem.channel_id == MediaOwner.external_id,
+        MediaItem.media_type == MediaOwner.media_type,
+    )
+    stmt = (
+        select(MediaOwner, MediaItem)
+        .join(MediaItem, join_conds)
+        .where(MediaItem.guild_id == guild_id)
+    )
+    if media_type is not None:
+        stmt = stmt.where(MediaOwner.media_type == media_type)
+    stmt = stmt.order_by(MediaOwner.name.asc())
+    rows = (await session.execute(stmt)).all()
+
+    owner_map: dict[int, dict[str, object]] = {}
+    for owner, item in rows:
+        if owner.id not in owner_map:
+            owner_map[owner.id] = {
+                "id": owner.id,
+                "media_type": owner.media_type,
+                "external_id": owner.external_id,
+                "name": owner.name,
+                "external_url": owner.external_url,
+                "thumbnail_url": owner.thumbnail_url,
+                "media_items": [],
+            }
+        owner_map[owner.id]["media_items"].append({  # type: ignore[index]
+            "id": item.id,
+            "title": item.title,
+            "name": item.name,
+            "external_id": item.external_id,
+        })
+
+    for owner_id, summary in owner_map.items():
+        metrics = await get_owner_latest_metrics(session, owner_id)
+        latest_ts = ""
+        for m in metrics.values():
+            if isinstance(m, dict):
+                mt = m.get("fetched_at", "")
+                if mt and mt > latest_ts:
+                    latest_ts = str(mt)
+        summary["metrics"] = metrics  # type: ignore[index]
+        summary["fetched_at"] = latest_ts  # type: ignore[index]
+
+    return list(owner_map.values())

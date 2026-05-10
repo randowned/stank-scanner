@@ -4,7 +4,7 @@
 	import { untrack } from 'svelte';
 	import { apiFetch } from '$lib/api';
 	import { formatFreshness } from '$lib/format';
-	import type { MediaItem, MetricSnapshot, CompareData, MetricDef, ProviderDef } from '$lib/types';
+	import type { MediaItem, MediaOwner, MetricSnapshot, CompareData, MetricDef, ProviderDef } from '$lib/types';
 	import { providersByType, loadProviders, mediaMetricUpdates } from '$lib/stores';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import ErrorState from '$lib/components/ErrorState.svelte';
@@ -620,6 +620,39 @@
 			</div>
 
 			<div class="md:col-span-2">
+				{#if item.owner}
+					{@const owner = item.owner as MediaOwner}
+					<div class="panel mb-4" data-testid="owner-card">
+						<div class="flex items-center gap-3 mb-3">
+							{#if owner.thumbnail_url}
+								<img src={owner.thumbnail_url} alt={owner.name} class="w-10 h-10 rounded-full object-cover" loading="lazy" />
+							{/if}
+							<a
+								href={owner.external_url}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="text-accent hover:underline font-semibold"
+								data-testid="owner-name-link"
+							>
+								{owner.name}
+							</a>
+						</div>
+						<div
+							class="grid gap-3"
+							style="grid-template-columns: repeat({Math.max(1, owner.metrics.length)}, minmax(0, 1fr));"
+						>
+							{#each owner.metrics as om}
+								<StatTile
+									value={om.value.toLocaleString('en-US')}
+									label="{om.icon} {om.label}"
+									testId="owner-metric-{om.key}"
+									fontSize="sm"
+								/>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
 				<div
 					class="grid gap-3 mb-4"
 					style="grid-template-columns: repeat({Math.max(1, metricOptions.length)}, minmax(0, 1fr));"

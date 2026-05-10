@@ -8,6 +8,7 @@ from stankbot.services.media_providers.base import (
     MediaProvider,
     MetricDef,
     MetricResult,
+    OwnerResult,
     ResolvedMedia,
 )
 
@@ -55,6 +56,18 @@ class MockYouTubeProvider(MediaProvider):
             for eid in external_ids
         ]
 
+    async def fetch_owner(self, external_id: str) -> OwnerResult | None:
+        return OwnerResult(
+            external_id=external_id,
+            name="Mock Channel",
+            external_url=f"https://youtube.com/channel/{external_id}",
+            metrics={
+                "subscriber_count": 1000000,
+                "view_count": 50000000,
+                "video_count": 200,
+            },
+        )
+
     async def health_check(self) -> bool:
         return True
 
@@ -96,6 +109,17 @@ class MockSpotifyProvider(MediaProvider):
             MetricResult(external_id=eid, values={"playcount": 1000000})
             for eid in external_ids
         ]
+
+    async def fetch_owner(self, external_id: str) -> OwnerResult | None:
+        return OwnerResult(
+            external_id=external_id,
+            name="Mock Artist",
+            external_url=f"https://open.spotify.com/artist/{external_id}",
+            metrics={
+                "follower_count": 500000,
+                "popularity": 75,
+            },
+        )
 
     async def health_check(self) -> bool:
         return True

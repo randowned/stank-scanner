@@ -198,6 +198,7 @@ export interface MediaItem {
 	metrics_last_fetched_at: string | null;
 	created_at: string | null;
 	updated_at: string | null;
+	owner?: MediaOwner | null;
 }
 
 export interface MediaMetricValue {
@@ -237,4 +238,23 @@ export interface CompareData {
 	metric: MetricDef | null;
 	series: CompareSeries[];
 	aligned?: boolean;
+}
+
+export interface MediaOwner {
+	id: number;
+	media_type: string;
+	external_id: string;
+	name: string;
+	external_url: string;
+	thumbnail_url: string | null;
+	metrics: MediaOwnerMetric[];
+	fetched_at: string | null;
+}
+
+export interface MediaOwnerMetric {
+	key: string;
+	label: string;
+	icon: string;
+	value: number;
+	format: string;
 }

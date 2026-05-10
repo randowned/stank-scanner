@@ -11,6 +11,7 @@
 	import Button from '$lib/components/Button.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Tabs from '$lib/components/Tabs.svelte';
 
 	const mediaId = $derived(Number(($page.params as { id: string }).id));
 
@@ -31,7 +32,17 @@
 	let metricDefs = $state<MetricDef[]>([]);
 	let loadingSnapshots = $state(false);
 
+	let ownerSnapshots = $state<Array<Record<string, string | number>>>([]);
+	let ownerMetricDefs = $state<MetricDef[]>([]);
+	let loadingOwnerSnapshots = $state(false);
+
+	let snapshotTab = $state<'media' | 'owner'>('media');
+
 	const freshness = $derived(formatFreshness(item?.metrics_last_fetched_at, 10));
+
+	const ownerTabLabel = $derived(
+		item?.media_type === 'spotify' ? 'Artist Snapshots' : 'Channel Snapshots'
+	);
 
 	async function loadItem() {
 		loading = true;
@@ -61,6 +72,21 @@
 		}
 	}
 
+	async function loadOwnerSnapshots() {
+		loadingOwnerSnapshots = true;
+		try {
+			const res = await apiFetch<{ snapshots: Array<Record<string, string | number>>; metric_defs: MetricDef[] }>(
+				`/api/admin/media/${mediaId}/owner/history?limit=20`
+			);
+			ownerSnapshots = res.snapshots;
+			ownerMetricDefs = res.metric_defs;
+		} catch {
+			ownerSnapshots = [];
+		} finally {
+			loadingOwnerSnapshots = false;
+		}
+	}
+
 	async function saveName() {
 		nameSaving = true;
 		nameError = null;
@@ -75,7 +101,6 @@
 				const err = await res.json().catch(() => ({ detail: 'Failed to save' }));
 				throw new Error(err.detail || 'Failed to save');
 			}
-			// re-read item to sync
 			await loadItem();
 			nameSaved = true;
 			setTimeout(() => (nameSaved = false), 2000);
@@ -93,6 +118,7 @@
 			await apiPost(`/api/admin/media/${mediaId}/refresh`);
 			await loadItem();
 			await loadSnapshots();
+			await loadOwnerSnapshots();
 		} catch (err) {
 			refreshError = toErrorMessage(err, 'Refresh failed');
 		} finally {
@@ -117,7 +143,15 @@
 		return val.toLocaleString('en-US');
 	}
 
+	function formatOwnerCellValue(key: string, val: number | string): string {
+		if (typeof val === 'string') return val;
+		const def = ownerMetricDefs.find((m) => m.key === key);
+		if (def?.format === 'percentage') return `${Math.round(val)}%`;
+		return val.toLocaleString('en-US');
+	}
+
 	const columnKeys = $derived(metricDefs.map((m) => m.key));
+	const ownerColumnKeys = $derived(ownerMetricDefs.map((m) => m.key));
 
 	$effect(() => {
 		loadItem();
@@ -215,46 +249,96 @@
 			<div class="panel"><img src={item.thumbnail_url} alt="" class="w-32 rounded" loading="lazy" /></div>
 		{/if}
 
-		<!-- Snapshot history table -->
+		<!-- Snapshots tabs -->
 		<div class="panel overflow-hidden">
-			<h3 class="text-sm font-semibold mb-3">Metric Snapshots (last 20)</h3>
-			{#if loadingSnapshots}
-				<div class="space-y-1">
-					{#each Array(5) as _}
-						<div class="h-4 bg-border rounded animate-pulse w-full"></div>
-					{/each}
-				</div>
-			{:else if snapshots.length === 0}
-				<div class="text-muted text-sm py-4 text-center">No snapshots yet. Force refresh to pull the first metrics.</div>
-			{:else}
-				<div class="overflow-x-auto -mx-4 sm:-mx-0">
-					<table class="w-full text-xs" data-testid="media-edit-snapshots">
-						<thead>
-							<tr class="border-b border-border">
-								<th class="text-left text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">Time</th>
-								{#each columnKeys as key}
-									<th class="text-right text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">
-										{metricDefs.find((d) => d.key === key)?.label ?? key}
-									</th>
-								{/each}
-							</tr>
-						</thead>
-						<tbody>
-							{#each snapshots as row, i}
-								<tr class="border-b border-border last:border-0 {i % 2 === 1 ? 'bg-panel/30' : ''}">
-									<td class="py-1.5 px-2 sm:px-3 text-muted whitespace-nowrap font-mono tabular-nums">
-										{formatIsoLocal(row.fetched_at as string)}
-									</td>
+			<Tabs
+				tabs={[
+					{ value: 'media' as const, label: 'Media Snapshots' },
+					{ value: 'owner' as const, label: ownerTabLabel },
+				]}
+				bind:value={snapshotTab}
+			/>
+
+			{#if snapshotTab === 'media'}
+				{#if loadingSnapshots}
+					<div class="space-y-1">
+						{#each Array(5) as _}
+							<div class="h-4 bg-border rounded animate-pulse w-full"></div>
+						{/each}
+					</div>
+				{:else if snapshots.length === 0}
+					<div class="text-muted text-sm py-4 text-center">No snapshots yet. Force refresh to pull the first metrics.</div>
+				{:else}
+					<div class="overflow-x-auto -mx-4 sm:-mx-0">
+						<table class="w-full text-xs" data-testid="media-edit-snapshots">
+							<thead>
+								<tr class="border-b border-border">
+									<th class="text-left text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">Time</th>
 									{#each columnKeys as key}
-										<td class="py-1.5 px-2 sm:px-3 text-right text-text whitespace-nowrap tabular-nums">
-											{formatCellValue(key, row[key] ?? 0)}
-										</td>
+										<th class="text-right text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">
+											{metricDefs.find((d) => d.key === key)?.label ?? key}
+										</th>
 									{/each}
 								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
+							</thead>
+							<tbody>
+								{#each snapshots as row, i}
+									<tr class="border-b border-border last:border-0 {i % 2 === 1 ? 'bg-panel/30' : ''}">
+										<td class="py-1.5 px-2 sm:px-3 text-muted whitespace-nowrap font-mono tabular-nums">
+											{formatIsoLocal(row.fetched_at as string)}
+										</td>
+										{#each columnKeys as key}
+											<td class="py-1.5 px-2 sm:px-3 text-right text-text whitespace-nowrap tabular-nums">
+												{formatCellValue(key, row[key] ?? 0)}
+											</td>
+										{/each}
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			{:else}
+				{#if loadingOwnerSnapshots}
+					<div class="space-y-1">
+						{#each Array(5) as _}
+							<div class="h-4 bg-border rounded animate-pulse w-full"></div>
+						{/each}
+					</div>
+				{:else if ownerSnapshots.length === 0}
+					<div class="text-muted text-sm py-4 text-center" data-testid="owner-snapshots-empty">
+						No {item.media_type === 'spotify' ? 'artist' : 'channel'} snapshots yet. Force refresh to pull the first data.
+					</div>
+				{:else}
+					<div class="overflow-x-auto -mx-4 sm:-mx-0">
+						<table class="w-full text-xs" data-testid="media-edit-owner-snapshots">
+							<thead>
+								<tr class="border-b border-border">
+									<th class="text-left text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">Time</th>
+									{#each ownerColumnKeys as key}
+										<th class="text-right text-muted font-medium py-2 px-2 sm:px-3 whitespace-nowrap">
+											{ownerMetricDefs.find((d) => d.key === key)?.label ?? key}
+										</th>
+									{/each}
+								</tr>
+							</thead>
+							<tbody>
+								{#each ownerSnapshots as row, i}
+									<tr class="border-b border-border last:border-0 {i % 2 === 1 ? 'bg-panel/30' : ''}">
+										<td class="py-1.5 px-2 sm:px-3 text-muted whitespace-nowrap font-mono tabular-nums">
+											{formatIsoLocal(row.fetched_at as string)}
+										</td>
+										{#each ownerColumnKeys as key}
+											<td class="py-1.5 px-2 sm:px-3 text-right text-text whitespace-nowrap tabular-nums">
+												{formatOwnerCellValue(key, row[key] ?? 0)}
+											</td>
+										{/each}
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
 			{/if}
 		</div>
 	</div>

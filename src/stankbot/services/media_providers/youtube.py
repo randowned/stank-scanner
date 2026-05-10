@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from .base import MediaProvider, MetricDef, MetricResult, ResolvedMedia
+from .base import MediaProvider, MetricDef, MetricResult, OwnerResult, ResolvedMedia
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ _YOUTUBE_ID_RE = re.compile(r"^[\w-]{11}$")
 
 _VIDEO_PARTS = "snippet,statistics,contentDetails"
 _API_BASE = "https://www.googleapis.com/youtube/v3/videos"
+_CHANNELS_API_BASE = "https://www.googleapis.com/youtube/v3/channels"
 
 
 class QuotaExceededError(Exception):
@@ -215,6 +216,63 @@ class YouTubeProvider(MediaProvider):
             url: str | None = t.get("url")
             if url:
                 return url
+        return None
+
+    async def fetch_owner(self, external_id: str) -> OwnerResult | None:
+        if not self._api_key or not external_id:
+            return None
+
+        url = f"{_CHANNELS_API_BASE}?part=snippet,statistics&id={external_id}&key={self._api_key}"
+        client = self._get_client()
+
+        backoff = 1.0
+        for attempt in range(3):
+            try:
+                resp = await client.get(url, timeout=15.0)
+                if resp.status_code == 403:
+                    body = resp.text
+                    if "quotaExceeded" in body:
+                        raise QuotaExceededError("YouTube API quota exceeded")
+                    log.warning("YouTube channels API 403: %s", body[:200])
+                    return None
+                if resp.status_code != 200:
+                    if attempt < 2:
+                        await asyncio.sleep(backoff)
+                        backoff = min(backoff * 2, 30)
+                        continue
+                    return None
+                data: dict[str, Any] = resp.json()
+                items = data.get("items", [])
+                if not items:
+                    return None
+                channel = items[0]
+                snippet = channel.get("snippet", {})
+                stats: dict[str, Any] = channel.get("statistics", {})
+
+                def _int_from(st: dict[str, Any], key: str, default: int = 0) -> int:
+                    try:
+                        return int(st.get(key, default))
+                    except (ValueError, TypeError):
+                        return default
+
+                return OwnerResult(
+                    external_id=external_id,
+                    name=snippet.get("title", ""),
+                    external_url=f"https://youtube.com/channel/{external_id}",
+                    thumbnail_url=self._best_thumbnail(snippet.get("thumbnails", {})),
+                    metrics={
+                        "subscriber_count": _int_from(stats, "subscriberCount"),
+                        "view_count": _int_from(stats, "viewCount"),
+                        "video_count": _int_from(stats, "videoCount"),
+                    },
+                )
+            except httpx.HTTPError as exc:
+                log.warning("YouTube channels API request failed (attempt %d): %s", attempt + 1, exc)
+                if attempt < 2:
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 30)
+                    continue
+                return None
         return None
 
     async def health_check(self) -> bool:

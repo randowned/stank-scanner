@@ -202,6 +202,65 @@ test.describe('Media page', () => {
 		await expect(link).toHaveAttribute('href', /open\.spotify\.com\//);
 		await expect(link).toContainText(/Open on/);
 	});
+
+	test('detail page shows owner card with metrics', async ({ page, injectMedia }) => {
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'owner-test', historyDays: 7 });
+		await page.goto(`/media/${id}`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+		// Owner card renders
+		await expect(page.getByTestId('owner-card')).toBeVisible({ timeout: 10000 });
+		// Owner name link is present and points to YouTube
+		const nameLink = page.getByTestId('owner-name-link');
+		await expect(nameLink).toBeVisible();
+		await expect(nameLink).toHaveAttribute('href', /youtube\.com\/channel\//);
+		// Owner metric tiles render
+		await expect(page.getByTestId('owner-metric-subscriber_count')).toBeVisible();
+		await expect(page.getByTestId('owner-metric-view_count')).toBeVisible();
+		await expect(page.getByTestId('owner-metric-video_count')).toBeVisible();
+	});
+
+	test('Spotify detail page shows owner card with artist metrics', async ({ page, injectMedia }) => {
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'spotify-owner', mediaType: 'spotify', historyDays: 7 });
+		await page.goto(`/media/${id}`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+		// Owner card renders
+		await expect(page.getByTestId('owner-card')).toBeVisible({ timeout: 10000 });
+		// Owner name link points to Spotify
+		const nameLink = page.getByTestId('owner-name-link');
+		await expect(nameLink).toHaveAttribute('href', /open\.spotify\.com\/artist\//);
+		// Owner metric tiles render
+		await expect(page.getByTestId('owner-metric-follower_count')).toBeVisible();
+		await expect(page.getByTestId('owner-metric-popularity')).toBeVisible();
+	});
+
+	test('owner snapshot tab shows on admin edit page', async ({ page, injectMedia, mockLogin, clearMedia }) => {
+		await mockLogin({ user_id: 222222222, username: 'E2E Admin', is_global_admin: true, is_guild_admin: true });
+		await clearMedia();
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'owner-admin-test', historyDays: 7 });
+		await page.goto(`/admin/media/${id}/edit`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+
+		// Tabs render
+		await expect(page.getByRole('tab', { name: 'Media Snapshots' })).toBeVisible();
+		await expect(page.getByRole('tab', { name: 'Channel Snapshots' })).toBeVisible();
+
+		// Click Channel Snapshots tab
+		await page.getByRole('tab', { name: 'Channel Snapshots' }).click();
+		// Owner snapshot table should have data
+		await expect(page.getByTestId('media-edit-owner-snapshots')).toBeVisible({ timeout: 10000 });
+	});
+
+	test('Spotify admin edit shows Artist Snapshots tab', async ({ page, injectMedia, mockLogin, clearMedia }) => {
+		await mockLogin({ user_id: 222222222, username: 'E2E Admin', is_global_admin: true, is_guild_admin: true });
+		await clearMedia();
+		const { id } = await injectMedia({ guildId: GUILD, slug: 'spotify-admin-owner', mediaType: 'spotify', historyDays: 7 });
+		await page.goto(`/admin/media/${id}/edit`);
+		await expect(page.getByTestId('page-header')).toBeVisible({ timeout: 10000 });
+
+		await expect(page.getByRole('tab', { name: 'Artist Snapshots' })).toBeVisible();
+		await page.getByRole('tab', { name: 'Artist Snapshots' }).click();
+		await expect(page.getByTestId('media-edit-owner-snapshots')).toBeVisible({ timeout: 10000 });
+	});
 });
 
 // Admin-specific tests — separate block with admin login

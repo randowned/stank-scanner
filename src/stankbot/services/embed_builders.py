@@ -541,6 +541,48 @@ async def build_media_milestone_embed(
     return render_embed(tmpl, ctx)
 
 
+async def build_owner_embed(
+    *,
+    media_type: str,
+    owner_name: str,
+    owner_url: str,
+    thumbnail_url: str | None,
+    metrics: dict[str, Any],
+    media_links: str,
+    media_count: int,
+    fetched_at: str,
+    guild_id: int,
+    session: AsyncSession,
+) -> discord.Embed:
+    """Build a Discord embed summarising a channel/artist owner and its media items."""
+
+    def _fmt_num(n: int) -> str:
+        return f"{n:,}"
+
+    variables: dict[str, str | int] = {
+        "owner_name": owner_name,
+        "owner_url": owner_url,
+        "thumbnail_url": thumbnail_url or "",
+        "media_count": media_count,
+        "fetched_at": fetched_at,
+        "media_links": media_links,
+    }
+
+    for key, val in metrics.items():
+        if isinstance(val, dict):
+            variables[key] = _fmt_num(int(val.get("value", 0)))
+        else:
+            variables[key] = _fmt_num(int(val))
+
+    template_key = (
+        "youtube_owner_embed" if media_type == "youtube"
+        else "spotify_owner_embed"
+    )
+    ctx = RenderContext(variables=variables)
+    tmpl = await template_store.load(template_key, session, guild_id)
+    return render_embed(tmpl, ctx)
+
+
 __all__ = [
     "ChainBreakVars",
     "NewSessionVars",
@@ -555,6 +597,7 @@ __all__ = [
     "build_media_embed",
     "build_media_milestone_embed",
     "build_new_session_embed",
+    "build_owner_embed",
     "build_record_embed",
     "current_record",
     "display_name_of",

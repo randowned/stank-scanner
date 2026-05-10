@@ -5,11 +5,13 @@ Framework-agnostic. Web routes and the scheduler both call this.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -639,7 +641,47 @@ class MediaService:
                                 name=item.name,
                                 external_id=item.external_id,
                             ))
+
+            # Owner refresh — collect unique channel_ids from this provider's items
+            owner_ids: set[tuple[str, str]] = set()
+            for item in items:
+                if item.channel_id:
+                    owner_ids.add((provider.media_type, item.channel_id))
+            for mt, cid in owner_ids:
+                with contextlib.suppress(Exception):
+                    await self._refresh_owner(mt, cid, now)
+
         return result
+
+    async def _refresh_owner(
+        self,
+        media_type: str,
+        channel_id: str,
+        now: datetime,
+    ) -> int | None:
+        """Fetch and persist owner data for a single channel/artist.
+
+        Returns the owner id if successful, or None.
+        """
+        provider = self.registry.get(media_type)
+        if provider is None:
+            return None
+        owner_data = await provider.fetch_owner(channel_id)
+        if owner_data is None:
+            return None
+        owner = await media_repo.upsert_owner(
+            self.session,
+            media_type=media_type,
+            external_id=owner_data.external_id,
+            name=owner_data.name,
+            external_url=owner_data.external_url,
+            thumbnail_url=owner_data.thumbnail_url,
+        )
+        for metric_key, value in owner_data.metrics.items():
+            await media_repo.insert_owner_snapshot(
+                self.session, owner.id, metric_key, value, now,
+            )
+        return owner.id
 
     async def refresh_single(self, media_item_id: int) -> RefreshResult:
         result = RefreshResult()
@@ -711,6 +753,9 @@ class MediaService:
                         name=item.name,
                         external_id=item.external_id,
                     ))
+        if item.channel_id:
+            with contextlib.suppress(Exception):
+                await self._refresh_owner(item.media_type, item.channel_id, now)
         return result
 
     async def backfill_alignment_masks(self) -> int:
@@ -767,3 +812,92 @@ class MediaService:
             "created_at": self._iso(item.created_at),
             "updated_at": self._iso(item.updated_at),
         }
+
+    # ------------------------------------------------------------------
+    # Owner queries & serialization
+    # ------------------------------------------------------------------
+
+    def _serialize_owner(
+        self,
+        owner: Any,
+        metrics: dict[str, dict[str, int | str]] | None = None,
+        provider_metrics: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any] | None:
+        if metrics is None:
+            metrics = {}
+        latest_ts = ""
+        serialized_metrics: list[dict[str, Any]] = []
+        if provider_metrics:
+            for pm in provider_metrics:
+                key = pm["key"]
+                m = metrics.get(key, {})
+                val = int(m.get("value", 0)) if m else 0
+                mt = m.get("fetched_at", "") if m else ""
+                if mt and mt > latest_ts:
+                    latest_ts = str(mt)
+                serialized_metrics.append({
+                    "key": key,
+                    "label": pm.get("label", key),
+                    "icon": pm.get("icon", ""),
+                    "value": val,
+                    "format": pm.get("format", "number"),
+                })
+        return {
+            "id": owner.id,
+            "media_type": owner.media_type,
+            "external_id": owner.external_id,
+            "name": owner.name,
+            "external_url": owner.external_url,
+            "thumbnail_url": owner.thumbnail_url,
+            "metrics": serialized_metrics,
+            "fetched_at": latest_ts,
+        }
+
+    async def get_owner_for_item(
+        self,
+        item: Any,
+    ) -> dict[str, Any] | None:
+        """Return serialized owner data for a media item, or None."""
+        if not item.channel_id:
+            return None
+        owner = await media_repo.get_owner(
+            self.session, item.media_type, item.channel_id,
+        )
+        if owner is None:
+            return None
+        metrics = await media_repo.get_owner_latest_metrics(
+            self.session, owner.id,
+        )
+        provider = self.registry.get(item.media_type)
+        pm: list[dict[str, str]] = []
+        if provider:
+            for m in provider.metrics:
+                pm.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
+        return self._serialize_owner(owner, metrics, pm)
+
+    async def get_owner_snapshots_for_item(
+        self,
+        item: Any,
+        limit: int = 20,
+    ) -> list[dict[str, int | str]]:
+        """Return pivoted owner snapshots for a media item's channel/artist."""
+        if not item.channel_id:
+            return []
+        owner = await media_repo.get_owner(
+            self.session, item.media_type, item.channel_id,
+        )
+        if owner is None:
+            return []
+        return await media_repo.get_owner_snapshots_pivoted(
+            self.session, owner.id, limit=limit,
+        )
+
+    async def list_owners_for_guild(
+        self,
+        guild_id: int,
+        media_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return owner summaries for a guild with latest metrics."""
+        return await media_repo.get_owners_for_guild(
+            self.session, guild_id, media_type,
+        )

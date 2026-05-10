@@ -182,6 +182,13 @@ async def get_media_admin(
     item = await svc.get_media_item(media_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Media item not found")
+
+    item_row = await media_repo.get(session, media_id)
+    if item_row and item_row.channel_id:
+        owner = await svc.get_owner_for_item(item_row)
+        if owner:
+            item["owner"] = owner
+
     return MsgPackResponse(item, request)
 
 
@@ -235,6 +242,43 @@ async def get_media_snapshots(
     return MsgPackResponse(
         {"snapshots": snapshots, "metric_defs": metric_defs}, request
     )
+
+
+@router.get("/{media_id}/owner/history")
+async def get_media_owner_history_admin(
+    request: Request,
+    media_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    _admin: dict[str, Any] = Depends(require_guild_admin),
+    session: AsyncSession = Depends(get_db),
+) -> MsgPackResponse:
+    item = await media_repo.get(session, media_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Media item not found")
+
+    svc = await _media_service(request, session)
+    snapshots = await svc.get_owner_snapshots_for_item(item, limit=limit)
+
+    registry = request.app.state.media_registry
+    provider = registry.get(item.media_type)
+    metric_defs: list[dict[str, str]] = []
+    if provider:
+        for m in provider.metrics:
+            metric_defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
+    else:
+        seen: set[str] = set()
+        for row in snapshots:
+            for key in row:
+                if key != "fetched_at" and key not in seen:
+                    seen.add(key)
+                    metric_defs.append({"key": key, "label": key, "icon": "", "format": "number"})
+
+    owner = await svc.get_owner_for_item(item)
+    return MsgPackResponse({
+        "owner_id": owner["id"] if owner else None,
+        "snapshots": snapshots,
+        "metric_defs": metric_defs,
+    }, request)
 
 
 @router.delete("/{media_id}")

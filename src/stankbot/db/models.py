@@ -624,6 +624,61 @@ class MediaMilestone(Base):
 
 
 # ---------------------------------------------------------------------------
+# Media Owners (Channels / Artists)
+# ---------------------------------------------------------------------------
+
+
+class MediaOwner(Base):
+    """Global (not per-guild) owner metadata for a media channel/artist.
+
+    One row per unique (media_type, external_id).  Multiple media_items
+    across guilds can reference the same owner via channel_id.
+    """
+
+    __tablename__ = "media_owners"
+    __table_args__ = (
+        UniqueConstraint("media_type", "external_id", name="uq_media_owner_unique"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    media_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    thumbnail_url: Mapped[str | None] = mapped_column(String(500))
+    external_url: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class MediaOwnerSnapshot(Base):
+    """Time-series metric snapshots for media owners.
+
+    One row per (owner, metric_key, fetch).  Mirrors MetricSnapshot pattern
+    but scoped to owners instead of media items.  Query for historical
+    channel/artist stat charts.
+    """
+
+    __tablename__ = "media_owner_snapshots"
+    __table_args__ = (
+        Index("ix_owner_snapshots_id_key_time", "media_owner_id", "metric_key", "fetched_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    media_owner_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("media_owners.id", ondelete="CASCADE"), nullable=False
+    )
+    metric_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    value: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------
 

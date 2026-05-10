@@ -15,7 +15,11 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 
 from stankbot.db.engine import session_scope
-from stankbot.db.models import MediaItem, MetricCache, MetricSnapshot
+from stankbot.db.models import (
+    MediaItem,
+    MetricCache,
+    MetricSnapshot,
+)
 from stankbot.db.repositories import media as media_repo
 from stankbot.web.transport import MsgPackResponse, msgpack_body
 
@@ -86,6 +90,8 @@ async def mock_add_media(
         or f"mock_{media_type}_{guild_id}_{stamp}"
     )
     base_name = payload.name or f"mock-{media_type}-{stamp[-12:]}"
+    channel_id = f"UC_mock_{stamp[-12:]}"
+    artist_name = "Mock Artist" if media_type == "spotify" else "Mock Channel"
 
     async with session_scope(request.app.state.session_factory) as session:
         # Handle name collisions by appending a counter
@@ -100,7 +106,8 @@ async def mock_add_media(
                     media_type=media_type,
                     external_id=f"{external_id}_{attempt}" if attempt > 0 else external_id,
                     title=f"Mock {media_type.capitalize()} Item — {name}",
-                    channel_name="Mock Channel",
+                    channel_name=artist_name,
+                    channel_id=channel_id,
                     thumbnail_url=None,
                     published_at=datetime.now(UTC),
                     duration_seconds=180,
@@ -143,6 +150,22 @@ async def mock_add_media(
             await media_repo.insert_metric_snapshot(session, item.id, key, val, now)
 
         item.metrics_last_fetched_at = now
+
+        # Create / update owner with a snapshot
+        owner = await media_repo.upsert_owner(
+            session,
+            media_type=media_type,
+            external_id=channel_id,
+            name=artist_name,
+            external_url=f"https://{'youtube.com/channel' if media_type == 'youtube' else 'open.spotify.com/artist'}/{channel_id}",
+        )
+        owner_metrics = {"subscriber_count": 1000000, "view_count": 50000000, "video_count": 200}
+        if media_type == "spotify":
+            owner_metrics = {"follower_count": 500000, "popularity": 75}
+        for key, val in owner_metrics.items():
+            await media_repo.insert_owner_snapshot(
+                session, owner.id, key, val, now,
+            )
 
     return MsgPackResponse(
         {"success": True, "id": item.id, "name": name}, request, status_code=201

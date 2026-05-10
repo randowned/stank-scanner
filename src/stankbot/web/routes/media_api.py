@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.repositories import media as media_repo
 from stankbot.services.chart_renderer import render_compare_chart, render_media_chart
-from stankbot.services.media_service import MediaService, _aggregate_snapshots, _floor_to_bucket
+from stankbot.services.media_service import MediaService
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.web.tools import get_active_guild_id, get_db, require_guild_member
 from stankbot.web.transport import MsgPackResponse
@@ -116,6 +116,14 @@ async def get_media_detail(
         raise HTTPException(status_code=404, detail="Media item not found")
     if item["media_type"] not in await _get_enabled_providers(session, guild_id):
         raise HTTPException(status_code=404, detail="Media item not found")
+
+    # Attach owner data when channel_id is present
+    item_row = await media_repo.get(session, media_id)
+    if item_row and item_row.channel_id:
+        owner = await svc.get_owner_for_item(item_row)
+        if owner:
+            item["owner"] = owner
+
     return MsgPackResponse(item, request)
 
 
@@ -167,6 +175,47 @@ async def get_media_history(
             payload["compare"] = compare
 
     return MsgPackResponse(payload, request)
+
+
+@router.get("/{media_id}/owner/history")
+async def get_media_owner_history(
+    request: Request,
+    media_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    guild_id: int = Depends(get_active_guild_id),
+    _user: dict[str, Any] = Depends(require_guild_member),
+    session: AsyncSession = Depends(get_db),
+) -> MsgPackResponse:
+    item = await media_repo.get(session, media_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    if item.media_type not in await _get_enabled_providers(session, guild_id):
+        raise HTTPException(status_code=404, detail="Media item not found")
+
+    svc = await _media_service(request, session)
+    snapshots = await svc.get_owner_snapshots_for_item(item, limit=limit)
+
+    registry = request.app.state.media_registry
+    provider = registry.get(item.media_type)
+    metric_defs: list[dict[str, str]] = []
+    if provider:
+        for m in provider.metrics:
+            metric_defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
+    else:
+        # Fallback: derive metric keys from snapshot columns
+        seen: set[str] = set()
+        for row in snapshots:
+            for key in row:
+                if key != "fetched_at" and key not in seen:
+                    seen.add(key)
+                    metric_defs.append({"key": key, "label": key, "icon": "", "format": "number"})
+
+    owner = await svc.get_owner_for_item(item)
+    return MsgPackResponse({
+        "owner_id": owner["id"] if owner else None,
+        "snapshots": snapshots,
+        "metric_defs": metric_defs,
+    }, request)
 
 
 # ---------------------------------------------------------------------------

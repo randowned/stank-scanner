@@ -81,6 +81,9 @@ class Keys(StrEnum):
     # Media milestone embed templates
     YOUTUBE_MILESTONE_EMBED = "youtube_milestone_embed"
     SPOTIFY_MILESTONE_EMBED = "spotify_milestone_embed"
+    # Media owner embed templates
+    YOUTUBE_OWNER_EMBED = "youtube_owner_embed"
+    SPOTIFY_OWNER_EMBED = "spotify_owner_embed"
 
 
 DEFAULTS: dict[str, Any] = {

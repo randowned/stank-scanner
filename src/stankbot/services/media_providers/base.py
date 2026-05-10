@@ -51,6 +51,17 @@ class MetricResult:
     error: str | None = None
 
 
+@dataclass(slots=True)
+class OwnerResult:
+    """Owner-level data fetched from a provider (channel/artist stats)."""
+
+    external_id: str
+    name: str
+    external_url: str
+    thumbnail_url: str | None = None
+    metrics: dict[str, int] = field(default_factory=dict)
+
+
 class MediaProvider(ABC):
     """Provider-agnostic interface for any media platform.
 
@@ -85,6 +96,14 @@ class MediaProvider(ABC):
         per-guild credentials (e.g. OAuth tokens).
         """
         return self.is_configured()
+
+    async def fetch_owner(self, external_id: str) -> OwnerResult | None:
+        """Fetch owner-level metrics for a channel/artist.
+
+        Default: not supported (returns None). Override in providers
+        that have an owner concept (YouTube channels, Spotify artists).
+        """
+        return None
 
     @abstractmethod
     async def health_check(self) -> bool: ...

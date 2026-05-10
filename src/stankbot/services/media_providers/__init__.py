@@ -1,6 +1,6 @@
 """Media provider exports."""
 
-from .base import MediaProvider, MetricDef, MetricResult, ProviderDef, ResolvedMedia
+from .base import MediaProvider, MetricDef, MetricResult, OwnerResult, ProviderDef, ResolvedMedia
 from .registry import MediaProviderRegistry
 from .spotify import SpotifyProvider
 from .youtube import YouTubeProvider
@@ -10,6 +10,7 @@ __all__ = [
     "MediaProviderRegistry",
     "MetricDef",
     "MetricResult",
+    "OwnerResult",
     "ProviderDef",
     "ResolvedMedia",
     "YouTubeProvider",

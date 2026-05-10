@@ -275,6 +275,35 @@ SPOTIFY_MILESTONE_EMBED: dict[str, Any] = {
 }
 
 
+YOUTUBE_OWNER_EMBED: dict[str, Any] = {
+    "color": "#ff0000",
+    "title": "{owner_name}",
+    "url": "{owner_url}",
+    "image": "{thumbnail_url}",
+    "fields": [
+        {"name": "\U0001f4ca Subscribers", "value": "{subscriber_count}", "inline": True},
+        {"name": "\U0001f441\ufe0f Total Views", "value": "{view_count}", "inline": True},
+        {"name": "\U0001f3ac Videos", "value": "{video_count}", "inline": True},
+    ],
+    "footer": "\U0001f3ac YouTube Channel \u00b7 {media_count} tracked item(s) \u00b7 Updated {fetched_at}",
+    "description": "{media_links}",
+}
+
+
+SPOTIFY_OWNER_EMBED: dict[str, Any] = {
+    "color": "#1db954",
+    "title": "{owner_name}",
+    "url": "{owner_url}",
+    "image": "{thumbnail_url}",
+    "fields": [
+        {"name": "\U0001f465 Followers", "value": "{follower_count}", "inline": True},
+        {"name": "\U0001f525 Popularity", "value": "{popularity}/100", "inline": True},
+    ],
+    "footer": "\U0001f3b5 Spotify Artist \u00b7 {media_count} tracked item(s) \u00b7 Updated {fetched_at}",
+    "description": "{media_links}",
+}
+
+
 ALL_DEFAULTS: dict[str, dict[str, Any]] = {
     "board_embed": BOARD_EMBED,
     "record_embed": RECORD_EMBED,
@@ -286,4 +315,6 @@ ALL_DEFAULTS: dict[str, dict[str, Any]] = {
     "spotify_media_embed": SPOTIFY_MEDIA_EMBED,
     "youtube_milestone_embed": YOUTUBE_MILESTONE_EMBED,
     "spotify_milestone_embed": SPOTIFY_MILESTONE_EMBED,
+    "youtube_owner_embed": YOUTUBE_OWNER_EMBED,
+    "spotify_owner_embed": SPOTIFY_OWNER_EMBED,
 }
