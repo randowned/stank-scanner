@@ -156,6 +156,7 @@
 	$effect(() => {
 		loadItem();
 		loadSnapshots();
+		loadOwnerSnapshots();
 	});
 </script>
 

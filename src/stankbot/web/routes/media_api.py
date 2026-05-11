@@ -120,7 +120,7 @@ async def get_media_detail(
     # Attach owner data when channel_id is present
     item_row = await media_repo.get(session, media_id)
     if item_row and item_row.channel_id:
-        owner = await svc.get_owner_for_item(item_row)
+        owner = await svc.get_owner_for_item(item_row, guild_id=guild_id)
         if owner:
             item["owner"] = owner
 
@@ -197,12 +197,8 @@ async def get_media_owner_history(
 
     registry = request.app.state.media_registry
     provider = registry.get(item.media_type)
-    metric_defs: list[dict[str, str]] = []
-    if provider:
-        for m in provider.metrics:
-            metric_defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
-    else:
-        # Fallback: derive metric keys from snapshot columns
+    metric_defs: list[dict[str, str]] = svc._owner_metric_defs(provider) if provider else []
+    if not metric_defs:
         seen: set[str] = set()
         for row in snapshots:
             for key in row:
@@ -210,7 +206,7 @@ async def get_media_owner_history(
                     seen.add(key)
                     metric_defs.append({"key": key, "label": key, "icon": "", "format": "number"})
 
-    owner = await svc.get_owner_for_item(item)
+    owner = await svc.get_owner_for_item(item, guild_id=guild_id)
     return MsgPackResponse({
         "owner_id": owner["id"] if owner else None,
         "snapshots": snapshots,

@@ -22,6 +22,13 @@ class MockYouTubeProvider(MediaProvider):
         MetricDef("like_count", "Likes", "number", "\U0001f44d"),
         MetricDef("comment_count", "Comments", "number", "\U0001f4ac"),
     ]
+    owner_metrics = [
+        MetricDef("subscriber_count", "Subscribers", "number", "\U0001f4ca"),
+        MetricDef("view_count", "Total Views", "number", "\U0001f441\ufe0f"),
+        MetricDef("video_count", "Videos", "number", "\U0001f3ac"),
+        MetricDef("total_like_count", "Total Likes", "number", "\U0001f44d"),
+        MetricDef("total_comment_count", "Total Comments", "number", "\U0001f4ac"),
+    ]
 
     def is_configured(self) -> bool:
         return True
@@ -78,6 +85,11 @@ class MockSpotifyProvider(MediaProvider):
     icon = "\U0001f7e2"
     metrics = [
         MetricDef("playcount", "Play Count", "number", "\U0001f3a7"),
+    ]
+    owner_metrics = [
+        MetricDef("follower_count", "Followers", "number", "\U0001f465"),
+        MetricDef("popularity", "Popularity", "number", "\U0001f525"),
+        MetricDef("total_playcount", "Total Plays", "number", "\U0001f3a7"),
     ]
 
     def is_configured(self) -> bool:

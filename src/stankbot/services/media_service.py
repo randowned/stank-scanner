@@ -817,30 +817,59 @@ class MediaService:
     # Owner queries & serialization
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _owner_metric_defs(provider: object | None) -> list[dict[str, str]]:
+        """Return display metadata for owner metrics, preferring owner_metrics."""
+        defs: list[dict[str, str]] = []
+        seen: set[str] = set()
+        if provider and hasattr(provider, "owner_metrics"):
+            for m in provider.owner_metrics:  # type: ignore[union-attr]
+                if m.key not in seen:
+                    defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
+                    seen.add(m.key)
+        if provider and hasattr(provider, "metrics"):
+            for m in provider.metrics:  # type: ignore[union-attr]
+                if m.key not in seen:
+                    defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
+                    seen.add(m.key)
+        return defs
+
     def _serialize_owner(
         self,
         owner: Any,
         metrics: dict[str, dict[str, int | str]] | None = None,
-        provider_metrics: list[dict[str, str]] | None = None,
+        metric_defs: list[dict[str, str]] | None = None,
     ) -> dict[str, Any] | None:
         if metrics is None:
             metrics = {}
+        if metric_defs is None:
+            metric_defs = []
         latest_ts = ""
         serialized_metrics: list[dict[str, Any]] = []
-        if provider_metrics:
-            for pm in provider_metrics:
-                key = pm["key"]
-                m = metrics.get(key, {})
-                val = int(m.get("value", 0)) if m else 0
-                mt = m.get("fetched_at", "") if m else ""
-                if mt and mt > latest_ts:
-                    latest_ts = str(mt)
+        # Build a lookup: metric_key → {label, icon, format}
+        defs_by_key: dict[str, dict[str, str]] = {d["key"]: d for d in metric_defs}
+        for key, m in metrics.items():
+            val = int(m.get("value", 0)) if m else 0
+            mt = m.get("fetched_at", "") if m else ""
+            if mt and mt > latest_ts:
+                latest_ts = str(mt)
+            d = defs_by_key.get(key, {})
+            serialized_metrics.append({
+                "key": key,
+                "label": d.get("label", key),
+                "icon": d.get("icon", ""),
+                "value": val,
+                "format": d.get("format", "number"),
+            })
+        # Include owner_metrics keys that have zero value (no snapshot yet)
+        for d in metric_defs:
+            if d["key"] not in metrics:
                 serialized_metrics.append({
-                    "key": key,
-                    "label": pm.get("label", key),
-                    "icon": pm.get("icon", ""),
-                    "value": val,
-                    "format": pm.get("format", "number"),
+                    "key": d["key"],
+                    "label": d.get("label", d["key"]),
+                    "icon": d.get("icon", ""),
+                    "value": 0,
+                    "format": d.get("format", "number"),
                 })
         return {
             "id": owner.id,
@@ -856,8 +885,14 @@ class MediaService:
     async def get_owner_for_item(
         self,
         item: Any,
+        guild_id: int | None = None,
     ) -> dict[str, Any] | None:
-        """Return serialized owner data for a media item, or None."""
+        """Return serialized owner data for a media item, or None.
+
+        When guild_id is provided, also computes aggregate metrics
+        (total likes, total comments, total plays) from the owner's
+        media items in that guild.
+        """
         if not item.channel_id:
             return None
         owner = await media_repo.get_owner(
@@ -869,10 +904,36 @@ class MediaService:
             self.session, owner.id,
         )
         provider = self.registry.get(item.media_type)
-        pm: list[dict[str, str]] = []
-        if provider:
-            for m in provider.metrics:
-                pm.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
+        pm = self._owner_metric_defs(provider)
+
+        # Aggregate item-level metrics across all media items for this owner
+        if guild_id is not None:
+            all_items = await media_repo.list_all(
+                self.session, guild_id, item.media_type,
+            )
+            owner_items = [it for it in all_items if it.channel_id == item.channel_id]
+            if owner_items:
+                item_metrics = await media_repo.get_metrics_for_items(
+                    self.session, [it.id for it in owner_items],
+                )
+                agg: dict[str, int] = {}
+                for _mid, im in item_metrics.items():
+                    for metric_key, mv in im.items():
+                        val = int(mv.get("value", 0)) if isinstance(mv, dict) else 0
+                        agg[metric_key] = agg.get(metric_key, 0) + val
+                # Map item metric keys to owner aggregate keys
+                agg_keys: dict[str, str] = {
+                    "like_count": "total_like_count",
+                    "comment_count": "total_comment_count",
+                    "playcount": "total_playcount",
+                }
+                for item_key, owner_key in agg_keys.items():
+                    if owner_key not in metrics and item_key in agg:
+                        metrics[owner_key] = {
+                            "value": agg[item_key],
+                            "fetched_at": "",
+                        }
+
         return self._serialize_owner(owner, metrics, pm)
 
     async def get_owner_snapshots_for_item(

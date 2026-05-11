@@ -73,6 +73,7 @@ class MediaProvider(ABC):
     label: str = ""
     icon: str = ""
     metrics: list[MetricDef] = []
+    owner_metrics: list[MetricDef] = []
 
     @abstractmethod
     def is_configured(self) -> bool: ...

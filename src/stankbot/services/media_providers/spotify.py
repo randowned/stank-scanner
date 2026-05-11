@@ -30,6 +30,11 @@ class SpotifyProvider(MediaProvider):
     metrics = [
         MetricDef("playcount", "Play Count", "number", "\U0001f3a7"),
     ]
+    owner_metrics = [
+        MetricDef("follower_count", "Followers", "number", "\U0001f465"),
+        MetricDef("popularity", "Popularity", "number", "\U0001f525"),
+        MetricDef("total_playcount", "Total Plays", "number", "\U0001f3a7"),
+    ]
 
     def __init__(
         self,

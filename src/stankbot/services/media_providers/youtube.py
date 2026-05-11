@@ -39,6 +39,13 @@ class YouTubeProvider(MediaProvider):
         MetricDef("like_count", "Likes", "number", "👍"),
         MetricDef("comment_count", "Comments", "number", "💬"),
     ]
+    owner_metrics = [
+        MetricDef("subscriber_count", "Subscribers", "number", "📊"),
+        MetricDef("view_count", "Total Views", "number", "👁️"),
+        MetricDef("video_count", "Videos", "number", "🎬"),
+        MetricDef("total_like_count", "Total Likes", "number", "👍"),
+        MetricDef("total_comment_count", "Total Comments", "number", "💬"),
+    ]
 
     def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key
