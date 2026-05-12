@@ -79,3 +79,22 @@ async def broadcast_media_milestone(
         seen.add(media_announce_channel_id)
     await broadcast(sender, seen, embed)
     return list(seen)
+
+
+async def broadcast_owner_milestone(
+    session: AsyncSession,
+    sender: EmbedSender,
+    *,
+    guild_id: int,
+    embed: discord.Embed,
+    media_announce_channel_id: int | None = None,
+    milestones_enabled: bool = True,
+) -> Sequence[int]:
+    """Send an owner milestone embed to announcement channels (same channels as media milestones)."""
+    if not milestones_enabled:
+        return []
+    seen: set[int] = set(await announcement_channel_ids(session, guild_id))
+    if media_announce_channel_id is not None:
+        seen.add(media_announce_channel_id)
+    await broadcast(sender, seen, embed)
+    return list(seen)

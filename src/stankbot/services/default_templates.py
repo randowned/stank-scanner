@@ -304,6 +304,50 @@ SPOTIFY_OWNER_EMBED: dict[str, Any] = {
 }
 
 
+YOUTUBE_OWNER_MILESTONE_EMBED: dict[str, Any] = {
+    "color": "#FFD700",
+    "title": "\U0001f389 {owner_name}",
+    "url": "{owner_url}",
+    "thumbnail": "{thumbnail_url}",
+    "author": {"name": "\U0001f680 Channel Milestone!", "url": "{board_url}"},
+    "fields": [
+        {
+            "name": "\U0001f3c6 {metric_label}",
+            "value": "**{milestone_value}**",
+            "inline": False,
+        },
+        {
+            "name": "\U0001f4ca All stats",
+            "value": "{other_metrics}",
+            "inline": False,
+        },
+    ],
+    "footer": "\U0001f517 {owner_page_url}",
+}
+
+
+SPOTIFY_OWNER_MILESTONE_EMBED: dict[str, Any] = {
+    "color": "#FFD700",
+    "title": "\U0001f389 {owner_name}",
+    "url": "{owner_url}",
+    "thumbnail": "{thumbnail_url}",
+    "author": {"name": "\U0001f680 Artist Milestone!", "url": "{board_url}"},
+    "fields": [
+        {
+            "name": "\U0001f3c6 {metric_label}",
+            "value": "**{milestone_value}**",
+            "inline": False,
+        },
+        {
+            "name": "\U0001f4ca All stats",
+            "value": "{other_metrics}",
+            "inline": False,
+        },
+    ],
+    "footer": "\U0001f517 {owner_page_url}",
+}
+
+
 ALL_DEFAULTS: dict[str, dict[str, Any]] = {
     "board_embed": BOARD_EMBED,
     "record_embed": RECORD_EMBED,
@@ -317,4 +361,6 @@ ALL_DEFAULTS: dict[str, dict[str, Any]] = {
     "spotify_milestone_embed": SPOTIFY_MILESTONE_EMBED,
     "youtube_owner_embed": YOUTUBE_OWNER_EMBED,
     "spotify_owner_embed": SPOTIFY_OWNER_EMBED,
+    "youtube_owner_milestone_embed": YOUTUBE_OWNER_MILESTONE_EMBED,
+    "spotify_owner_milestone_embed": SPOTIFY_OWNER_MILESTONE_EMBED,
 }

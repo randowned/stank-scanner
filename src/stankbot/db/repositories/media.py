@@ -11,6 +11,7 @@ from stankbot.db.models import (
     MediaItem,
     MediaMilestone,
     MediaOwner,
+    MediaOwnerMilestone,
     MediaOwnerSnapshot,
     MetricCache,
     MetricSnapshot,
@@ -571,3 +572,49 @@ async def get_owners_for_guild(
         summary["fetched_at"] = latest_ts  # type: ignore[index]
 
     return list(owner_map.values())
+
+
+# ---------------------------------------------------------------------------
+# Owner milestones (announcement tracking)
+# ---------------------------------------------------------------------------
+
+
+async def insert_owner_milestone(
+    session: AsyncSession,
+    media_owner_id: int,
+    metric_key: str,
+    milestone_value: int,
+) -> MediaOwnerMilestone | None:
+    from sqlalchemy.dialects.sqlite import insert as sqlite_upsert
+
+    now = datetime.now(UTC)
+    stmt = sqlite_upsert(MediaOwnerMilestone).values(
+        media_owner_id=media_owner_id,
+        metric_key=metric_key,
+        milestone_value=milestone_value,
+        announced_at=now,
+    )
+    stmt = stmt.on_conflict_do_nothing(
+        index_elements=["media_owner_id", "metric_key", "milestone_value"]
+    )
+    result = await session.execute(stmt)
+    await session.flush()
+    if result.rowcount and result.rowcount > 0:  # type: ignore[attr-defined]
+        row = await session.get(MediaOwnerMilestone, result.lastrowid)  # type: ignore[attr-defined]
+        return row
+    return None
+
+
+async def has_owner_milestone(
+    session: AsyncSession,
+    media_owner_id: int,
+    metric_key: str,
+    milestone_value: int,
+) -> bool:
+    stmt = select(MediaOwnerMilestone).where(
+        MediaOwnerMilestone.media_owner_id == media_owner_id,
+        MediaOwnerMilestone.metric_key == metric_key,
+        MediaOwnerMilestone.milestone_value == milestone_value,
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none() is not None

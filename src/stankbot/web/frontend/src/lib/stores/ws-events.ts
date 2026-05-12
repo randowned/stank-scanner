@@ -19,7 +19,10 @@ export type WsEvent =
 	| { kind: 'update-available'; serverVersion: string; clientVersion: string }
 	| { kind: 'media-milestone'; mediaItemId: number; title: string;
 	    metricKey: string; milestoneValue: number; newValue: number;
-	    thumbnailUrl?: string | null; name?: string | null };
+	    thumbnailUrl?: string | null; name?: string | null }
+	| { kind: 'owner-milestone'; ownerId: number; ownerName: string;
+	    mediaType: string; metricKey: string; milestoneValue: number;
+	    newValue: number; thumbnailUrl?: string | null; externalUrl?: string | null };
 
 /** Latest event; subscribers react on change. `null` between events. */
 export const lastWsEvent: Writable<WsEvent | null> = writable(null);

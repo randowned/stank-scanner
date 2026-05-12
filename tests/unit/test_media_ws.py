@@ -6,8 +6,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from stankbot.web.ws import MSG_TYPE_MEDIA_MILESTONE, broadcast_media_milestone
-from stankbot.web.ws import MSG_TYPE_MEDIA_SNAPSHOT, broadcast_media_snapshot
+from stankbot.web.ws import (
+    MSG_TYPE_MEDIA_MILESTONE,
+    MSG_TYPE_MEDIA_SNAPSHOT,
+    broadcast_media_milestone,
+    broadcast_media_snapshot,
+)
 
 
 @pytest.mark.asyncio

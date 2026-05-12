@@ -4,6 +4,8 @@ import { connectionStatus, wsLatency, boardState, onlineUsers } from './stores/i
 import type { OnlineUser } from './stores/index';
 import { mediaMetricUpdates } from './stores/index';
 import type { MediaMetricUpdate } from './stores/index';
+import { ownerMetricUpdates } from './stores/index';
+import type { OwnerMetricUpdate } from './stores/index';
 import { emitWsEvent } from './stores/ws-events';
 import type { BoardState, Badge } from './types';
 import { get } from 'svelte/store';
@@ -27,7 +29,9 @@ export enum MsgType {
 	VERSION_MISMATCH = 109,
 	ONLINE_USERS = 110,
 	MEDIA_SNAPSHOT = 111,
-	MEDIA_MILESTONE = 112
+	MEDIA_MILESTONE = 112,
+	OWNER_SNAPSHOT = 113,
+	OWNER_MILESTONE = 114
 }
 
 interface PingMsg {
@@ -149,6 +153,30 @@ interface MediaMilestoneMsg {
 	};
 }
 
+interface OwnerSnapshotMsg {
+	t: typeof MsgType.OWNER_SNAPSHOT;
+	d: {
+		owner_id: number;
+		media_type: string;
+		metric_key: string;
+		value: number;
+	};
+}
+
+interface OwnerMilestoneMsg {
+	t: typeof MsgType.OWNER_MILESTONE;
+	d: {
+		owner_id: number;
+		owner_name: string;
+		media_type: string;
+		metric_key: string;
+		milestone_value: number;
+		new_value: number;
+		thumbnail_url: string | null;
+		external_url: string | null;
+	};
+}
+
 type ServerMsg =
 	| StateMsg
 	| RankUpdateMsg
@@ -161,7 +189,9 @@ type ServerMsg =
 	| VersionMismatchMsg
 	| OnlineUsersMsg
 	| MediaSnapshotMsg
-	| MediaMilestoneMsg;
+	| MediaMilestoneMsg
+	| OwnerSnapshotMsg
+	| OwnerMilestoneMsg;
 
 let ws: WebSocket | null = null;
 let pingInterval: ReturnType<typeof setInterval> | null = null;
@@ -398,6 +428,29 @@ function handleMessage(msg: ServerMsg): void {
 				newValue: msg.d.new_value,
 				thumbnailUrl: msg.d.thumbnail_url,
 				name: msg.d.name
+			});
+			break;
+
+		case MsgType.OWNER_SNAPSHOT: {
+			const update: OwnerMetricUpdate = {
+				ownerId: msg.d.owner_id,
+				metrics: [{ key: msg.d.metric_key, value: msg.d.value, fetchedAt: '' }]
+			};
+			ownerMetricUpdates.set(update);
+			break;
+		}
+
+		case MsgType.OWNER_MILESTONE:
+			emitWsEvent({
+				kind: 'owner-milestone',
+				ownerId: msg.d.owner_id,
+				ownerName: msg.d.owner_name,
+				mediaType: msg.d.media_type,
+				metricKey: msg.d.metric_key,
+				milestoneValue: msg.d.milestone_value,
+				newValue: msg.d.new_value,
+				thumbnailUrl: msg.d.thumbnail_url,
+				externalUrl: msg.d.external_url
 			});
 			break;
 	}

@@ -34,6 +34,8 @@ MSG_TYPE_VERSION_MISMATCH = 109
 MSG_TYPE_ONLINE_USERS = 110
 MSG_TYPE_MEDIA_SNAPSHOT = 111
 MSG_TYPE_MEDIA_MILESTONE = 112
+MSG_TYPE_OWNER_SNAPSHOT = 113
+MSG_TYPE_OWNER_MILESTONE = 114
 
 router = APIRouter(prefix="")
 
@@ -559,6 +561,58 @@ async def broadcast_media_snapshot(
                 "metric_key": metric_key,
                 "value": value,
                 "fetched_at": fetched_at,
+            },
+        },
+    )
+
+
+async def broadcast_owner_snapshot(
+    guild_id: int,
+    *,
+    owner_id: int,
+    media_type: str,
+    metric_key: str,
+    value: int,
+) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {
+            "t": MSG_TYPE_OWNER_SNAPSHOT,
+            "d": {
+                "owner_id": owner_id,
+                "media_type": media_type,
+                "metric_key": metric_key,
+                "value": value,
+            },
+        },
+    )
+
+
+async def broadcast_owner_milestone(
+    guild_id: int,
+    *,
+    owner_id: int,
+    owner_name: str,
+    media_type: str,
+    metric_key: str,
+    milestone_value: int,
+    new_value: int,
+    thumbnail_url: str | None = None,
+    external_url: str | None = None,
+) -> None:
+    await manager.broadcast_json(
+        guild_id,
+        {
+            "t": MSG_TYPE_OWNER_MILESTONE,
+            "d": {
+                "owner_id": owner_id,
+                "owner_name": owner_name,
+                "media_type": media_type,
+                "metric_key": metric_key,
+                "milestone_value": milestone_value,
+                "new_value": new_value,
+                "thumbnail_url": thumbnail_url,
+                "external_url": external_url,
             },
         },
     )

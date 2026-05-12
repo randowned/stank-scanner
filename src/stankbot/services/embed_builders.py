@@ -24,7 +24,12 @@ from stankbot.db.repositories import media as media_repo
 from stankbot.db.repositories import players as players_repo
 from stankbot.services import template_store
 from stankbot.services.board_renderer import PlayerRow
-from stankbot.services.media_service import MilestoneInfo, next_milestone, prev_milestone
+from stankbot.services.media_service import (
+    MilestoneInfo,
+    OwnerMilestoneInfo,
+    next_milestone,
+    prev_milestone,
+)
 from stankbot.services.template_engine import RenderContext, render_embed
 
 
@@ -541,6 +546,51 @@ async def build_media_milestone_embed(
     return render_embed(tmpl, ctx)
 
 
+async def build_owner_milestone_embed(
+    *,
+    info: OwnerMilestoneInfo,
+    other_metrics: str,
+    guild_id: int,
+    session: AsyncSession,
+    base_url: str = "",
+) -> discord.Embed:
+    """Build a Discord embed for an owner (channel/artist) milestone."""
+
+    def _fmt_num(n: int) -> str:
+        return f"{n:,}"
+
+    metric_labels: dict[str, str] = {
+        "subscriber_count": "Subscribers",
+        "total_view_count": "Total Views",
+        "follower_count": "Followers",
+        "total_playcount": "Total Plays",
+    }
+    metric_label = metric_labels.get(info.metric_key, info.metric_key)
+
+    template_key = (
+        "youtube_owner_milestone_embed" if info.media_type == "youtube"
+        else "spotify_owner_milestone_embed"
+    )
+
+    owner_page_url = f"{base_url}/media" if base_url else info.external_url
+    board_url = base_url if base_url else ""
+
+    ctx = RenderContext(
+        variables={
+            "owner_name": info.owner_name,
+            "owner_url": info.external_url,
+            "thumbnail_url": info.thumbnail_url or "",
+            "milestone_value": _fmt_num(info.milestone_value),
+            "metric_label": metric_label,
+            "other_metrics": other_metrics,
+            "board_url": board_url,
+            "owner_page_url": owner_page_url,
+        }
+    )
+    tmpl = await template_store.load(template_key, session, guild_id)
+    return render_embed(tmpl, ctx)
+
+
 async def build_owner_embed(
     *,
     media_type: str,
@@ -598,6 +648,7 @@ __all__ = [
     "build_media_milestone_embed",
     "build_new_session_embed",
     "build_owner_embed",
+    "build_owner_milestone_embed",
     "build_record_embed",
     "current_record",
     "display_name_of",

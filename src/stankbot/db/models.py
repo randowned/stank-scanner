@@ -678,6 +678,32 @@ class MediaOwnerSnapshot(Base):
     )
 
 
+class MediaOwnerMilestone(Base):
+    """Tracks which milestone thresholds have been announced for a media owner.
+
+    One row per (owner, metric_key, milestone_value). Unique constraint
+    prevents duplicate announcements. Upward-only — regression is ignored.
+    """
+
+    __tablename__ = "media_owner_milestones"
+    __table_args__ = (
+        UniqueConstraint(
+            "media_owner_id", "metric_key", "milestone_value",
+            name="uq_owner_milestone",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    media_owner_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("media_owners.id", ondelete="CASCADE"), nullable=False
+    )
+    metric_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    milestone_value: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    announced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 # ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------

@@ -13,7 +13,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Guild, MediaItem, MetricSnapshot
-from stankbot.services.media_providers.base import MediaProvider, MetricDef, MetricResult, ResolvedMedia
+from stankbot.services.media_providers.base import (
+    MediaProvider,
+    MetricDef,
+    MetricResult,
+    ResolvedMedia,
+)
 from stankbot.services.media_providers.registry import MediaProviderRegistry
 from stankbot.web.routes.media_api import router as media_router
 

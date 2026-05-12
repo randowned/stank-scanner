@@ -5,7 +5,7 @@
 	import { apiFetch } from '$lib/api';
 	import { formatFreshness } from '$lib/format';
 	import type { MediaItem, MediaOwner, MetricSnapshot, CompareData, MetricDef, ProviderDef } from '$lib/types';
-	import { providersByType, loadProviders, mediaMetricUpdates } from '$lib/stores';
+	import { providersByType, loadProviders, mediaMetricUpdates, ownerMetricUpdates } from '$lib/stores';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import ErrorState from '$lib/components/ErrorState.svelte';
 	import StatTile from '$lib/components/StatTile.svelte';
@@ -549,6 +549,30 @@
 			void loadChartData();
 		}
 	});
+
+	// Owner metric live updates from WS
+	let liveOwnerMetrics = $state<Record<string, number>>({});
+	let ownerFlashKeys = $state<Record<string, boolean>>({});
+	$effect(() => {
+		if (!item?.owner?.metrics) return;
+		const m: Record<string, number> = {};
+		for (const om of item.owner.metrics) {
+			m[om.key] = om.value;
+		}
+		liveOwnerMetrics = m;
+	});
+	$effect(() => {
+		const update = $ownerMetricUpdates;
+		if (!update || !item?.owner || update.ownerId !== item.owner.id) return;
+		for (const m of update.metrics) {
+			liveOwnerMetrics[m.key] = m.value;
+		}
+		ownerFlashKeys = {};
+		for (const m of update.metrics) {
+			ownerFlashKeys[m.key] = true;
+		}
+		setTimeout(() => { ownerFlashKeys = {}; }, 1500);
+	});
 	const graphs = $derived(history.length > 0);
 
 	function externalUrl(): string | null {
@@ -644,8 +668,9 @@
 						>
 							{#each (owner.metrics ?? []).slice(0, 2) as om}
 								<StatTile
-									value={om.value.toLocaleString('en-US')}
+									value={(liveOwnerMetrics[om.key] ?? om.value).toLocaleString('en-US')}
 									label="{om.icon} {om.label}"
+									flash={!!ownerFlashKeys[om.key]}
 									testId="owner-metric-{om.key}"
 									fontSize="sm"
 								/>
@@ -659,8 +684,9 @@
 							>
 								{#each (owner.metrics ?? []).slice(2) as om}
 									<StatTile
-										value={om.value.toLocaleString('en-US')}
+										value={(liveOwnerMetrics[om.key] ?? om.value).toLocaleString('en-US')}
 										label="{om.icon} {om.label}"
+										flash={!!ownerFlashKeys[om.key]}
 										testId="owner-metric-{om.key}"
 										fontSize="sm"
 									/>

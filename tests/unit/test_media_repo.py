@@ -5,12 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Guild, MediaItem
 from stankbot.db.repositories import media as media_repo
-
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 

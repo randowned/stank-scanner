@@ -22,7 +22,8 @@ from stankbot.services.media_providers.registry import MediaProviderRegistry
 
 log = logging.getLogger(__name__)
 
-# Milestone thresholds — every 1M until 50M, then selected jumps through 1B.
+# Milestone thresholds — sparse K-scale, then every 1M to 50M, then jumps to 1B.
+_MILESTONES_K: list[int] = [n * 1_000 for n in (1, 5, 10, 25, 50, 100, 250, 500)]
 _MILESTONES_BASE: list[int] = [n * 1_000_000 for n in range(1, 51)]
 _MILESTONES_EXT: list[int] = [
     75_000_000, 100_000_000, 150_000_000, 200_000_000,
@@ -30,12 +31,18 @@ _MILESTONES_EXT: list[int] = [
     600_000_000, 700_000_000, 800_000_000, 900_000_000,
     1_000_000_000,
 ]
-MILESTONE_THRESHOLDS: list[int] = sorted(_MILESTONES_BASE + _MILESTONES_EXT)
+MILESTONE_THRESHOLDS: list[int] = sorted(_MILESTONES_K + _MILESTONES_BASE + _MILESTONES_EXT)
 
-# Primary metric per provider — the one used for milestone detection.
+# Primary metric per provider — the one used for media item milestone detection.
 _PRIMARY_METRIC: dict[str, str] = {
     "youtube": "view_count",
     "spotify": "playcount",
+}
+
+# Per-owner-provider metrics that trigger milestones (each metric independently).
+_OWNER_MILESTONE_METRICS: dict[str, list[str]] = {
+    "youtube": ["subscriber_count", "total_view_count"],
+    "spotify": ["follower_count", "total_playcount"],
 }
 
 
@@ -217,11 +224,24 @@ class MilestoneInfo:
 
 
 @dataclass(slots=True)
+class OwnerMilestoneInfo:
+    media_owner_id: int
+    media_type: str
+    owner_name: str
+    external_url: str
+    thumbnail_url: str | None
+    metric_key: str
+    milestone_value: int
+    new_value: int
+
+
+@dataclass(slots=True)
 class RefreshResult:
     refreshed: int = 0
     failed: int = 0
     errors: list[str] = field(default_factory=list)
     milestones: list[MilestoneInfo] = field(default_factory=list)
+    owner_milestones: list[OwnerMilestoneInfo] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -573,7 +593,8 @@ class MediaService:
     # ------------------------------------------------------------------
 
     async def refresh_all(self, guild_id: int, media_type: str | None = None,
-                           on_snapshot: Callable[..., Any] | None = None) -> RefreshResult:
+                           on_snapshot: Callable[..., Any] | None = None,
+                           on_owner_snapshot: Callable[..., Any] | None = None) -> RefreshResult:
         """Refresh metrics for all media items, optionally scoped to one provider type."""
         result = RefreshResult()
         for provider in self.registry.enabled():
@@ -651,7 +672,8 @@ class MediaService:
                     owner_ids.add((provider.media_type, item.channel_id))
             for mt, cid in owner_ids:
                 with contextlib.suppress(Exception):
-                    await self._refresh_owner(mt, cid, now)
+                    await self._refresh_owner(mt, cid, now, result,
+                                               on_owner_snapshot=on_owner_snapshot)
 
         return result
 
@@ -660,6 +682,8 @@ class MediaService:
         media_type: str,
         channel_id: str,
         now: datetime,
+        result: RefreshResult | None = None,
+        on_owner_snapshot: Callable[..., Any] | None = None,
     ) -> int | None:
         """Fetch and persist owner data for a single channel/artist.
 
@@ -671,6 +695,18 @@ class MediaService:
         owner_data = await provider.fetch_owner(channel_id)
         if owner_data is None:
             return None
+
+        # Snapshot old values for milestone detection
+        owner = await media_repo.get_owner(self.session, media_type, channel_id)
+        old_metrics: dict[str, int] = {}
+        if owner:
+            old_owner_metrics = await media_repo.get_owner_latest_metrics(
+                self.session, owner.id,
+            )
+            for key in _OWNER_MILESTONE_METRICS.get(media_type, []):
+                m = old_owner_metrics.get(key, {})
+                old_metrics[key] = int(m.get("value", 0)) if m else 0
+
         owner = await media_repo.upsert_owner(
             self.session,
             media_type=media_type,
@@ -683,6 +719,32 @@ class MediaService:
             await media_repo.insert_owner_snapshot(
                 self.session, owner.id, metric_key, value, now,
             )
+            if on_owner_snapshot is not None:
+                await on_owner_snapshot(owner_id=owner.id, media_type=media_type,
+                                         metric_key=metric_key, value=value)
+
+        # Owner milestone detection
+        if result is not None:
+            for metric_key in _OWNER_MILESTONE_METRICS.get(media_type, []):
+                old_val = old_metrics.get(metric_key, 0)
+                new_val = owner_data.metrics.get(metric_key, 0)
+                crossed = get_crossed_milestones(old_val, new_val)
+                for mval in crossed:
+                    recorded = await media_repo.insert_owner_milestone(
+                        self.session, owner.id, metric_key, mval,
+                    )
+                    if recorded is not None:
+                        result.owner_milestones.append(OwnerMilestoneInfo(
+                            media_owner_id=owner.id,
+                            media_type=media_type,
+                            owner_name=owner_data.name,
+                            external_url=owner_data.external_url,
+                            thumbnail_url=owner_data.thumbnail_url,
+                            metric_key=metric_key,
+                            milestone_value=mval,
+                            new_value=new_val,
+                        ))
+
         return owner.id
 
     async def refresh_single(self, media_item_id: int) -> RefreshResult:
@@ -757,7 +819,7 @@ class MediaService:
                     ))
         if item.channel_id:
             with contextlib.suppress(Exception):
-                await self._refresh_owner(item.media_type, item.channel_id, now)
+                await self._refresh_owner(item.media_type, item.channel_id, now, result)
         return result
 
     async def backfill_alignment_masks(self) -> int:

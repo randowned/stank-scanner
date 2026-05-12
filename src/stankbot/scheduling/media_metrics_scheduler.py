@@ -19,15 +19,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from stankbot.db.models import Guild
 from stankbot.db.repositories import media as media_repo
-from stankbot.services.announcement_service import broadcast_media_milestone
-from stankbot.services.embed_builders import build_media_milestone_embed
+from stankbot.services.announcement_service import (
+    broadcast_media_milestone,
+    broadcast_owner_milestone,
+)
+from stankbot.services.embed_builders import (
+    build_media_milestone_embed,
+    build_owner_milestone_embed,
+)
 from stankbot.services.media_providers.registry import MediaProviderRegistry
-from stankbot.services.media_service import MediaService, MilestoneInfo
+from stankbot.services.media_service import (
+    _OWNER_MILESTONE_METRICS,
+    MediaService,
+    MilestoneInfo,
+    OwnerMilestoneInfo,
+)
 from stankbot.services.settings_service import Keys, SettingsService
 from stankbot.utils.time_utils import utc_isoformat
 from stankbot.web.routes.media_api import cleanup_chart_cache
 from stankbot.web.ws import broadcast_media_milestone as ws_broadcast_milestone
 from stankbot.web.ws import broadcast_media_snapshot as ws_broadcast_snapshot
+from stankbot.web.ws import broadcast_owner_milestone as ws_broadcast_owner_milestone
+from stankbot.web.ws import broadcast_owner_snapshot as ws_broadcast_owner_snapshot
 
 if TYPE_CHECKING:
     from stankbot.bot import StankBot
@@ -167,18 +180,31 @@ class MediaMetricsScheduler:
                     fetched_at=utc_isoformat(fetched_at),
                 )
 
+            async def _on_owner_snapshot(*, owner_id: int, media_type: str,
+                                          metric_key: str, value: int) -> None:
+                await ws_broadcast_owner_snapshot(
+                    guild_id,
+                    owner_id=owner_id,
+                    media_type=media_type,
+                    metric_key=metric_key,
+                    value=value,
+                )
+
             result = await svc.refresh_all(guild_id, media_type=provider_type,
-                                             on_snapshot=_on_snapshot)
+                                             on_snapshot=_on_snapshot,
+                                             on_owner_snapshot=_on_owner_snapshot)
 
             # Milestone announcements
             for minfo in result.milestones:
                 await self._announce_milestone(session, guild_id, minfo)
+            for ominfo in result.owner_milestones:
+                await self._announce_owner_milestone(session, guild_id, ominfo)
 
         elapsed = (datetime.now(tz=UTC) - now).total_seconds()
         log.info(
-            "MediaMetrics: guild=%d provider=%s refreshed=%d failed=%d milestones=%d in %.1fs",
+            "MediaMetrics: guild=%d provider=%s refreshed=%d failed=%d milestones=%d owner_milestones=%d in %.1fs",
             guild_id, provider_type, result.refreshed, result.failed,
-            len(result.milestones), elapsed,
+            len(result.milestones), len(result.owner_milestones), elapsed,
         )
 
     async def _announce_milestone(
@@ -254,6 +280,73 @@ class MediaMetricsScheduler:
             "MediaMilestone: guild=%d item=%d metric=%s milestone=%s announced",
             guild_id, minfo.media_item_id, minfo.metric_key,
             f"{minfo.milestone_value:,}",
+        )
+
+    async def _announce_owner_milestone(
+        self,
+        session: AsyncSession,
+        guild_id: int,
+        ominfo: OwnerMilestoneInfo,
+    ) -> None:
+        settings = SettingsService(session)
+        milestones_enabled = await settings.get(guild_id, Keys.MEDIA_ANNOUNCE_MILESTONES, True)
+        if not milestones_enabled:
+            return
+        media_channel = await settings.get(guild_id, Keys.MEDIA_ANNOUNCE_CHANNEL_ID, None)
+
+        # Build compact other-metrics string from owner snapshots
+        other_parts: list[str] = []
+        owner_metrics = await media_repo.get_owner_latest_metrics(session, ominfo.media_owner_id)
+        metric_keys = _OWNER_MILESTONE_METRICS.get(ominfo.media_type, [])
+        for key in metric_keys:
+            if key == ominfo.metric_key:
+                continue
+            m = owner_metrics.get(key, {})
+            if isinstance(m, dict) and int(m.get("value", 0)):
+                cv = int(m["value"])
+                if cv >= 1_000_000_000:
+                    fm = f"{cv / 1_000_000_000:.1f}B".replace(".0B", "B")
+                elif cv >= 1_000_000:
+                    fm = f"{cv / 1_000_000:.1f}M".replace(".0M", "M")
+                elif cv >= 1_000:
+                    fm = f"{cv / 1_000:.1f}K".replace(".0K", "K")
+                else:
+                    fm = str(cv)
+                other_parts.append(fm)
+        other_metrics = "  \u00b7  ".join(other_parts) if other_parts else "\u2014"
+
+        base_url = self.bot.config.oauth_redirect_uri.rsplit("/", 2)[0]
+
+        embed = await build_owner_milestone_embed(
+            info=ominfo,
+            other_metrics=other_metrics,
+            guild_id=guild_id,
+            session=session,
+            base_url=base_url,
+        )
+        await broadcast_owner_milestone(
+            session,
+            self.bot,
+            guild_id=guild_id,
+            embed=embed,
+            media_announce_channel_id=media_channel,
+            milestones_enabled=True,
+        )
+        await ws_broadcast_owner_milestone(
+            guild_id,
+            owner_id=ominfo.media_owner_id,
+            owner_name=ominfo.owner_name,
+            media_type=ominfo.media_type,
+            metric_key=ominfo.metric_key,
+            milestone_value=ominfo.milestone_value,
+            new_value=ominfo.new_value,
+            thumbnail_url=ominfo.thumbnail_url,
+            external_url=ominfo.external_url,
+        )
+        log.info(
+            "OwnerMilestone: guild=%d owner=%d metric=%s milestone=%s announced",
+            guild_id, ominfo.media_owner_id, ominfo.metric_key,
+            f"{ominfo.milestone_value:,}",
         )
 
     async def _cleanup_chart_cache(self) -> None:
