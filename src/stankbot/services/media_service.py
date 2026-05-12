@@ -843,6 +843,8 @@ class MediaService:
         # Build a lookup: metric_key → {label, icon, format}
         defs_by_key: dict[str, dict[str, str]] = {d["key"]: d for d in metric_defs}
         for key, m in metrics.items():
+            if key not in defs_by_key:
+                continue
             val = int(m.get("value", 0)) if m else 0
             mt = m.get("fetched_at", "") if m else ""
             if mt and mt > latest_ts:
