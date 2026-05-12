@@ -41,8 +41,8 @@ class YouTubeProvider(MediaProvider):
     ]
     owner_metrics = [
         MetricDef("subscriber_count", "Subscribers", "number", "📊"),
-        MetricDef("view_count", "Total Views", "number", "👁️"),
         MetricDef("video_count", "Videos", "number", "🎬"),
+        MetricDef("total_view_count", "Total Views", "number", "👁️"),
         MetricDef("total_like_count", "Total Likes", "number", "👍"),
         MetricDef("total_comment_count", "Total Comments", "number", "💬"),
     ]

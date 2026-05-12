@@ -24,8 +24,8 @@ class MockYouTubeProvider(MediaProvider):
     ]
     owner_metrics = [
         MetricDef("subscriber_count", "Subscribers", "number", "\U0001f4ca"),
-        MetricDef("view_count", "Total Views", "number", "\U0001f441\ufe0f"),
         MetricDef("video_count", "Videos", "number", "\U0001f3ac"),
+        MetricDef("total_view_count", "Total Views", "number", "\U0001f441\ufe0f"),
         MetricDef("total_like_count", "Total Likes", "number", "\U0001f44d"),
         MetricDef("total_comment_count", "Total Comments", "number", "\U0001f4ac"),
     ]

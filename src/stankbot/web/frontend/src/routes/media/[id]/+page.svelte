@@ -637,11 +637,12 @@
 								{owner.name}
 							</a>
 						</div>
+						<!-- Row 1: channel-level stats -->
 						<div
-							class="grid gap-3"
-							style="grid-template-columns: repeat({Math.max(1, owner.metrics.length)}, minmax(0, 1fr));"
+							class="grid gap-3 mb-3"
+							style="grid-template-columns: repeat({Math.max(1, Math.min(2, (owner.metrics ?? []).length))}, minmax(0, 1fr));"
 						>
-							{#each owner.metrics as om}
+							{#each (owner.metrics ?? []).slice(0, 2) as om}
 								<StatTile
 									value={om.value.toLocaleString('en-US')}
 									label="{om.icon} {om.label}"
@@ -650,6 +651,22 @@
 								/>
 							{/each}
 						</div>
+						<!-- Row 2: aggregate totals -->
+						{#if (owner.metrics ?? []).length > 2}
+							<div
+								class="grid gap-3"
+								style="grid-template-columns: repeat({Math.max(1, (owner.metrics ?? []).length - 2)}, minmax(0, 1fr));"
+							>
+								{#each (owner.metrics ?? []).slice(2) as om}
+									<StatTile
+										value={om.value.toLocaleString('en-US')}
+										label="{om.icon} {om.label}"
+										testId="owner-metric-{om.key}"
+										fontSize="sm"
+									/>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{/if}
 

@@ -494,6 +494,7 @@ class MediaService:
                 "media_type": item.media_type,
                 "title": item.title,
                 "name": item.name,
+                "label": item.name or item.title,
                 "points": raw_points,
             })
 
@@ -553,6 +554,7 @@ class MediaService:
                     "media_type": item.media_type,
                     "title": item.title,
                     "name": item.name,
+                    "label": item.name or item.title,
                     "points": points,
                 })
 
@@ -819,19 +821,11 @@ class MediaService:
 
     @staticmethod
     def _owner_metric_defs(provider: object | None) -> list[dict[str, str]]:
-        """Return display metadata for owner metrics, preferring owner_metrics."""
+        """Return display metadata for owner metrics from owner_metrics only."""
         defs: list[dict[str, str]] = []
-        seen: set[str] = set()
         if provider and hasattr(provider, "owner_metrics"):
             for m in provider.owner_metrics:  # type: ignore[union-attr]
-                if m.key not in seen:
-                    defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
-                    seen.add(m.key)
-        if provider and hasattr(provider, "metrics"):
-            for m in provider.metrics:  # type: ignore[union-attr]
-                if m.key not in seen:
-                    defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
-                    seen.add(m.key)
+                defs.append({"key": m.key, "label": m.label, "icon": m.icon, "format": m.format})
         return defs
 
     def _serialize_owner(
@@ -923,6 +917,7 @@ class MediaService:
                         agg[metric_key] = agg.get(metric_key, 0) + val
                 # Map item metric keys to owner aggregate keys
                 agg_keys: dict[str, str] = {
+                    "view_count": "total_view_count",
                     "like_count": "total_like_count",
                     "comment_count": "total_comment_count",
                     "playcount": "total_playcount",
