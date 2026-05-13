@@ -598,7 +598,6 @@ async def build_owner_embed(
     owner_url: str,
     thumbnail_url: str | None,
     metrics: dict[str, Any],
-    media_links: str,
     media_count: int,
     fetched_at: str,
     guild_id: int,
@@ -615,7 +614,6 @@ async def build_owner_embed(
         "thumbnail_url": thumbnail_url or "",
         "media_count": media_count,
         "fetched_at": fetched_at,
-        "media_links": media_links,
     }
 
     for key, val in metrics.items():

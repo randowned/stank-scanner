@@ -266,28 +266,25 @@ class StatsCommands(commands.GroupCog, name="stats"):
                 media_items = owner.get("media_items", [])
                 fetched_at = _fmt_relative(str(owner.get("fetched_at", "")))
 
-                # Build media links description
-                media_links_parts: list[str] = []
-                for mi in media_items:
-                    mi_name = str(mi.get("name") if isinstance(mi, dict) else "")
-                    mi_title = str(mi.get("title") if isinstance(mi, dict) else "")
-                    mi_ext_id = str(mi.get("external_id") if isinstance(mi, dict) else "")
-                    display_title = mi_title or mi_name
+                # Compute aggregate totals from tracked media items
+                item_ids = [mi["id"] for mi in media_items if isinstance(mi, dict) and mi.get("id")]
+                if item_ids:
+                    item_metrics = await media_repo.get_metrics_for_items(session, item_ids)
+                    agg: dict[str, int] = {}
+                    for _mid, im in item_metrics.items():
+                        for metric_key, mv in im.items():
+                            val = int(mv.get("value", 0)) if isinstance(mv, dict) else 0
+                            agg[metric_key] = agg.get(metric_key, 0) + val
                     if media_type == "youtube":
-                        direct_url: str = f"https://youtube.com/watch?v={mi_ext_id}"
-                    else:
-                        direct_url = f"https://open.spotify.com/track/{mi_ext_id}"
-                    cmd_link = f"</stats {media_type} info:{mi_name or ''}>" if mi_name else ""
-                    parts: list[str] = []
-                    if direct_url:
-                        parts.append(f"[{display_title}]({direct_url})")
-                    else:
-                        parts.append(display_title)
-                    if cmd_link:
-                        parts.append(f"\u2014 {cmd_link}")
-                    media_links_parts.append(" ".join(parts))
-
-                media_links = "\n".join(media_links_parts) if media_links_parts else "No media items."
+                        for item_key, owner_key in [
+                            ("view_count", "total_view_count"),
+                            ("like_count", "total_like_count"),
+                            ("comment_count", "total_comment_count"),
+                        ]:
+                            if item_key in agg:
+                                metrics[owner_key] = {"value": agg[item_key], "fetched_at": ""}
+                    elif media_type == "spotify" and "playcount" in agg:
+                        metrics["total_playcount"] = {"value": agg["playcount"], "fetched_at": ""}
 
                 embed = await build_owner_embed(
                     media_type=media_type,
@@ -295,7 +292,6 @@ class StatsCommands(commands.GroupCog, name="stats"):
                     owner_url=owner_url,
                     thumbnail_url=thumbnail_url,
                     metrics=metrics,
-                    media_links=media_links,
                     media_count=len(media_items) if isinstance(media_items, list) else 0,
                     fetched_at=fetched_at,
                     guild_id=interaction.guild.id,

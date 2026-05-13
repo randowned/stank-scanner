@@ -14,8 +14,8 @@ from stankbot.services.media_service import (
 class TestMilestoneThresholds:
     """Verify the 71-threshold list (8 K-scale + 63 M-scale) is ordered and complete."""
 
-    def test_count_is_71(self) -> None:
-        assert len(MILESTONE_THRESHOLDS) == 71
+    def test_count_is_72(self) -> None:
+        assert len(MILESTONE_THRESHOLDS) == 72
 
     def test_first_is_1k(self) -> None:
         assert MILESTONE_THRESHOLDS[0] == 1_000
@@ -27,14 +27,14 @@ class TestMilestoneThresholds:
         assert sorted(MILESTONE_THRESHOLDS) == MILESTONE_THRESHOLDS
 
     def test_k_scale_then_m_scale(self) -> None:
-        # First 8 are K-scale
-        assert MILESTONE_THRESHOLDS[7] == 500_000
+        # First 9 are K-scale
+        assert MILESTONE_THRESHOLDS[8] == 750_000
         # Next 50 are 1M–50M
-        assert MILESTONE_THRESHOLDS[8] == 1_000_000
-        assert MILESTONE_THRESHOLDS[8 + 49] == 50_000_000
+        assert MILESTONE_THRESHOLDS[9] == 1_000_000
+        assert MILESTONE_THRESHOLDS[9 + 49] == 50_000_000
         # Then 75M, 100M, ..., 1B
-        assert MILESTONE_THRESHOLDS[8 + 50] == 75_000_000
-        assert MILESTONE_THRESHOLDS[8 + 51] == 100_000_000
+        assert MILESTONE_THRESHOLDS[9 + 50] == 75_000_000
+        assert MILESTONE_THRESHOLDS[9 + 51] == 100_000_000
 
 
 class TestGetCrossedMilestones:
@@ -50,8 +50,8 @@ class TestGetCrossedMilestones:
         assert get_crossed_milestones(0, 999) == []
 
     def test_single_crossing_1m(self) -> None:
-        # 0 → 1M crosses all 8 K-scale thresholds + 1M
-        assert get_crossed_milestones(0, 1_000_000) == [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
+        # 0 → 1M crosses all 9 K-scale thresholds + 1M
+        assert get_crossed_milestones(0, 1_000_000) == [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 750_000, 1_000_000]
 
     def test_single_crossing_10m(self) -> None:
         assert get_crossed_milestones(9_500_000, 10_000_000) == [10_000_000]
@@ -66,7 +66,7 @@ class TestGetCrossedMilestones:
 
     def test_multiple_crossings_in_one_jump(self) -> None:
         """0 → 3M should cross all K-scale + 1M, 2M, 3M."""
-        expected = [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000,
+        expected = [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 750_000,
                     1_000_000, 2_000_000, 3_000_000]
         assert get_crossed_milestones(0, 3_000_000) == expected
 
@@ -89,7 +89,7 @@ class TestGetCrossedMilestones:
         assert get_crossed_milestones(1_000_000_000, 1_500_000_000) == []
 
     def test_just_over_1m(self) -> None:
-        expected = [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
+        expected = [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 750_000, 1_000_000]
         assert get_crossed_milestones(0, 1_000_001) == expected
 
 
@@ -99,8 +99,8 @@ class TestNextMilestone:
     def test_from_zero(self) -> None:
         assert next_milestone(0) == 1_000
 
-    def test_from_500k(self) -> None:
-        assert next_milestone(500_000) == 1_000_000
+    def test_from_750k(self) -> None:
+        assert next_milestone(750_000) == 1_000_000
 
     def test_from_5m(self) -> None:
         assert next_milestone(5_000_000) == 6_000_000

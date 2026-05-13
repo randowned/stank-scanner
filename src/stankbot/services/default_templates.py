@@ -282,11 +282,13 @@ YOUTUBE_OWNER_EMBED: dict[str, Any] = {
     "image": "{thumbnail_url}",
     "fields": [
         {"name": "\U0001f4ca Subscribers", "value": "{subscriber_count}", "inline": True},
-        {"name": "\U0001f441\ufe0f Total Views", "value": "{view_count}", "inline": True},
         {"name": "\U0001f3ac Videos", "value": "{video_count}", "inline": True},
+        {"name": "\u200b", "value": "\u200b", "inline": True},
+        {"name": "\U0001f441\ufe0f Total Views", "value": "{total_view_count}", "inline": True},
+        {"name": "\U0001f44d Total Likes", "value": "{total_like_count}", "inline": True},
+        {"name": "\U0001f4ac Total Comments", "value": "{total_comment_count}", "inline": True},
     ],
     "footer": "\U0001f3ac YouTube Channel \u00b7 {media_count} tracked item(s) \u00b7 Updated {fetched_at}",
-    "description": "{media_links}",
 }
 
 
@@ -298,9 +300,9 @@ SPOTIFY_OWNER_EMBED: dict[str, Any] = {
     "fields": [
         {"name": "\U0001f465 Followers", "value": "{follower_count}", "inline": True},
         {"name": "\U0001f525 Popularity", "value": "{popularity}/100", "inline": True},
+        {"name": "\U0001f3a7 Total Plays", "value": "{total_playcount}", "inline": True},
     ],
     "footer": "\U0001f3b5 Spotify Artist \u00b7 {media_count} tracked item(s) \u00b7 Updated {fetched_at}",
-    "description": "{media_links}",
 }
 
 

@@ -23,7 +23,7 @@ from stankbot.services.media_providers.registry import MediaProviderRegistry
 log = logging.getLogger(__name__)
 
 # Milestone thresholds — sparse K-scale, then every 1M to 50M, then jumps to 1B.
-_MILESTONES_K: list[int] = [n * 1_000 for n in (1, 5, 10, 25, 50, 100, 250, 500)]
+_MILESTONES_K: list[int] = [n * 1_000 for n in (1, 5, 10, 25, 50, 100, 250, 500, 750)]
 _MILESTONES_BASE: list[int] = [n * 1_000_000 for n in range(1, 51)]
 _MILESTONES_EXT: list[int] = [
     75_000_000, 100_000_000, 150_000_000, 200_000_000,
